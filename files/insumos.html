@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Insumos — Sistema Comercial</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="page">
+
+  <nav class="top-menu">
+    <a class="menu-link" href="dashboard.html">Dashboard</a>
+    <a class="menu-link" href="precificacao.html">Precificação</a>
+    <a class="menu-link" href="produtos.html">Produtos</a>
+    <a class="menu-link" href="insumos.html">Insumos</a>
+    <a class="menu-link" href="configuracoes.html">Configurações</a>
+    <a class="menu-link" href="orcamentos.html">Orçamentos</a>
+  </nav>
+
+  <div class="card">
+    <div class="section-title">Insumos</div>
+
+    <!-- Formulário novo insumo -->
+    <div class="form-row">
+      <input type="text"   id="ins-nome"      placeholder="Nome do insumo"/>
+      <select id="ins-unidade"></select>
+      <input type="number" id="ins-preco"     placeholder="Preço (R$)" step="0.01" min="0"/>
+      <label class="check-label">
+        <input type="checkbox" id="ins-embalagem"/> Embalagem
+      </label>
+      <button class="btn btn-primary" id="btn-add">+ Adicionar</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Unidade</th>
+          <th class="text-right">Preço</th>
+          <th>Tipo</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tb-insumos"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+// ── Estado ────────────────────────────────────────────────────────────────────
+let unidades = [];
+
+// ── Carregar dados ────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const data = await apiFetch('/insumos/json');
+    unidades = data.unidades || [];
+
+    // Popular select de unidades
+    const sel = document.getElementById('ins-unidade');
+    sel.innerHTML = unidades.map(u => `<option value="${u.id}">${u.nome} (${u.sigla})</option>`).join('');
+
+    // Renderizar tabela
+    const tbody = clearTable('tb-insumos');
+    const insumos = data.insumos || [];
+    if (!insumos.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum insumo cadastrado</td></tr>';
+      return;
+    }
+    insumos.forEach(i => {
+      const unidadeNome = unidades.find(u => u.id === i.unidadeMedidaId)?.nome ?? '—';
+      appendRow('tb-insumos', `
+        <td>${i.nome}</td>
+        <td>${unidadeNome}</td>
+        <td class="text-right td-mono">${fmt.brl(i.preco)}</td>
+        <td><span class="badge ${i.isEmbalagem ? 'badge-blue' : 'badge-gray'}">${i.isEmbalagem ? 'Embalagem' : 'Matéria-prima'}</span></td>
+        <td class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="editarInsumo(${i.id}, '${escHtml(i.nome)}', ${i.preco})">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deletarInsumo(${i.id})">Deletar</button>
+        </td>
+      `);
+    });
+  } catch (e) {
+    console.error(e);
+    toast('Erro ao carregar insumos', 'error');
+  }
+}
+
+// ── Adicionar ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-add').addEventListener('click', async () => {
+  const nome       = document.getElementById('ins-nome').value.trim();
+  const unidadeId  = parseInt(document.getElementById('ins-unidade').value) || 0;
+  const preco      = parseFloat(document.getElementById('ins-preco').value) || 0;
+  const embalagem  = document.getElementById('ins-embalagem').checked;
+
+  if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+
+  try {
+    await apiPost('/insumos', {
+      id: 0, nome, unidadeMedidaId: unidadeId,
+      quantidadePorEmbalagem: null, unidadeEmbalagemId: null,
+      fornecedorId: null, preco, isEmbalagem: embalagem,
+    });
+    document.getElementById('ins-nome').value = '';
+    document.getElementById('ins-preco').value = '';
+    document.getElementById('ins-embalagem').checked = false;
+    toast('Insumo adicionado');
+    load();
+  } catch (e) { toast('Erro ao adicionar: ' + e.message, 'error'); }
+});
+
+// ── Editar ────────────────────────────────────────────────────────────────────
+async function editarInsumo(id, nomeAtual, precoAtual) {
+  const nome = prompt('Nome:', nomeAtual);
+  if (nome === null) return;
+  const precoStr = prompt('Preço (R$):', precoAtual);
+  if (precoStr === null) return;
+  const preco = parseFloat(precoStr) || 0;
+  try {
+    await apiPost(`/insumos/atualizar/${id}`, {
+      id, nome, unidadeMedidaId: 0,
+      quantidadePorEmbalagem: null, unidadeEmbalagemId: null,
+      fornecedorId: null, preco, isEmbalagem: false,
+    });
+    toast('Insumo atualizado');
+    load();
+  } catch (e) { toast('Erro ao atualizar', 'error'); }
+}
+
+// ── Deletar ───────────────────────────────────────────────────────────────────
+async function deletarInsumo(id) {
+  if (!confirm('Confirma a exclusão?')) return;
+  try {
+    await apiFetch(`/insumos/deletar/${id}`);
+    toast('Insumo removido');
+    load();
+  } catch (e) { toast('Erro ao deletar', 'error'); }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(s) { return String(s).replace(/'/g, "\\'"); }
+
+load();
+</script>
+</body>
+</html>

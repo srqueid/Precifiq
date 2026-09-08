@@ -1,0 +1,132 @@
+/* =========================================================
+   styles.css — Camada de utilitários compatível com o tema
+   Mapeado diretamente para as variáveis semânticas de app.css
+   ========================================================= */
+
+/* Body e Container Base */
+body {
+  margin: 0;
+  font-family: var(--font, 'Inter', system-ui, -apple-system, sans-serif);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.min-h-screen { min-height: 100vh; }
+.max-w-7xl { max-width: 1360px; margin: 0 auto; }
+.p-6 { padding: 24px; }
+.mb-6 { margin-bottom: 24px; }
+.space-y-6 > * + * { margin-top: 24px; }
+.space-y-4 > * + * { margin-top: 16px; }
+
+/* Tipografia e Cores de Texto Semânticas */
+.text-gray-900 { color: var(--text) !important; }
+.text-gray-800 { color: var(--text) !important; }
+.text-gray-700 { color: var(--text-secondary) !important; }
+.text-gray-600 { color: var(--text-secondary) !important; }
+.text-gray-500 { color: var(--muted) !important; }
+.text-gray-400 { color: var(--muted) !important; opacity: 0.85; }
+.text-white { color: #ffffff !important; }
+.text-blue-600, .text-indigo-600 { color: var(--accent) !important; }
+.text-green-600 { color: var(--green) !important; }
+.text-yellow-600 { color: var(--yellow) !important; }
+.text-red-600 { color: var(--red) !important; }
+
+/* Backgrounds Semânticos (Compatíveis com Light & Dark Mode) */
+.bg-white { background: var(--surface) !important; }
+.bg-gray-50 { background: var(--surface-2) !important; }
+.bg-gray-100 { background: var(--surface-2) !important; }
+.bg-gray-200 { background: var(--surface-3) !important; }
+.bg-gray-800 { background: var(--surface) !important; }
+.bg-gray-900 { background: var(--surface) !important; }
+.bg-blue-50 { background: var(--accent-dim) !important; }
+.bg-green-50 { background: var(--green-dim) !important; }
+.bg-yellow-50 { background: var(--yellow-dim) !important; }
+.bg-red-50 { background: var(--red-dim) !important; }
+
+/* Bordas Semânticas */
+.border { border: 1px solid var(--border); }
+.border-t { border-top: 1px solid var(--border); }
+.border-b { border-bottom: 1px solid var(--border); }
+.border-gray-100, .border-gray-200 { border-color: var(--border) !important; }
+.border-gray-300 { border-color: var(--border-strong) !important; }
+
+/* Arredondamento */
+.rounded-sm { border-radius: 4px; }
+.rounded-md { border-radius: var(--radius); }
+.rounded-lg { border-radius: var(--radius); }
+.rounded-xl { border-radius: var(--radius-lg); }
+.rounded-2xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: 9999px; }
+
+/* Sombras */
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow { box-shadow: var(--shadow); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+
+/* Flexbox & Grid */
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.flex-1 { flex: 1 1 0%; }
+.flex-shrink-0 { flex-shrink: 0; }
+
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.gap-5 { gap: 20px; }
+.gap-6 { gap: 24px; }
+
+/* Dimensões e Espaçamento */
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.text-xs { font-size: 11px; }
+.text-sm { font-size: 13px; }
+.text-base { font-size: 14px; }
+.text-lg { font-size: 16px; }
+.text-xl { font-size: 18px; }
+.text-2xl { font-size: 22px; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.overflow-hidden { overflow: hidden; }
+.overflow-x-auto { overflow-x: auto; }
+.whitespace-nowrap { white-space: nowrap; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+
+.table-auto { width: 100%; border-collapse: collapse; }
+.table-fixed { table-layout: fixed; width: 100%; border-collapse: collapse; }
+
+.cursor-pointer { cursor: pointer; }
+.transition-all { transition: all var(--transition); }
+
+/* Ajuste Responsivo */
+@media (max-width: 768px) {
+  .max-w-7xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .p-6 {
+    padding: 1rem;
+  }
+  .table-auto {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

@@ -1,0 +1,740 @@
+[
+  {
+    "id": 6,
+    "nome": "Vidro Topazio G28 300 ML Tampa prata",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 300,
+    "fornecedorId": 16,
+    "preco": 7.15,
+    "isEmbalagem": true,
+    "estoque": 7
+  },
+  {
+    "id": 10,
+    "nome": "Frasco Rubi Transparente 300ml",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 300,
+    "fornecedorId": 3,
+    "preco": 7.91,
+    "isEmbalagem": true,
+    "estoque": 4
+  },
+  {
+    "id": 8,
+    "nome": "Frasco Topazio 300ML transparente",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 300,
+    "fornecedorId": 3,
+    "preco": 9.2,
+    "isEmbalagem": true,
+    "estoque": 4
+  },
+  {
+    "id": 13,
+    "nome": "Frasco Topazio 300ML Degrade Preto com Azul do Mar",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 300,
+    "fornecedorId": 3,
+    "preco": 15.1,
+    "isEmbalagem": true,
+    "estoque": 2
+  },
+  {
+    "id": 25,
+    "nome": "Pérola para decoração Amarela",
+    "unidadeMedidaId": 2,
+    "fornecedorId": 23,
+    "preco": 4.99,
+    "isEmbalagem": true,
+    "estoque": 63
+  },
+  {
+    "id": 11,
+    "nome": "Tampa Luxo Dourada Rosca 28 com furo",
+    "unidadeMedidaId": 3,
+    "fornecedorId": 3,
+    "preco": 2.68,
+    "isEmbalagem": true,
+    "estoque": 10
+  },
+  {
+    "id": 24,
+    "nome": "Saco Adesivado Numero 6 com furo 10x15",
+    "unidadeMedidaId": 7,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 22,
+    "preco": 10.59,
+    "isEmbalagem": true,
+    "estoque": 0
+  },
+  {
+    "id": 20,
+    "nome": "Válvula Preta Spray Lisa 24/415",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 2,
+    "preco": 1.5,
+    "isEmbalagem": true,
+    "estoque": 25
+  },
+  {
+    "id": 15,
+    "nome": "Essencia Bamboo  MM 100ml",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 2,
+    "preco": 24.21,
+    "isEmbalagem": false,
+    "estoque": 5
+  },
+  {
+    "id": 27,
+    "nome": "Fita Cetim Azul Bebe",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 0
+  },
+  {
+    "id": 28,
+    "nome": "Fita Cetim Verde ",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 0
+  },
+  {
+    "id": 29,
+    "nome": "Fita Cetim Rosa Velho",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 0
+  },
+  {
+    "id": 41,
+    "nome": "Dioxido de Titanio",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 5,
+    "preco": 24.75,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 45,
+    "nome": "Oléo Essencial Bergamota Italia Reggio",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 5,
+    "preco": 22.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 46,
+    "nome": "Oléo Essencial Laranja Pera Doce",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 5,
+    "preco": 19.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 47,
+    "nome": "Essencia de Mel Aromatizadores/Cosmeticos",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 5,
+    "preco": 24.32,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 50,
+    "nome": "Oléo Resina de Alecrim",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 5,
+    "preco": 18.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 53,
+    "nome": "Oléo Essencial de Lavandim Grosso ",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 20,
+    "fornecedorId": 5,
+    "preco": 14.8,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 52,
+    "nome": "Oléo Essencial de Alecrim Rosmarinus",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 20,
+    "fornecedorId": 5,
+    "preco": 21.1,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 57,
+    "nome": "Ninpaguard SCE Conservante",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 5,
+    "preco": 55.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 60,
+    "nome": "Essência Hidrossolúvel Cascas E Folhas 500g",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 72.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 2,
+    "nome": "Frasco  Pet  Borrifador  Spray  Mini Gatilho ",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 200,
+    "fornecedorId": 76,
+    "preco": 3.93,
+    "isEmbalagem": true,
+    "estoque": 3
+  },
+  {
+    "id": 26,
+    "nome": "Fita de Cetim Champangne",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 1
+  },
+  {
+    "id": 14,
+    "nome": "Frasco  vidro Brilhante 350ml rosca 28/410",
+    "unidadeMedidaId": 6,
+    "quantidadePorEmbalagem": 350,
+    "fornecedorId": 3,
+    "preco": 12.5,
+    "isEmbalagem": true,
+    "estoque": 4
+  },
+  {
+    "id": 1,
+    "nome": "Frasco Pet Cilíndrico 60ml Rosca 20/410mm",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 60,
+    "fornecedorId": 6,
+    "preco": 1.45,
+    "isEmbalagem": true,
+    "estoque": 38
+  },
+  {
+    "id": 37,
+    "nome": "Pérola N16 decoração gota branca",
+    "unidadeMedidaId": 2,
+    "quantidadePorEmbalagem": 1,
+    "fornecedorId": 25,
+    "preco": 8.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 22,
+    "nome": "Vidro aromatizador de carrro 10ml",
+    "unidadeMedidaId": 3,
+    "fornecedorId": 7,
+    "preco": 82,
+    "isEmbalagem": true,
+    "estoque": 80
+  },
+  {
+    "id": 33,
+    "nome": "Pérola N10 Branca",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 50,
+    "fornecedorId": 25,
+    "preco": 7.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 32,
+    "nome": "Pérola N8 Lilás Lavanda",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 25,
+    "preco": 7.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 35,
+    "nome": "Pérola N8 Verde Bebê",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 25,
+    "preco": 7.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 36,
+    "nome": "Pérola N10 Perolada",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 25,
+    "preco": 7.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 59,
+    "nome": "Frasco Vidro Octogonal  200ml ",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 200,
+    "preco": 12,
+    "isEmbalagem": true,
+    "estoque": 1
+  },
+  {
+    "id": 34,
+    "nome": "Pérola N8 Rosa",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 25,
+    "preco": 7.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 38,
+    "nome": "Pérola N16 decoração gota perolada",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 25,
+    "preco": 8.99,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 9,
+    "nome": "Frasco  Vidro Esmeralda 350ml Rosca 28/410",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 350,
+    "fornecedorId": 3,
+    "preco": 11.78,
+    "isEmbalagem": true,
+    "estoque": 4
+  },
+  {
+    "id": 5,
+    "nome": "Essencias Diversas 500 ml",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 16,
+    "preco": 129.5,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 31,
+    "nome": "Fita Cetim Laranja",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 1
+  },
+  {
+    "id": 30,
+    "nome": "Fita Cetim Lilas Lavanda",
+    "unidadeMedidaId": 8,
+    "quantidadePorEmbalagem": 10,
+    "fornecedorId": 23,
+    "preco": 3.9,
+    "isEmbalagem": true,
+    "estoque": 1
+  },
+  {
+    "id": 17,
+    "nome": "Frasco  Pet Cristal Premium 250ml rosca 28/410",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 250,
+    "fornecedorId": 75,
+    "preco": 2.63,
+    "isEmbalagem": true,
+    "estoque": 38
+  },
+  {
+    "id": 61,
+    "nome": "Essência Hidrossolúvel Alecrim 500g ",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 69.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 62,
+    "nome": "Essência Hidrossolúvel Chá Branco 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 59.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 63,
+    "nome": "Essência Hidrossoluvel  Lavanda 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 69.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 64,
+    "nome": "Essência Hidrossolúvel Flor De Cerejeira 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 59.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 65,
+    "nome": "Essência Hidrossolúvel Capim Limão 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 59.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 66,
+    "nome": "Tampa Lacre Branca Rosca 28/410mm",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 77,
+    "preco": 0.2,
+    "isEmbalagem": true,
+    "estoque": 50
+  },
+  {
+    "id": 18,
+    "nome": "Tampa de Metal  ouro com furo 28/410",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 2,
+    "preco": 0.85,
+    "isEmbalagem": true,
+    "estoque": 25
+  },
+  {
+    "id": 19,
+    "nome": "Tampa Metal Prata com furo 28/410",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 2,
+    "preco": 0.85,
+    "isEmbalagem": true,
+    "estoque": 25
+  },
+  {
+    "id": 16,
+    "nome": "Frasco  Pet Premium Ambar 250ml Rosca 24/415",
+    "unidadeMedidaId": 3,
+    "fornecedorId": 2,
+    "preco": 2.5,
+    "isEmbalagem": true,
+    "estoque": 25
+  },
+  {
+    "id": 12,
+    "nome": "Válvula Saboneteira Prime Dourada",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 3,
+    "preco": 6.89,
+    "isEmbalagem": true,
+    "estoque": 2
+  },
+  {
+    "id": 7,
+    "nome": "Renex 95",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "preco": 40,
+    "isEmbalagem": false,
+    "estoque": 1000
+  },
+  {
+    "id": 67,
+    "nome": "Frasco Pet Cilíndrico 60ml Rosca 20/410mm Spray",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 60,
+    "fornecedorId": 77,
+    "preco": 0.85,
+    "isEmbalagem": true,
+    "estoque": 33
+  },
+  {
+    "id": 68,
+    "nome": "Essência Citronela 100g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 100,
+    "fornecedorId": 77,
+    "preco": 22.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 69,
+    "nome": "Essência Hidrossolúvel Cheirinho De Bebê 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 63.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 70,
+    "nome": "Essência Hidrossolúvel Flor De Laranjeira 500g",
+    "unidadeMedidaId": 5,
+    "fornecedorId": 77,
+    "preco": 66.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 71,
+    "nome": "Essência Hidrossolúvel Limão Siciliano 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 60.2,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 72,
+    "nome": "Essência Hidrossolúvel Bambu 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 66.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 73,
+    "nome": "Essência Hidrossolúvel Flor De Algodão 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 59.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 74,
+    "nome": "Tampa Flip Top Branca Rosca 18/410mm",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 77,
+    "preco": 0.25,
+    "isEmbalagem": true,
+    "estoque": 25
+  },
+  {
+    "id": 75,
+    "nome": "Tampa Furada Alumínio Prata Rosca 28/410mm",
+    "unidadeMedidaId": 6,
+    "preco": 0.6,
+    "isEmbalagem": false,
+    "estoque": 15
+  },
+  {
+    "id": 76,
+    "nome": "Válvula Spray Branca Rosca 20/410mm",
+    "unidadeMedidaId": 6,
+    "fornecedorId": 77,
+    "preco": 1.2,
+    "isEmbalagem": true,
+    "estoque": 35
+  },
+  {
+    "id": 77,
+    "nome": "Essência Hidrossolúvel Verbena 500g",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 500,
+    "fornecedorId": 77,
+    "preco": 61.9,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 23,
+    "nome": "Glicerina Bi - distilada USP 5L",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 8,
+    "preco": 85,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 40,
+    "nome": "Óleo Vegetal Mamona(Ricino) Prensado a Frio Extra Virgem",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 500000,
+    "fornecedorId": 5,
+    "preco": 25.1,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 42,
+    "nome": "Oleo Vegetal Semente de Uva Refinado",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 500000,
+    "fornecedorId": 5,
+    "preco": 47.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 44,
+    "nome": "Base Para Sabonete/Shampoo Líquido Perolado",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 22.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 48,
+    "nome": "Oléo Vegetal  Palma Prensado Frio Extra Virgem",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 45.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 49,
+    "nome": "Oléo Vegetal de Coco Prensado Frio Extra Virgem",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 71.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 21,
+    "nome": "Lauril  Líquido",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 4,
+    "preco": 130,
+    "isEmbalagem": false,
+    "estoque": 2000
+  },
+  {
+    "id": 39,
+    "nome": "Ácido Esteárico - Estearina Tripla Pressão",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 49.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 51,
+    "nome": "Soda Cáustica Escama 99%",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 25,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 54,
+    "nome": "Estearina de Palma",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 44.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 56,
+    "nome": "Uréia",
+    "unidadeMedidaId": 5,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 24.9,
+    "isEmbalagem": false,
+    "estoque": 0
+  },
+  {
+    "id": 58,
+    "nome": "Água Destilada",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 5000,
+    "preco": 15.99,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 3,
+    "nome": "Álcool de Cereais perfumaria 5 L",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 5000,
+    "fornecedorId": 20,
+    "preco": 73.79,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 43,
+    "nome": "Base Sabonete Líquido 0% Lauril",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 1000,
+    "fornecedorId": 5,
+    "preco": 36.95,
+    "isEmbalagem": false,
+    "estoque": 1
+  },
+  {
+    "id": 4,
+    "nome": "Cocoamidopropril betaina 5 L",
+    "unidadeMedidaId": 3,
+    "quantidadePorEmbalagem": 5000,
+    "fornecedorId": 74,
+    "preco": 129.48,
+    "isEmbalagem": false,
+    "estoque": 4000
+  }
+]

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fetch JSON - localhost:8080</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;background:#f3f4f6;color:#111;padding:20px}
+    .card{background:#fff;padding:16px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+    pre{white-space:pre-wrap;background:#f9fafb;padding:8px;border-radius:6px}
+    .error{color:#b91c1c}
+    button{background:#059669;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Leitor JSON - http://localhost:8080</h1>
+    <p>Busca conteúdo JSON no servidor e renderiza tabelas para cada chave que contenha um array.</p>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btn">Carregar</button>
+      <span id="status"></span>
+    </div>
+    <p style="margin-top:8px;font-size:13px;color:#374151">Se ocorrer erro CORS, execute este arquivo com um servidor local (ex.: <code>npx serve .</code> ou <code>python -m http.server 8000</code>).</p>
+  </div>
+
+  <div id="out"></div>
+
+  <script>
+    const btn = document.getElementById('btn');
+    const status = document.getElementById('status');
+    const out = document.getElementById('out');
+
+    btn.addEventListener('click', fetchJson);
+    // auto-load
+    // fetchJson();
+
+    async function fetchJson(){
+      status.textContent = 'carregando...';
+      out.innerHTML = '';
+      try{
+        const res = await fetch('http://localhost:8080/');
+        if(!res.ok) throw new Error('Resposta não OK: ' + res.status);
+        let data;
+        try{ data = await res.json(); } catch(e){
+          const txt = await res.text();
+          try{ data = JSON.parse(txt); } catch(e){ data = txt; }
+        }
+
+        renderData(data);
+        status.textContent = 'ok';
+      }catch(err){
+        status.innerHTML = '<span class="error">Erro: ' + String(err) + '</span>';
+        out.innerHTML = '<div class="card"><pre>' + String(err) + '</pre></div>';
+      }
+    }
+
+    function renderData(data){
+      out.innerHTML = '';
+      if(Array.isArray(data)){
+        out.appendChild(makeSection('root', data));
+        return;
+      }
+      if(typeof data === 'object' && data !== null){
+        const keys = Object.keys(data);
+        const arrayKeys = keys.filter(k => Array.isArray(data[k]));
+        if(arrayKeys.length){
+          arrayKeys.forEach(k => out.appendChild(makeSection(k, data[k])));
+          return;
+        }
+        // sem arrays: mostra o objeto inteiro
+        const c = document.createElement('div'); c.className='card';
+        c.innerHTML = '<h3>Objeto</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        out.appendChild(c);
+        return;
+      }
+      // texto simples
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = '<h3>Resultado</h3><pre>' + String(data) + '</pre>';
+      out.appendChild(c);
+    }
+
+    function makeSection(title, items){
+      const wrapper = document.createElement('div'); wrapper.className='card';
+      const h = document.createElement('h3'); h.textContent = title; wrapper.appendChild(h);
+      if(!items.length){
+        const p = document.createElement('p'); p.textContent = 'Nenhum item'; wrapper.appendChild(p); return wrapper;
+      }
+      // descobrir colunas
+      const cols = new Set();
+      items.slice(0,20).forEach(it => { if(it && typeof it === 'object') Object.keys(it).forEach(k => cols.add(k)); });
+      const colArr = Array.from(cols);
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      const thIndex = document.createElement('th'); thIndex.textContent = '#'; trh.appendChild(thIndex);
+      colArr.forEach(c => { const th = document.createElement('th'); th.textContent = c; trh.appendChild(th); });
+      thead.appendChild(trh); table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      items.forEach((it,i) => {
+        const tr = document.createElement('tr');
+        const tdIndex = document.createElement('td'); tdIndex.textContent = ''+(i+1); tr.appendChild(tdIndex);
+        colArr.forEach(c => {
+          const td = document.createElement('td');
+          const val = it && (it[c]!==undefined ? it[c] : '');
+          if(typeof val === 'object') td.innerHTML = '<pre>' + escapeHtml(JSON.stringify(val, null, 2)) + '</pre>';
+          else td.textContent = String(val);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrapper.appendChild(table);
+      return wrapper;
+    }
+
+    function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

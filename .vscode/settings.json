@@ -1,0 +1,27 @@
+{
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.metadata/**",
+        "**/archetype-resources/**",
+        "**/META-INF/maven/**",
+        "/**/test/**",
+        "**/.kilo/**"
+    ],
+    "files.exclude": {
+        "**/.kilo": true
+    },
+    "search.exclude": {
+        "**/.kilo": true
+    },
+    "files.watcherExclude": {
+        "**/.kilo/**": true
+    },
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-21",
+            "path": "C:\\Program Files\\Java\\jdk-21",
+            "default": true
+        }
+    ]
+}

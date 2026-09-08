@@ -1,0 +1,61 @@
+ID	Razão Social	Nome Fantasia	CNPJ/CPF	UF	Contato	Ações
+#74	Quimisulsc	Quimisulsc	24.788.909/0001-14	Não informado	
+vendas@quimisulsc.com.br(47) 9762-0757
+
+#75	Olfativestore Comercio de Embalagem	Não informado	09.558.710/0001-06	SP	Não informado	
+
+#9	Flower	Não informado	48.901.776/0001-09	SP	
+flowerprodutos@gmail.com(11) 94887-2186
+
+#8	Martha Ferreira de Almeida	Não informado	46.461.882/0001-93	SP	
+(11) 91475-9163
+
+#7	Central de Art Comercio de Embalagens e Produtos Alimenticios	Não informado	13.924.118/0001-58	Não informado	Não informado	
+
+#5	Destilaria Bauru Eireli	Não informado	11.143.171/0001-96	SP	
+(17) 3524-6284
+
+#6	Fonte dos Frascos Ltda	Não informado	45.063.126/0001-43	SP	
+fontesdosfrascos@yahoo.com(11) 95404-2618
+
+#4	Lin Pei Yu	Não informado	46.119.943/0001-39	SP	Não informado	
+
+#2	IMPERIO DAS ESSENCIAS LTDA	Não informado	03.706.592/0002-30	SP	
+(11) 2896-7030
+
+#76	Thessencia LTDA	Não informado	41.562.790/0001-86	SP	Não informado	
+
+#77	CANTINHO DAS ESSENCIAS LTDA	Não informado	57.186.456/0001-05	SP	
+vendas@cantinhodasessencias.com.br(15) 99109-2070
+
+#3	Vanessa Gonçalves Coutinho	Não informado	38.308.074/0001-62	SP	
+casavidro.shop@gmail.com(11) 97631-7568
+
+#16	Piter Paiva	Não informado	32.952.310/0001-00	SP	
+(11) 5594-8335
+
+#17	Essencia da Ceci	Não informado	371.768.036-68	SP	Não informado	
+
+#18	Godinho Ramiro	Não informado	47.911.734/0001-96	SP	
+(11) 99241-6270
+
+#19	Alecrim Essencia e Limpeza	Não informado	48.983.774/0001-06	SP	Não informado	
+
+#20	21 Quimica Distribuidora de produtos	Não informado	38.307.394/0001-06	Não informado	
+(11) 98504-6472
+
+#21	Terumã Agropecuaria Comercial Eireli	Não informado	57.283.327/0001-35	Não informado	
+(11) 3645-1065
+
+#22	Open Festas Comercia de Produtos	Não informado	50.020.591/0001-37	DF	
+(61)3339-176
+
+#23	Colibri Papelaria e Armarinho	Não informado	08.369.238/0001-09	DF	
+(61) 3335-2438
+
+#24	Big Essencia e Decorações LTDA	Não informado	45.757.589/0001-05	MG	
+logisticasbigessencias01@gmail.com(31) 7319-9636
+
+#25	Sueli Guilherme Cosme Dos Santos ME	Não informado	2364916000100	DF	
+(61) 3335-5449
+

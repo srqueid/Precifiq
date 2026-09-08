@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Configurações — Sistema Comercial</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="page">
+
+  <nav class="top-menu">
+    <a class="menu-link" href="dashboard.html">Dashboard</a>
+    <a class="menu-link" href="precificacao.html">Precificação</a>
+    <a class="menu-link" href="produtos.html">Produtos</a>
+    <a class="menu-link" href="insumos.html">Insumos</a>
+    <a class="menu-link" href="configuracoes.html">Configurações</a>
+    <a class="menu-link" href="orcamentos.html">Orçamentos</a>
+  </nav>
+
+  <!-- Horas semanais -->
+  <div class="card">
+    <div class="section-title">Horas Trabalhadas por Semana</div>
+    <div class="form-row">
+      <input type="number" id="horas-input" step="0.1" min="1" style="max-width:160px"/>
+      <button class="btn btn-primary" id="btn-horas">Salvar</button>
+    </div>
+  </div>
+
+  <!-- Funcionários -->
+  <div class="card">
+    <div class="section-title">Funcionários</div>
+    <div class="form-row">
+      <input type="text"   id="func-nome"    placeholder="Nome"/>
+      <input type="number" id="func-salario" placeholder="Salário bruto (R$)" step="0.01" min="0"/>
+      <button class="btn btn-primary" id="btn-add-func">+ Adicionar</button>
+    </div>
+    <table>
+      <thead><tr><th>Nome</th><th class="text-right">Salário Bruto</th><th>Ações</th></tr></thead>
+      <tbody id="tb-func"></tbody>
+    </table>
+  </div>
+
+  <!-- Despesas fixas -->
+  <div class="card">
+    <div class="section-title">Despesas Fixas</div>
+    <div class="form-row">
+      <input type="text"   id="desp-desc"  placeholder="Descrição"/>
+      <input type="number" id="desp-valor" placeholder="Valor mensal (R$)" step="0.01" min="0"/>
+      <button class="btn btn-primary" id="btn-add-desp">+ Adicionar</button>
+    </div>
+    <table>
+      <thead><tr><th>Descrição</th><th class="text-right">Valor Mensal</th><th>Ações</th></tr></thead>
+      <tbody id="tb-desp"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+async function load() {
+  try {
+    const data = await apiFetch('/configuracoes/json');
+    const config = data.config || {};
+    document.getElementById('horas-input').value = config.horasTrabalhadasPorSemana ?? 44;
+
+    // Funcionários
+    const tbFunc = clearTable('tb-func');
+    const funcs = data.funcionarios || [];
+    if (!funcs.length) {
+      tbFunc.innerHTML = '<tr><td colspan="3" class="empty-state">Nenhum funcionário</td></tr>';
+    } else {
+      funcs.forEach(f => appendRow('tb-func', `
+        <td>${f.nome}</td>
+        <td class="text-right td-mono">${fmt.brl(f.salarioBruto)}</td>
+        <td class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="editarFunc(${f.id}, '${escHtml(f.nome)}', ${f.salarioBruto})">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deletarFunc(${f.id})">Deletar</button>
+        </td>
+      `));
+    }
+
+    // Despesas
+    const tbDesp = clearTable('tb-desp');
+    const desps = data.despesas || [];
+    if (!desps.length) {
+      tbDesp.innerHTML = '<tr><td colspan="3" class="empty-state">Nenhuma despesa cadastrada</td></tr>';
+    } else {
+      desps.forEach(d => appendRow('tb-desp', `
+        <td>${d.descricao}</td>
+        <td class="text-right td-mono">${fmt.brl(d.valorMensal)}</td>
+        <td class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="editarDesp(${d.id}, '${escHtml(d.descricao)}', ${d.valorMensal})">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deletarDesp(${d.id})">Deletar</button>
+        </td>
+      `));
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Erro ao carregar configurações', 'error');
+  }
+}
+
+// ── Horas ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-horas').addEventListener('click', async () => {
+  const horas = parseFloat(document.getElementById('horas-input').value) || 44;
+  try {
+    await apiPostForm('/configuracoes/horas', { horasSemana: String(horas) });
+    toast('Horas salvas');
+  } catch (e) { toast('Erro ao salvar horas', 'error'); }
+});
+
+// ── Funcionários ──────────────────────────────────────────────────────────────
+document.getElementById('btn-add-func').addEventListener('click', async () => {
+  const nome    = document.getElementById('func-nome').value.trim();
+  const salario = parseFloat(document.getElementById('func-salario').value) || 0;
+  if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+  try {
+    await apiPost('/configuracoes/funcionarios', { id: 0, nome, salarioBruto: salario });
+    document.getElementById('func-nome').value = '';
+    document.getElementById('func-salario').value = '';
+    toast('Funcionário adicionado');
+    load();
+  } catch (e) { toast('Erro ao adicionar', 'error'); }
+});
+
+async function editarFunc(id, nomeAtual, salarioAtual) {
+  const nome = prompt('Nome:', nomeAtual); if (nome === null) return;
+  const s    = prompt('Salário bruto (R$):', salarioAtual); if (s === null) return;
+  try {
+    await apiPost(`/configuracoes/funcionarios/atualizar/${id}`, { id, nome, salarioBruto: parseFloat(s) || 0 });
+    toast('Funcionário atualizado');
+    load();
+  } catch (e) { toast('Erro ao atualizar', 'error'); }
+}
+
+async function deletarFunc(id) {
+  if (!confirm('Confirma a exclusão?')) return;
+  try {
+    await apiFetch(`/configuracoes/funcionarios/${id}/deletar`);
+    toast('Funcionário removido');
+    load();
+  } catch (e) { toast('Erro ao deletar', 'error'); }
+}
+
+// ── Despesas ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-add-desp').addEventListener('click', async () => {
+  const desc  = document.getElementById('desp-desc').value.trim();
+  const valor = parseFloat(document.getElementById('desp-valor').value) || 0;
+  if (!desc) { toast('Descrição é obrigatória', 'error'); return; }
+  try {
+    await apiPost('/configuracoes/despesas', { id: 0, descricao: desc, valorMensal: valor });
+    document.getElementById('desp-desc').value = '';
+    document.getElementById('desp-valor').value = '';
+    toast('Despesa adicionada');
+    load();
+  } catch (e) { toast('Erro ao adicionar', 'error'); }
+});
+
+async function editarDesp(id, descAtual, valorAtual) {
+  const desc  = prompt('Descrição:', descAtual); if (desc === null) return;
+  const v     = prompt('Valor mensal (R$):', valorAtual); if (v === null) return;
+  try {
+    await apiPost(`/configuracoes/despesas/atualizar/${id}`, { id, descricao: desc, valorMensal: parseFloat(v) || 0 });
+    toast('Despesa atualizada');
+    load();
+  } catch (e) { toast('Erro ao atualizar', 'error'); }
+}
+
+async function deletarDesp(id) {
+  if (!confirm('Confirma a exclusão?')) return;
+  try {
+    await apiFetch(`/configuracoes/despesas/${id}/deletar`);
+    toast('Despesa removida');
+    load();
+  } catch (e) { toast('Erro ao deletar', 'error'); }
+}
+
+function escHtml(s) { return String(s).replace(/'/g, "\\'"); }
+
+load();
+</script>
+</body>
+</html>

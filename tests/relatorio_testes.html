@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatório Executivo de Testes Automatizados E2E - Precific</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #131b2e;
+      --surface-card: #182238;
+      --border: #23314f;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-light: #60a5fa;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .timestamp-badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--card-accent, var(--primary));
+    }
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .metric-value {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .grid-tests {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 24px;
+    }
+    .test-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .test-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+    }
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .test-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+    .test-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .test-time {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+    }
+    .test-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .screenshot-container {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+      height: 220px;
+      position: relative;
+    }
+    .screenshot-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+      cursor: zoom-in;
+      transition: transform 0.3s ease;
+    }
+    .screenshot-container img:hover {
+      transform: scale(1.03);
+    }
+    .error-box {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+    }
+    /* Modal Lightbox */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal-backdrop.active {
+      display: flex;
+    }
+    .modal-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .modal-close:hover {
+      color: #fff;
+    }
+    .modal-img-container {
+      overflow: auto;
+      max-height: calc(90vh - 60px);
+      background: #000;
+      text-align: center;
+    }
+    .modal-img-container img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1 class="brand-title">Suíte Completa de Testes Automatizados E2E</h1>
+        <p class="brand-subtitle">Precifiq - Sistema de Gestão e Precificação • Cobertura Integral de Módulos, Telas e Multi-Tenant</p>
+      </div>
+      <div class="timestamp-badge">
+        📅 08/09/2026 17:06:53
+      </div>
+    </header>
+
+    <div class="metrics-grid">
+      <div class="metric-card" style="--card-accent: #3b82f6;">
+        <span class="metric-label">Total de Testes</span>
+        <span class="metric-value">22</span>
+      </div>
+      <div class="metric-card" style="--card-accent: #10b981;">
+        <span class="metric-label">Aprovados (Pass)</span>
+        <span class="metric-value" style="color: #10b981;">22</span>
+      </div>
+      <div class="metric-card" style="--card-accent: #64748b;">
+        <span class="metric-label">Falhas / Erros</span>
+        <span class="metric-value" style="color: #64748b;">0</span>
+      </div>
+      <div class="metric-card" style="--card-accent: #f59e0b;">
+        <span class="metric-label">Taxa de Sucesso</span>
+        <span class="metric-value" style="color: #f59e0b;">100.0%</span>
+      </div>
+      <div class="metric-card" style="--card-accent: #8b5cf6;">
+        <span class="metric-label">Tempo Total</span>
+        <span class="metric-value">49.1s</span>
+      </div>
+    </div>
+
+    <div class="grid-tests">
+      
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">01 - Dashboard Executivo</h3>
+            </div>
+            <span class="test-time">⏱ 2.50s</span>
+          </div>
+          <p class="test-desc">Métricas gerais de vendas, orçamentos, estoque e compras em tempo real</p>
+          <div class="screenshot-container">
+            <img src="screenshots/01_dashboard.png" alt="01 - Dashboard Executivo" onclick="openModal('screenshots/01_dashboard.png', '01 - Dashboard Executivo')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">02 - Company Switcher Corporativo</h3>
+            </div>
+            <span class="test-time">⏱ 1.77s</span>
+          </div>
+          <p class="test-desc">Dropdown de seleção rápida de empresas e filiais na Sidebar</p>
+          <div class="screenshot-container">
+            <img src="screenshots/02_company_switcher.png" alt="02 - Company Switcher Corporativo" onclick="openModal('screenshots/02_company_switcher.png', '02 - Company Switcher Corporativo')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">03 - Gestão Global: Empresas & Filiais</h3>
+            </div>
+            <span class="test-time">⏱ 1.83s</span>
+          </div>
+          <p class="test-desc">Hierarquia corporativa completa com schemas de banco dedicados</p>
+          <div class="screenshot-container">
+            <img src="screenshots/03_gestao_global_empresas.png" alt="03 - Gestão Global: Empresas & Filiais" onclick="openModal('screenshots/03_gestao_global_empresas.png', '03 - Gestão Global: Empresas & Filiais')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">04 - Gestão Global: Modal Nova Filial</h3>
+            </div>
+            <span class="test-time">⏱ 3.03s</span>
+          </div>
+          <p class="test-desc">Formulário de cadastro e provisionamento automático de novo tenant</p>
+          <div class="screenshot-container">
+            <img src="screenshots/04_gestao_global_modal_filial.png" alt="04 - Gestão Global: Modal Nova Filial" onclick="openModal('screenshots/04_gestao_global_modal_filial.png', '04 - Gestão Global: Modal Nova Filial')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">05 - Gestão Global: Usuários Centrais</h3>
+            </div>
+            <span class="test-time">⏱ 1.72s</span>
+          </div>
+          <p class="test-desc">Gestão de acessos corporativos, papéis e permissões globais</p>
+          <div class="screenshot-container">
+            <img src="screenshots/05_gestao_global_usuarios.png" alt="05 - Gestão Global: Usuários Centrais" onclick="openModal('screenshots/05_gestao_global_usuarios.png', '05 - Gestão Global: Usuários Centrais')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">06 - Gestão Global: Perfis & RBAC</h3>
+            </div>
+            <span class="test-time">⏱ 1.71s</span>
+          </div>
+          <p class="test-desc">Matriz de perfis corporativos (Administrador, Gerente, Operador)</p>
+          <div class="screenshot-container">
+            <img src="screenshots/06_gestao_global_perfis.png" alt="06 - Gestão Global: Perfis & RBAC" onclick="openModal('screenshots/06_gestao_global_perfis.png', '06 - Gestão Global: Perfis & RBAC')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">07 - Gestão de Fornecedores</h3>
+            </div>
+            <span class="test-time">⏱ 1.77s</span>
+          </div>
+          <p class="test-desc">Listagem cadastral de parceiros, CNPJ, contatos e filtros</p>
+          <div class="screenshot-container">
+            <img src="screenshots/07_fornecedores_listagem.png" alt="07 - Gestão de Fornecedores" onclick="openModal('screenshots/07_fornecedores_listagem.png', '07 - Gestão de Fornecedores')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">08 - Fornecedores: Cadastro Completo</h3>
+            </div>
+            <span class="test-time">⏱ 2.02s</span>
+          </div>
+          <p class="test-desc">Modal de inclusão de fornecedor com dados bancários e fiscais</p>
+          <div class="screenshot-container">
+            <img src="screenshots/08_fornecedores_modal.png" alt="08 - Fornecedores: Cadastro Completo" onclick="openModal('screenshots/08_fornecedores_modal.png', '08 - Fornecedores: Cadastro Completo')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">09 - Estoque de Insumos & Matérias-Primas</h3>
+            </div>
+            <span class="test-time">⏱ 1.99s</span>
+          </div>
+          <p class="test-desc">Controle de saldo, custos unitários e estoque mínimo</p>
+          <div class="screenshot-container">
+            <img src="screenshots/09_estoque_insumos.png" alt="09 - Estoque de Insumos & Matérias-Primas" onclick="openModal('screenshots/09_estoque_insumos.png', '09 - Estoque de Insumos & Matérias-Primas')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">10 - Insumos: Pesquisa & Filtros Dinâmicos</h3>
+            </div>
+            <span class="test-time">⏱ 1.48s</span>
+          </div>
+          <p class="test-desc">Mecanismo interativo de busca e atualização da tabela</p>
+          <div class="screenshot-container">
+            <img src="screenshots/10_insumos_interativo.png" alt="10 - Insumos: Pesquisa & Filtros Dinâmicos" onclick="openModal('screenshots/10_insumos_interativo.png', '10 - Insumos: Pesquisa & Filtros Dinâmicos')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">11 - Estoque de Produtos Acabados</h3>
+            </div>
+            <span class="test-time">⏱ 1.80s</span>
+          </div>
+          <p class="test-desc">Acompanhamento de inventário e valor total em estoque</p>
+          <div class="screenshot-container">
+            <img src="screenshots/11_estoque_produtos.png" alt="11 - Estoque de Produtos Acabados" onclick="openModal('screenshots/11_estoque_produtos.png', '11 - Estoque de Produtos Acabados')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">12 - Unidades de Medida</h3>
+            </div>
+            <span class="test-time">⏱ 1.76s</span>
+          </div>
+          <p class="test-desc">Catálogo de unidades (KG, UN, M, L) e fatores de conversão</p>
+          <div class="screenshot-container">
+            <img src="screenshots/12_unidades_medida.png" alt="12 - Unidades de Medida" onclick="openModal('screenshots/12_unidades_medida.png', '12 - Unidades de Medida')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">13 - Produtos Finais & Ficha Técnica</h3>
+            </div>
+            <span class="test-time">⏱ 1.94s</span>
+          </div>
+          <p class="test-desc">Precificação dinâmica, custos operacionais e margem de lucro</p>
+          <div class="screenshot-container">
+            <img src="screenshots/13_produtos_finais.png" alt="13 - Produtos Finais & Ficha Técnica" onclick="openModal('screenshots/13_produtos_finais.png', '13 - Produtos Finais & Ficha Técnica')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">14 - Gestão de Kits & Combos</h3>
+            </div>
+            <span class="test-time">⏱ 1.75s</span>
+          </div>
+          <p class="test-desc">Composição de kits com cálculo automático de custos e markup</p>
+          <div class="screenshot-container">
+            <img src="screenshots/14_kits_produtos.png" alt="14 - Gestão de Kits & Combos" onclick="openModal('screenshots/14_kits_produtos.png', '14 - Gestão de Kits & Combos')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">15 - Painel de Orçamentos</h3>
+            </div>
+            <span class="test-time">⏱ 1.76s</span>
+          </div>
+          <p class="test-desc">Cotações com clientes, status de aprovação e valores</p>
+          <div class="screenshot-container">
+            <img src="screenshots/15_orcamentos.png" alt="15 - Painel de Orçamentos" onclick="openModal('screenshots/15_orcamentos.png', '15 - Painel de Orçamentos')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">16 - Pedidos de Venda / Clientes</h3>
+            </div>
+            <span class="test-time">⏱ 1.76s</span>
+          </div>
+          <p class="test-desc">Emissão e processamento de pedidos finais de clientes</p>
+          <div class="screenshot-container">
+            <img src="screenshots/16_pedidos_clientes.png" alt="16 - Pedidos de Venda / Clientes" onclick="openModal('screenshots/16_pedidos_clientes.png', '16 - Pedidos de Venda / Clientes')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">17 - Pedidos de Compra a Fornecedores</h3>
+            </div>
+            <span class="test-time">⏱ 1.76s</span>
+          </div>
+          <p class="test-desc">Geração de ordens de compra e acompanhamento de entrega</p>
+          <div class="screenshot-container">
+            <img src="screenshots/17_pedidos_compra.png" alt="17 - Pedidos de Compra a Fornecedores" onclick="openModal('screenshots/17_pedidos_compra.png', '17 - Pedidos de Compra a Fornecedores')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">18 - Registro de Compras Realizadas</h3>
+            </div>
+            <span class="test-time">⏱ 1.77s</span>
+          </div>
+          <p class="test-desc">Lançamento de notas fiscais e alimentação do estoque de insumos</p>
+          <div class="screenshot-container">
+            <img src="screenshots/18_compras_realizadas.png" alt="18 - Registro de Compras Realizadas" onclick="openModal('screenshots/18_compras_realizadas.png', '18 - Registro de Compras Realizadas')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">19 - Configurações & Parâmetros de Custo</h3>
+            </div>
+            <span class="test-time">⏱ 1.77s</span>
+          </div>
+          <p class="test-desc">Ajuste fino de custos fixos, comissões, taxas e impostos</p>
+          <div class="screenshot-container">
+            <img src="screenshots/19_configuracoes_globais.png" alt="19 - Configurações & Parâmetros de Custo" onclick="openModal('screenshots/19_configuracoes_globais.png', '19 - Configurações & Parâmetros de Custo')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">20 - Copilot IA Operacional (Text-to-SQL)</h3>
+            </div>
+            <span class="test-time">⏱ 2.43s</span>
+          </div>
+          <p class="test-desc">Assistente inteligente com suporte a consultas em linguagem natural</p>
+          <div class="screenshot-container">
+            <img src="screenshots/20_copilot_ia_spotlight.png" alt="20 - Copilot IA Operacional (Text-to-SQL)" onclick="openModal('screenshots/20_copilot_ia_spotlight.png', '20 - Copilot IA Operacional (Text-to-SQL)')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">21 - Modo Escuro (Dark Mode)</h3>
+            </div>
+            <span class="test-time">⏱ 2.16s</span>
+          </div>
+          <p class="test-desc">Suporte completo a tema escuro com contraste e legibilidade impecáveis</p>
+          <div class="screenshot-container">
+            <img src="screenshots/21_dark_mode_interface.png" alt="21 - Modo Escuro (Dark Mode)" onclick="openModal('screenshots/21_dark_mode_interface.png', '21 - Modo Escuro (Dark Mode)')" />
+          </div>
+          
+        </div>
+        
+        <div class="test-card">
+          <div class="test-header">
+            <div class="test-title-group">
+              <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                PASS
+              </span>
+              <h3 class="test-title">22 - Isolamento Multi-Tenant Real</h3>
+            </div>
+            <span class="test-time">⏱ 4.37s</span>
+          </div>
+          <p class="test-desc">Comprovação de schema dedicado da filial sem vazamento de dados da matriz</p>
+          <div class="screenshot-container">
+            <img src="screenshots/22_filial_isolada_multi_tenant.png" alt="22 - Isolamento Multi-Tenant Real" onclick="openModal('screenshots/22_filial_isolada_multi_tenant.png', '22 - Isolamento Multi-Tenant Real')" />
+          </div>
+          
+        </div>
+        
+    </div>
+  </div>
+
+  <!-- Modal Lightbox -->
+  <div id="imageModal" class="modal-backdrop" onclick="closeModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="modalTitle" class="modal-title"></span>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-img-container">
+        <img id="modalImg" src="" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openModal(src, title) {
+      document.getElementById('modalImg').src = src;
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('imageModal').classList.add('active');
+    }
+    function closeModal() {
+      document.getElementById('imageModal').classList.remove('active');
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  </script>
+</body>
+</html>

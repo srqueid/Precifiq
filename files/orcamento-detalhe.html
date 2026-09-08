@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Detalhe do Orçamento — Sistema Comercial</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="page">
+
+  <nav class="top-menu">
+    <a class="menu-link" href="dashboard.html">Dashboard</a>
+    <a class="menu-link" href="precificacao.html">Precificação</a>
+    <a class="menu-link" href="produtos.html">Produtos</a>
+    <a class="menu-link" href="insumos.html">Insumos</a>
+    <a class="menu-link" href="configuracoes.html">Configurações</a>
+    <a class="menu-link" href="orcamentos.html">← Orçamentos</a>
+  </nav>
+
+  <!-- Cabeçalho do orçamento -->
+  <div class="card" id="orc-header">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div id="orc-titulo" style="font-size:22px; font-weight:700; margin-bottom:6px">Carregando…</div>
+        <div id="orc-meta" style="color:var(--muted); font-size:13px"></div>
+      </div>
+      <span class="badge" id="orc-status-badge">—</span>
+    </div>
+  </div>
+
+  <!-- Itens -->
+  <div class="card">
+    <div class="section-title">Itens do Orçamento</div>
+
+    <div class="form-row">
+      <select id="item-insumo"></select>
+      <input type="number" id="item-qtd" step="0.01" min="0" placeholder="Quantidade"/>
+      <button class="btn btn-primary" id="btn-add-item">+ Adicionar item</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Insumo</th>
+          <th class="text-right">Quantidade</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tb-itens"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+const STATUS_BADGE = {
+  'EM_DIGITACAO':       { cls: 'badge-gray',   label: 'Em Digitação' },
+  'ORCAMENTO_APROVADO': { cls: 'badge-green',  label: 'Aprovado' },
+  'CONCLUIDO':          { cls: 'badge-blue',   label: 'Concluído' },
+  'CANCELADO':          { cls: 'badge-red',    label: 'Cancelado' },
+};
+
+const orcId = new URLSearchParams(location.search).get('id');
+if (!orcId) location.href = 'orcamentos.html';
+
+async function load() {
+  try {
+    // Orçamento + itens
+    const data    = await apiFetch(`/orcamentos/${orcId}`);
+    const orc     = data.orcamento;
+    const itens   = data.itens || [];
+
+    // Header
+    document.getElementById('orc-titulo').textContent = orc.titulo;
+    document.getElementById('orc-meta').textContent   =
+      `Criado: ${orc.dataCriacao}` + (orc.observacoes ? ` — ${orc.observacoes}` : '');
+    const sb = STATUS_BADGE[orc.status] ?? { cls: 'badge-gray', label: orc.status };
+    const badgeEl = document.getElementById('orc-status-badge');
+    badgeEl.className = `badge ${sb.cls}`;
+    badgeEl.textContent = sb.label;
+
+    // Insumos para o select
+    const insData = await apiFetch('/insumos/json');
+    const insumos = insData.insumos || [];
+    const sel = document.getElementById('item-insumo');
+    sel.innerHTML = insumos.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+
+    // Tabela de itens
+    const tbody = clearTable('tb-itens');
+    if (!itens.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Nenhum item adicionado</td></tr>';
+    } else {
+      itens.forEach(it => {
+        const nome = insumos.find(i => i.id === it.insumoId)?.nome ?? `#${it.insumoId}`;
+        appendRow('tb-itens', `
+          <td>${nome}</td>
+          <td class="text-right td-mono">${fmt.num(it.quantidade)}</td>
+          <td class="actions">
+            <button class="btn btn-danger btn-sm" onclick="deletarItem(${it.id})">Remover</button>
+          </td>
+        `);
+      });
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Erro ao carregar orçamento', 'error');
+  }
+}
+
+document.getElementById('btn-add-item').addEventListener('click', async () => {
+  const insumoId  = parseInt(document.getElementById('item-insumo').value) || 0;
+  const quantidade = parseFloat(document.getElementById('item-qtd').value) || 0;
+  if (!insumoId || quantidade <= 0) { toast('Selecione insumo e informe quantidade > 0', 'error'); return; }
+  try {
+    await apiPost(`/orcamentos/${orcId}/itens`, {
+      id: 0, orcamentoId: parseInt(orcId), insumoId, quantidade,
+    });
+    document.getElementById('item-qtd').value = '';
+    toast('Item adicionado');
+    load();
+  } catch (e) { toast('Erro ao adicionar item', 'error'); }
+});
+
+async function deletarItem(itemId) {
+  if (!confirm('Confirma a remoção?')) return;
+  try {
+    await apiFetch(`/orcamentos/${orcId}/itens/${itemId}/deletar`);
+    toast('Item removido');
+    load();
+  } catch (e) { toast('Erro ao remover item', 'error'); }
+}
+
+load();
+</script>
+</body>
+</html>

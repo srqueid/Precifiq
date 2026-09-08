@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Produtos — Sistema Comercial</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="page">
+
+  <nav class="top-menu">
+    <a class="menu-link" href="dashboard.html">Dashboard</a>
+    <a class="menu-link" href="precificacao.html">Precificação</a>
+    <a class="menu-link" href="produtos.html">Produtos</a>
+    <a class="menu-link" href="insumos.html">Insumos</a>
+    <a class="menu-link" href="configuracoes.html">Configurações</a>
+    <a class="menu-link" href="orcamentos.html">Orçamentos</a>
+  </nav>
+
+  <div class="card">
+    <div class="section-title">Produtos Finais</div>
+
+    <div class="form-row">
+      <input type="text"   id="prod-nome"       placeholder="Nome do produto"/>
+      <input type="text"   id="prod-desc"       placeholder="Descrição"/>
+      <input type="number" id="prod-rendimento" placeholder="Rendimento" step="0.01" min="0"/>
+      <button class="btn btn-primary" id="btn-add">+ Adicionar</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Descrição</th>
+          <th class="text-right">Rendimento</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tb-produtos"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+async function load() {
+  try {
+    const data = await apiFetch('/produtos-finais/json');
+    const tbody = clearTable('tb-produtos');
+    const produtos = data.produtos || [];
+    if (!produtos.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum produto cadastrado</td></tr>';
+      return;
+    }
+    produtos.forEach(p => {
+      appendRow('tb-produtos', `
+        <td>${p.nome}</td>
+        <td style="color:var(--muted)">${p.descricao || '—'}</td>
+        <td class="text-right td-mono">${fmt.num(p.rendimentoReceitaBase)}</td>
+        <td class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="editarProd(${p.id}, '${escHtml(p.nome)}', '${escHtml(p.descricao || '')}', ${p.rendimentoReceitaBase})">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deletarProd(${p.id})">Deletar</button>
+        </td>
+      `);
+    });
+  } catch (e) {
+    console.error(e);
+    toast('Erro ao carregar produtos', 'error');
+  }
+}
+
+document.getElementById('btn-add').addEventListener('click', async () => {
+  const nome       = document.getElementById('prod-nome').value.trim();
+  const descricao  = document.getElementById('prod-desc').value.trim();
+  const rendimento = parseFloat(document.getElementById('prod-rendimento').value) || 1;
+  if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+  try {
+    await apiPost('/produtos-finais', { id: 0, nome, descricao, rendimentoReceitaBase: rendimento });
+    document.getElementById('prod-nome').value = '';
+    document.getElementById('prod-desc').value = '';
+    document.getElementById('prod-rendimento').value = '';
+    toast('Produto adicionado');
+    load();
+  } catch (e) { toast('Erro ao adicionar: ' + e.message, 'error'); }
+});
+
+async function editarProd(id, nomeAtual, descAtual, rendAtual) {
+  const nome = prompt('Nome:', nomeAtual); if (nome === null) return;
+  const desc = prompt('Descrição:', descAtual); if (desc === null) return;
+  const rendStr = prompt('Rendimento:', rendAtual); if (rendStr === null) return;
+  const rendimento = parseFloat(rendStr) || 1;
+  try {
+    await apiPost(`/produtos-finais/atualizar/${id}`, { id, nome, descricao: desc, rendimentoReceitaBase: rendimento });
+    toast('Produto atualizado');
+    load();
+  } catch (e) { toast('Erro ao atualizar', 'error'); }
+}
+
+async function deletarProd(id) {
+  if (!confirm('Confirma a exclusão?')) return;
+  try {
+    await apiFetch(`/produtos-finais/deletar/${id}`);
+    toast('Produto removido');
+    load();
+  } catch (e) { toast('Erro ao deletar', 'error'); }
+}
+
+function escHtml(s) { return String(s).replace(/'/g, "\\'"); }
+
+load();
+</script>
+</body>
+</html>

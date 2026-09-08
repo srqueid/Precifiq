@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Sistema Comercial</title>
+  <link rel="stylesheet" href="../css/app.css"/>
+</head>
+<body>
+<div class="page">
+
+  <nav class="top-menu">
+    <a class="menu-link" href="dashboard.html">Dashboard</a>
+    <a class="menu-link" href="precificacao.html">Precificação</a>
+    <a class="menu-link" href="produtos.html">Produtos</a>
+    <a class="menu-link" href="insumos.html">Insumos</a>
+    <a class="menu-link" href="configuracoes.html">Configurações</a>
+    <a class="menu-link" href="orcamentos.html">Orçamentos</a>
+  </nav>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card green">
+      <div class="kpi-label">Compras Aguardando</div>
+      <div class="kpi-value green" id="kpi-compras-pendentes">—</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">Orçamentos em Elaboração</div>
+      <div class="kpi-value yellow" id="kpi-orcamentos">—</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">Orçamentos Aprovados</div>
+      <div class="kpi-value blue" id="kpi-aprovados">—</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Compras do Mês</div>
+      <div class="kpi-value red" id="kpi-compras-total">—</div>
+    </div>
+  </div>
+
+  <!-- Conteúdo principal -->
+  <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:24px;">
+
+    <!-- Planilha de preços -->
+    <div class="card">
+      <div class="section-title">Planilha de Preços</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Tamanho</th>
+            <th>Custo</th>
+            <th>Venda</th>
+            <th>Margem</th>
+          </tr>
+        </thead>
+        <tbody id="tb-precos"></tbody>
+      </table>
+      <p style="margin-top:12px; font-size:12px; color:var(--muted)">Atualizado automaticamente com base no custo calculado.</p>
+    </div>
+
+    <!-- Estoque -->
+    <div class="card">
+      <div class="section-title">Estoque</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Unid.</th>
+            <th class="text-right">Estoque</th>
+            <th class="text-right">Preço</th>
+          </tr>
+        </thead>
+        <tbody id="tb-estoque"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- Compras pendentes -->
+  <div class="card" id="card-pendentes" style="display:none">
+    <div class="section-title">Compras Aguardando Recebimento</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th>Fornecedor</th>
+          <th class="text-right">Valor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tb-pendentes"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="../js/app.js"></script>
+<script>
+async function load() {
+  try {
+    const d = await apiFetch('/');
+
+    // KPIs
+    document.getElementById('kpi-compras-pendentes').textContent = d.comprasPendentesCount ?? 0;
+    document.getElementById('kpi-orcamentos').textContent        = d.orcamentosCount ?? 0;
+    document.getElementById('kpi-aprovados').textContent         = d.aprovadosCount ?? 0;
+    document.getElementById('kpi-compras-total').textContent     = fmt.brl(d.comprasTotal);
+
+    // Preços
+    const tbPrecos = clearTable('tb-precos');
+    (d.precos || []).forEach(p => {
+      appendRow('tb-precos', `
+        <td>${p.produtoNome}</td>
+        <td>${p.nomeTamanho}</td>
+        <td class="td-blue td-mono">${fmt.brl(p.custoUnitarioCalculado)}</td>
+        <td class="td-blue td-mono">${fmt.brl(p.precoVenda)}</td>
+        <td class="td-green td-mono">${fmt.pct(p.margemLucro)}</td>
+      `);
+    });
+    if (!d.precos?.length) tbPrecos.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum produto precificado</td></tr>';
+
+    // Estoque
+    const tbEstoque = clearTable('tb-estoque');
+    (d.estoque || []).forEach(i => {
+      appendRow('tb-estoque', `
+        <td>${i.nome}</td>
+        <td><span class="badge ${i.tipo === 'Embalagem' ? 'badge-blue' : 'badge-gray'}">${i.tipo}</span></td>
+        <td>${i.unidadeSigla}</td>
+        <td class="text-right td-mono">${i.estoque ?? '—'}</td>
+        <td class="text-right td-mono">${fmt.brl(i.preco)}</td>
+      `);
+    });
+    if (!d.estoque?.length) tbEstoque.innerHTML = '<tr><td colspan="5" class="empty-state">Sem dados de estoque</td></tr>';
+
+    // Compras pendentes
+    const pendentes = d.comprasPendentes || [];
+    if (pendentes.length) {
+      document.getElementById('card-pendentes').style.display = '';
+      pendentes.forEach(c => {
+        appendRow('tb-pendentes', `
+          <td class="td-mono">#${c.id}</td>
+          <td>${c.dataCriacao || '—'}</td>
+          <td>${c.fornecedorId ?? '—'}</td>
+          <td class="text-right td-mono">${fmt.brl(c.valorTotal)}</td>
+          <td><span class="badge badge-yellow">${c.status}</span></td>
+        `);
+      });
+    }
+
+  } catch (e) {
+    console.error('Erro ao carregar dashboard:', e);
+    toast('Falha ao conectar com a API', 'error');
+  }
+}
+
+load();
+</script>
+</body>
+</html>

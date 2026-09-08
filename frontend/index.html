@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Precifiq - Sistema de Gestão e Precificação</title>
+    <script>
+      // Silencia erros de extensões de terceiros injetadas no navegador (ex: Web Vitals / DevTools / VM*)
+      window.addEventListener('error', function (event) {
+        if (
+          event.message &&
+          (event.message.indexOf("reading 'startTime'") !== -1 ||
+           event.message.indexOf("reportAllChanges") !== -1)
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

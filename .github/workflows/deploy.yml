@@ -1,0 +1,92 @@
+name: Deploy to Production Server
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          timeout: 60s
+          script: |
+            set -e
+            cd /opt/controle-silvia
+            
+            # 2. Grava o commit ATUAL em uma variável para ser usado caso necessite de Rollback
+            # Se ainda não houver nenhum commit validado (primeiro deploy), usa HEAD
+            PREV_COMMIT=$(git rev-parse --verify HEAD 2>/dev/null || echo "")
+            echo "Commit de segurança antes do deploy: ${PREV_COMMIT}"
+            
+            # 3. Define função de Rollback em caso de falha no deploy
+            rollback() {
+              echo "❌ ERRO CRÍTICO NO DEPLOY! Os containers não ficaram saudáveis."
+              if [ -n "$PREV_COMMIT" ]; then
+                echo "⚠️ Iniciando ROLLBACK AUTOMÁTICO para o commit: ${PREV_COMMIT}..."
+                git reset --hard "$PREV_COMMIT"
+                
+                # Sobe a versão anterior da aplicação rapidamente usando as imagens em cache
+                docker compose up -d --remove-orphans --force-recreate backend frontend
+                echo "✅ Rollback concluído com sucesso. A aplicação voltou ao estado anterior."
+              else
+                echo "⚠️ Não há commit anterior registrado para reverter."
+              fi
+              exit 1
+            }
+            
+            # 4. Atualiza o código-fonte (Requer chave SSH no servidor sem passphrase!)
+            git remote set-url origin "git@github.com:${{ github.repository }}.git"
+            git fetch origin master
+            git reset --hard origin/master
+            
+            # Gera o arquivo .env correto (evitando expor no terminal em caso de erro)
+            printf '%s\n' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+            
+            # 5. Inicialização do banco e migration no primeiro deploy (desabilita nos próximos)
+            if [ ! -f .migration_completed ] || [ "$FORCE_MIGRATION" = "true" ]; then
+              echo "🚀 [PRIMEIRO DEPLOY DETECTADO] Inicializando banco e executando migration no schema 'controle'..."
+              docker compose --profile db up -d postgres
+              
+              echo "⏳ Aguardando PostgreSQL ficar pronto..."
+              for i in {1..30}; do
+                if docker compose --profile db exec -T postgres pg_isready > /dev/null 2>&1; then
+                  echo "✅ PostgreSQL pronto para receber comandos."
+                  break
+                fi
+                sleep 2
+              done
+              
+              echo "⚙️ Aplicando schema 'controle' e carga inicial de dados..."
+              docker compose --profile db exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
+              
+              touch .migration_completed
+              echo "🔒 Trava .migration_completed criada com sucesso! Migration desabilitada para deploys futuros."
+            else
+              echo "ℹ️ Migration inicial já concluída (.migration_completed presente). Pulando para manter os dados preservados."
+            fi
+            
+            # 6. Build antecipado dos serviços de aplicação sem causar downtime
+            echo "🛠️ Construindo as novas imagens Docker (backend e frontend)..."
+            docker compose build --pull backend frontend
+            
+            # 7. DEPLOY COM HEALTHCHECK + ROLLBACK CONDICIONAL
+            # O '--wait' faz o Docker Compose segurar a execução por até 120s 
+            # esperando os healthchecks do backend e frontend darem 'OK'.
+            # O banco de dados NÃO é afetado por este comando.
+            echo "🚀 Subindo novos containers da aplicação e aguardando testes de saúde..."
+            docker compose up -d --remove-orphans --wait --wait-timeout 120 backend frontend || rollback
+            
+            # 8. Limpeza de cache e imagens antigas sem uso para economizar disco
+            echo "🧹 Limpando imagens antigas sem uso..."
+            docker image prune -f
+            
+            echo "✨ Deploy da aplicação finalizado e validado com sucesso!"
