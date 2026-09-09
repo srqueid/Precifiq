@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, Ruler, ShoppingBag, ClipboardList, Settings, Moon, Sun, Monitor, Menu, X, ShoppingCart, Warehouse, FileText, Truck, Landmark, LucideIcon, PackagePlus, Sparkles, Building2, ChevronDown, Check, GitFork } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Users, Package, Ruler, ShoppingBag, ClipboardList, Settings, Moon, Sun, Monitor, Menu, X, ShoppingCart, Warehouse, FileText, Truck, Landmark, LucideIcon, PackagePlus, Sparkles, Building2, ChevronDown, Check, GitFork, ShieldCheck, LogOut } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useTenant, EmpresaItem } from './contexts/TenantContext';
+import { useAuth } from './contexts/AuthContext';
 import packageJson from '../package.json';
+import precifiqLogo from './assets/precifiq.png';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,8 +22,10 @@ interface MenuItem {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopilot }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { activeCompany, empresasHierarquia, selectCompany } = useTenant();
+  const { user, isSuperuser, logout } = useAuth();
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const appVersion = packageJson.version;
@@ -44,6 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
   };
 
   const menuItems: MenuItem[] = [
+    ...(isSuperuser ? [{ path: '/superadmin', label: 'Superadmin DcSys', icon: ShieldCheck }] : []),
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/fornecedores', label: 'Fornecedores', icon: Users },
     { path: '/insumos', label: 'Estoque de Insumos', icon: Package },
@@ -72,7 +77,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
         </button>
 
         <div className="sidebar-brand" aria-label="Precifiq - Sistema de Gestão e Precificação" title="Precifiq - Sistema de Gestão e Precificação">
-          <div className="sidebar-logo" aria-hidden="true">PQ</div>
+          <div className="sidebar-logo-container" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img 
+              src={precifiqLogo} 
+              alt="Logo Precifiq" 
+              style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'contain' }} 
+            />
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <div className="sidebar-title" style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '-0.01em', lineHeight: 1.2 }}>Precifiq</div>
             <div style={{ fontSize: '10px', color: 'var(--text-secondary, #64748b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500, lineHeight: 1.2 }}>
@@ -273,6 +284,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActivePath(item.path);
+            const isGestaoGlobal = item.path === '/gestao-global';
+            const isSuperadmin = item.path === '/superadmin';
             return (
               <Link
                 key={item.path}
@@ -280,13 +293,106 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
                 onClick={onClose}
                 className={`sidebar-link ${isActive ? 'active' : ''}`}
                 aria-current={isActive ? 'page' : undefined}
+                style={isSuperadmin ? {
+                  background: isActive ? 'linear-gradient(135deg, rgba(124, 58, 237, 0.22) 0%, rgba(79, 70, 229, 0.22) 100%)' : 'rgba(124, 58, 237, 0.08)',
+                  border: '1px solid rgba(124, 58, 237, 0.25)',
+                  color: '#7c3aed',
+                  fontWeight: 700
+                } : undefined}
               >
-                <Icon size={18} />
+                <Icon size={18} style={isSuperadmin ? { color: '#7c3aed' } : undefined} />
                 <span>{item.label}</span>
+                {isSuperadmin && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    background: '#7c3aed',
+                    color: '#ffffff',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px'
+                  }}>
+                    ROOT
+                  </span>
+                )}
+                {isGestaoGlobal && isSuperuser && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    background: 'rgba(147, 51, 234, 0.15)',
+                    color: '#7c3aed',
+                    padding: '2px 5px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px'
+                  }}>
+                    DCSYS
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
+
+        {/* Card do Usuário Logado & Botão Sair / Trocar Conta */}
+        <div style={{
+          padding: '10px 12px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          marginTop: 'auto',
+          background: 'var(--surface, rgba(0,0,0,0.02))'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              backgroundColor: isSuperuser ? '#7c3aed' : '#2563eb',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              fontWeight: 700,
+              flexShrink: 0
+            }}>
+              {user?.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div style={{ overflow: 'hidden', minWidth: 0 }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                {user?.nome || 'Usuário'}
+              </div>
+              <div style={{ fontSize: '9px', color: isSuperuser ? '#7c3aed' : 'var(--text-secondary, #64748b)', fontWeight: isSuperuser ? 700 : 500 }}>
+                {isSuperuser ? 'Superusuário DcSys' : 'Colaborador'}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+            title="Sair / Trocar Conta"
+            style={{
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: 'var(--text-secondary, #64748b)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
 
         <div className="sidebar-footer" role="group" aria-label="Seletor de tema">
           <div className="sidebar-version-tag">v{appVersion}</div>
@@ -327,6 +433,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActivePath(item.path);
+            const isGestaoGlobal = item.path === '/gestao-global';
+            const isSuperadmin = item.path === '/superadmin';
             return (
               <Link
                 key={item.path}
@@ -335,13 +443,109 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
                 className={`sidebar-link ${isActive ? 'active' : ''}`}
                 role="menuitem"
                 aria-current={isActive ? 'page' : undefined}
+                style={isSuperadmin ? {
+                  background: isActive ? 'linear-gradient(135deg, rgba(124, 58, 237, 0.22) 0%, rgba(79, 70, 229, 0.22) 100%)' : 'rgba(124, 58, 237, 0.08)',
+                  border: '1px solid rgba(124, 58, 237, 0.25)',
+                  color: '#7c3aed',
+                  fontWeight: 700
+                } : undefined}
               >
-                <Icon size={20} />
+                <Icon size={20} style={isSuperadmin ? { color: '#7c3aed' } : undefined} />
                 <span>{item.label}</span>
+                {isSuperadmin && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    background: '#7c3aed',
+                    color: '#ffffff',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px'
+                  }}>
+                    ROOT
+                  </span>
+                )}
+                {isGestaoGlobal && isSuperuser && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    background: 'rgba(147, 51, 234, 0.15)',
+                    color: '#7c3aed',
+                    padding: '2px 5px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.4px'
+                  }}>
+                    DCSYS
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
+
+        {/* Rodapé do Usuário & Logout */}
+        {user && (
+          <div style={{
+            marginTop: 'auto',
+            padding: '12px 14px',
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            backgroundColor: 'var(--surface-2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: isSuperuser ? '#7c3aed' : 'var(--accent)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: '13px',
+                flexShrink: 0
+              }}>
+                {user.nome.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {user.nome}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {isSuperuser ? 'Superusuário DcSys' : user.email}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                onClose();
+                navigate('/');
+              }}
+              title="Sair / Trocar Conta"
+              className="btn-action-danger"
+              style={{
+                padding: '6px',
+                borderRadius: 'var(--radius)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

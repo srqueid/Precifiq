@@ -17,6 +17,7 @@ data class KitPayload(
     val nome: String,
     val descricao: String?,
     val margemLucro: Double,
+    val codigoBarras: String? = null,
     val itens: List<KitItemPayload>
 )
 
@@ -43,6 +44,7 @@ data class KitDto(
     val margemLucro: Double,
     val custoTotalCalculado: Double,
     val precoVenda: Double,
+    val codigoBarras: String? = null,
     val itens: List<KitItemDto>
 )
 
@@ -77,6 +79,7 @@ fun Route.kitsRoutes() {
                             margemLucro = row[KitsTable.margemLucro],
                             custoTotalCalculado = row[KitsTable.custoTotalCalculado],
                             precoVenda = row[KitsTable.precoVenda],
+                            codigoBarras = row[KitsTable.codigoBarras],
                             itens = items
                         )
                     }
@@ -149,6 +152,7 @@ fun Route.kitsRoutes() {
                     val resultRow = KitsTable.insert {
                         it[nome] = payload.nome
                         it[descricao] = payload.descricao
+                        it[codigoBarras] = payload.codigoBarras?.takeIf { c -> c.isNotBlank() }
                         it[margemLucro] = payload.margemLucro
                         it[this.custoTotalCalculado] = custoTotalCalculado
                         it[precoVenda] = precoDeVenda
@@ -215,6 +219,7 @@ fun Route.kitsRoutes() {
                     val count = KitsTable.update({ KitsTable.id eq id }) {
                         it[nome] = payload.nome
                         it[descricao] = payload.descricao
+                        it[codigoBarras] = payload.codigoBarras?.takeIf { c -> c.isNotBlank() }
                         it[margemLucro] = payload.margemLucro
                         it[this.custoTotalCalculado] = custoTotalCalculado
                         it[precoVenda] = precoDeVenda

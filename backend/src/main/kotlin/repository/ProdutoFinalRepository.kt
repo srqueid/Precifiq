@@ -125,6 +125,7 @@ class ProdutoFinalRepository {
                 precoVenda = it[ProdutoVariacoesTable.precoVenda],
                 custoUnitarioCalculado = it[ProdutoVariacoesTable.custoUnitarioCalculado],
                 estoque = estoqueMap[varId] ?: 0.0,
+                codigoBarras = it[ProdutoVariacoesTable.codigoBarras],
                 materiais = lerMateriaisDaVariacao(varId)
             )
         }
@@ -153,6 +154,7 @@ class ProdutoFinalRepository {
                 precoVenda = it[ProdutoVariacoesTable.precoVenda],
                 custoUnitarioCalculado = it[ProdutoVariacoesTable.custoUnitarioCalculado],
                 estoque = estoqueMap[varId] ?: 0.0,
+                codigoBarras = it[ProdutoVariacoesTable.codigoBarras],
                 materiais = lerMateriaisDaVariacao(varId)
             )
         }
@@ -179,6 +181,7 @@ class ProdutoFinalRepository {
                 precoVenda = it[ProdutoVariacoesTable.precoVenda],
                 custoUnitarioCalculado = it[ProdutoVariacoesTable.custoUnitarioCalculado],
                 estoque = estoqueVal,
+                codigoBarras = it[ProdutoVariacoesTable.codigoBarras],
                 materiais = lerMateriaisDaVariacao(id)
             )
         }
@@ -276,6 +279,7 @@ class ProdutoFinalRepository {
             it[margemLucro] = v.margemLucro
             it[precoVenda] = v.precoVenda
             it[custoUnitarioCalculado] = v.custoUnitarioCalculado
+            it[codigoBarras] = v.codigoBarras?.takeIf { c -> c.isNotBlank() }
         } get ProdutoVariacoesTable.id
 
         if (v.materiais.isNotEmpty()) {
@@ -305,6 +309,7 @@ class ProdutoFinalRepository {
             it[precoVenda] = v.precoVenda
             it[custoUnitarioCalculado] = v.custoUnitarioCalculado
             it[estoque] = v.estoque
+            it[codigoBarras] = v.codigoBarras?.takeIf { c -> c.isNotBlank() }
         }
         if (v.materiais.isNotEmpty()) {
             salvarMateriaisDaVariacao(id, v.materiais)

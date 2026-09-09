@@ -52,11 +52,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // Ignora erro
     }
-    return DEFAULT_USER;
+    return null;
   });
 
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem(AUTH_TOKEN_KEY) || 'jwt_dev_session';
+    return localStorage.getItem(AUTH_TOKEN_KEY) || null;
   });
 
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {

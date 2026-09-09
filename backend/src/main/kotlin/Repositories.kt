@@ -4,7 +4,9 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.javatime.CurrentTimestamp
 import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.sql.javatime.date
 import java.time.LocalDateTime
+import java.time.LocalDate
 
 // --- Unidades de Medida ---
 object UnidadesMedidaTable : Table("unidade_medida") {
@@ -58,6 +60,9 @@ object InsumosTable : Table("insumo") {
     val preco = double("preco")
     val isEmbalagem = bool("is_embalagem").default(false)
     val estoque = double("estoque").nullable()
+    val dataValidade = date("data_validade").nullable()
+    val lote = varchar("lote", 50).nullable()
+    val codigoBarras = varchar("codigo_barras", 50).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -89,13 +94,15 @@ object UnidadesCompraInsumoTable : Table("unidade_compra_insumo") {
 object MovimentosEstoqueInsumoTable : Table("movimento_estoque_insumo") {
     val id = integer("id").autoIncrement()
     val insumoId = integer("insumo_id").references(InsumosTable.id)
-    val tipo = varchar("tipo", 30) // ENTRADA_COMPRA, SAIDA_PRODUCAO, AJUSTE_INVENTARIO, PERDA, ESTORNO
+    val tipo = varchar("tipo", 30) // ENTRADA_COMPRA, SAIDA_PRODUCAO, SAIDA_VENDA, SAIDA_VENDA_KIT, AJUSTE_INVENTARIO, PERDA, ESTORNO
     val quantidade = double("quantidade")
     val saldoAnterior = double("saldo_anterior")
     val saldoPosterior = double("saldo_posterior")
     val origemReferencia = varchar("origem_referencia", 50).nullable()
     val referenciaId = integer("referencia_id").nullable()
     val motivo = text("motivo").nullable()
+    val dataValidade = date("data_validade").nullable()
+    val lote = varchar("lote", 50).nullable()
     val criadoEm = datetime("criado_em").clientDefault { LocalDateTime.now() }
     val criadoPor = integer("criado_por").references(FuncionariosTable.id).nullable()
     override val primaryKey = PrimaryKey(id)
@@ -124,6 +131,19 @@ object ProdutoVariacoesTable : Table("produto_variacao") {
     val precoVenda = double("preco_venda")
     val custoUnitarioCalculado = double("custo_unitario_calculado").default(0.0)
     val estoque = double("estoque").default(0.0)
+    val codigoBarras = varchar("codigo_barras", 50).nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+// --- Movimentos de Estoque de Produtos Acabados ---
+object MovimentosEstoqueVariacaoTable : Table("movimentacoes_estoque") {
+    val id = integer("id").autoIncrement()
+    val variacaoId = integer("variacao_id").references(ProdutoVariacoesTable.id)
+    val tipo = varchar("tipo", 30) // SAIDA_VENDA, SAIDA_VENDA_KIT, ENTRADA_PRODUCAO, AJUSTE_MANUAL
+    val quantidade = double("quantidade")
+    val motivo = varchar("motivo", 255).nullable()
+    val origem = varchar("origem", 100).nullable()
+    val dataMovimentacao = datetime("data_movimentacao").clientDefault { LocalDateTime.now() }
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -276,6 +296,8 @@ object PedidosTable : Table("pedido") {
     val id = integer("id").autoIncrement()
     val clienteId = integer("cliente_id").references(ClientesTable.id).nullable()
     val valor = double("valor").nullable()
+    val valorCustoTotal = double("valor_custo_total").default(0.0)
+    val lucroBruto = double("lucro_bruto").default(0.0)
     val formaPagamento = varchar("forma_pagamento", 50)
     val dataPagamento = varchar("data_pagamento", 20).nullable()
     val entregue = bool("entregue").default(false)
@@ -285,8 +307,12 @@ object PedidosTable : Table("pedido") {
 object PedidoItensTable : Table("pedido_item") {
     val id = integer("id").autoIncrement()
     val pedidoId = integer("pedido_id").references(PedidosTable.id)
+    val variacaoId = integer("variacao_id").nullable()
+    val kitId = integer("kit_id").nullable()
+    val tipo = varchar("tipo", 20).default("PRODUTO")
     val nomeProduto = varchar("nome_produto", 255)
     val quantidade = integer("quantidade")
     val precoUnitario = double("preco_unitario")
+    val custoUnitario = double("custo_unitario").default(0.0)
     override val primaryKey = PrimaryKey(id)
 }

@@ -1,6 +1,23 @@
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrcamentoFormScreen(
-    orcamentoId: Int? = null, // null = novo
+    orcamentoId: Int? = null,
     viewModel: OrcamentoFormViewModel = hiltViewModel()
 ) {
     val formState by viewModel.formState.collectAsState()
@@ -26,7 +43,6 @@ fun OrcamentoFormScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // Dados Gerais
             OutlinedTextField(
                 value = formState.titulo,
                 onValueChange = { viewModel.updateTitulo(it) },
@@ -41,13 +57,12 @@ fun OrcamentoFormScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             )
 
-            // Lista de Itens
             Text("Itens", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp))
 
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(420.dp)
+                    .height(300.dp)
             ) {
                 items(itens) { item ->
                     ItemOrcamentoEditable(
@@ -58,7 +73,6 @@ fun OrcamentoFormScreen(
                 }
             }
 
-            // Total
             Card(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -76,7 +90,6 @@ fun OrcamentoFormScreen(
                 }
             }
 
-            // Botões de Ação
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = { /* Salvar Rascunho */ },
@@ -89,7 +102,7 @@ fun OrcamentoFormScreen(
                     onClick = { viewModel.salvarEEnviarAprovacao() },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Salvar e Enviar para Aprovação")
+                    Text("Salvar e Enviar")
                 }
             }
         }

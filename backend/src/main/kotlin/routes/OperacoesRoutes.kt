@@ -39,6 +39,8 @@ fun Route.operacoesRoutes(db: AppDatabase) {
 
                 val insumosPreview = mutableListOf<Map<String, Any?>>()
                 var estoqueInsuficiente = false
+                var temInsumoVencido = false
+                val hoje = java.time.LocalDate.now()
 
                 for (item in receita) {
                     val insumo = db.insumos.lerPorId(item.insumoId)
@@ -51,6 +53,14 @@ fun Route.operacoesRoutes(db: AppDatabase) {
 
                         if (!disponivel) estoqueInsuficiente = true
 
+                        val vencido = try {
+                            if (!insumo.dataValidade.isNullOrBlank()) {
+                                java.time.LocalDate.parse(insumo.dataValidade).isBefore(hoje)
+                            } else false
+                        } catch (e: Exception) { false }
+
+                        if (vencido) temInsumoVencido = true
+
                         insumosPreview.add(mapOf(
                             "insumoId" to insumo.id,
                             "insumoNome" to insumo.nome,
@@ -58,7 +68,10 @@ fun Route.operacoesRoutes(db: AppDatabase) {
                             "unidadeSigla" to (unidade?.sigla ?: "ml"),
                             "estoqueAtual" to estoqueAtual,
                             "saldoApos" to saldoApos,
-                            "disponivel" to disponivel
+                            "disponivel" to disponivel,
+                            "dataValidade" to insumo.dataValidade,
+                            "lote" to insumo.lote,
+                            "vencido" to vencido
                         ))
                     }
                 }
@@ -73,6 +86,14 @@ fun Route.operacoesRoutes(db: AppDatabase) {
 
                         if (!disponivel) estoqueInsuficiente = true
 
+                        val vencido = try {
+                            if (!embalagem.dataValidade.isNullOrBlank()) {
+                                java.time.LocalDate.parse(embalagem.dataValidade).isBefore(hoje)
+                            } else false
+                        } catch (e: Exception) { false }
+
+                        if (vencido) temInsumoVencido = true
+
                         insumosPreview.add(mapOf(
                             "insumoId" to embalagem.id,
                             "insumoNome" to embalagem.nome,
@@ -81,7 +102,10 @@ fun Route.operacoesRoutes(db: AppDatabase) {
                             "estoqueAtual" to estoqueAtual,
                             "saldoApos" to saldoApos,
                             "disponivel" to disponivel,
-                            "isEmbalagem" to true
+                            "isEmbalagem" to true,
+                            "dataValidade" to embalagem.dataValidade,
+                            "lote" to embalagem.lote,
+                            "vencido" to vencido
                         ))
                     }
                 }
@@ -91,6 +115,7 @@ fun Route.operacoesRoutes(db: AppDatabase) {
                     "variacaoNome" to (variacao?.nomeTamanho ?: "Batelada"),
                     "quantidade" to quantidade,
                     "estoqueInsuficiente" to estoqueInsuficiente,
+                    "temInsumoVencido" to temInsumoVencido,
                     "insumos" to insumosPreview
                 ))
             } catch (e: Exception) {

@@ -1,10 +1,33 @@
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrcamentoDetalhesScreen(
     orcamentoId: Int,
-    onVoltar: () -> Unit,
-    onConverterParaCompra: () -> Unit
+    onVoltar: () -> Unit = {},
+    onConverterParaCompra: () -> Unit = {}
 ) {
-    val orcamento = remember { /* buscar do ViewModel */ }
+    val orcamento = remember { Orcamento(orcamentoId, "Mesa Madeira Maciça", "21/05/2026", Status.APROVADO, 3450.0) }
+    val itens = remember {
+        listOf(
+            ItemOrcamento(1, 1, "MDF 15mm 2.75x1.85m", "MDF 15mm", 3, "chapas", 180.0, 540.0),
+            ItemOrcamento(2, 2, "Cola de Contato 2.8kg", "Cola Contato", 1, "galões", 45.0, 45.0)
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -45,12 +68,10 @@ fun OrcamentoDetalhesScreen(
                 }
             }
 
-            // Informações
-            InfoSection(title = "Cliente/Projeto", value = "Produção Interna")
-            InfoSection(title = "Data", value = "21/05/2026")
-            InfoSection(title = "Validade", value = "20/06/2026")
+            InfoRow(title = "Cliente / Projeto", value = "Produção Interna")
+            InfoRow(title = "Data", value = "21/05/2026")
+            InfoRow(title = "Validade", value = "20/06/2026")
 
-            // Itens
             Text(
                 "Itens do Orçamento",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -58,13 +79,12 @@ fun OrcamentoDetalhesScreen(
                 fontSize = 18.sp
             )
 
-            LazyColumn(modifier = Modifier.height(400.dp)) {
+            LazyColumn(modifier = Modifier.height(300.dp)) {
                 items(itens) { item ->
                     ItemOrcamentoRow(item)
                 }
             }
 
-            // Botão de Conversão
             if (orcamento.status == Status.APROVADO) {
                 Button(
                     onClick = onConverterParaCompra,
@@ -82,6 +102,19 @@ fun OrcamentoDetalhesScreen(
 }
 
 @Composable
+fun InfoRow(title: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(title, color = Color.Gray, fontSize = 14.sp)
+        Text(value, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+    }
+}
+
+@Composable
 fun ItemOrcamentoRow(item: ItemOrcamento) {
     Card(
         modifier = Modifier
@@ -94,12 +127,12 @@ fun ItemOrcamentoRow(item: ItemOrcamento) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.insumo, fontWeight = FontWeight.Medium)
+                Text(item.insumo.ifEmpty { item.insumoNome }, fontWeight = FontWeight.Medium)
                 Text("${item.quantidade} ${item.unidade}", color = Color.Gray)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("R$ ${item.precoUnitario.format(2)}", fontWeight = FontWeight.SemiBold)
-                Text("R$ ${(item.subtotal/1000).format(2)}", color = MaterialTheme.colorScheme.primary)
+                Text("R$ ${(item.quantidade * item.precoUnitario).format(2)}", color = MaterialTheme.colorScheme.primary)
             }
         }
     }

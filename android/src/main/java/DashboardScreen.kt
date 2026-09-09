@@ -58,48 +58,56 @@ data class CustoPonto(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
+    viewModel: DashboardViewModel = hiltViewModel(),
     onNavigateToOrcamentos: () -> Unit = {},
     onNavigateToNovoOrcamento: () -> Unit = {},
     onNavigateToInsumos: () -> Unit = {},
     onNavigateToFornecedores: () -> Unit = {}
 ) {
-    // Dados de exemplo para o Dashboard
-    val kpis = remember {
+    val kpisFromApi by viewModel.kpis.collectAsState()
+    val insumosFromApi by viewModel.insumosCriticos.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+
+    // Dados base enquanto sincroniza com a API
+    val defaultKpis = remember {
         listOf(
             DashboardKPIData(
                 title = "Valor em Estoque",
-                value = "R$ 8.942,50",
-                trendText = "+5.2% este mês",
+                value = "R$ 0,00",
+                trendText = "Sincronizando...",
                 isPositiveTrend = true,
                 icon = Icons.Default.Inventory,
                 accentColor = Color(0xFF2563EB)
             ),
             DashboardKPIData(
                 title = "Orçamentos Aprovados",
-                value = "14",
-                trendText = "+3 nesta semana",
+                value = "0",
+                trendText = "Sincronizando...",
                 isPositiveTrend = true,
                 icon = Icons.Default.CheckCircle,
                 accentColor = Color(0xFF10B981)
             ),
             DashboardKPIData(
                 title = "Compras em Andamento",
-                value = "7",
-                trendText = "2 aguardando entrega",
+                value = "0",
+                trendText = "Sincronizando...",
                 isPositiveTrend = true,
                 icon = Icons.Default.ShoppingCart,
                 accentColor = Color(0xFFF59E0B)
             ),
             DashboardKPIData(
                 title = "Insumos Críticos",
-                value = "9",
-                trendText = "Abaixo do estoque mín.",
+                value = "0",
+                trendText = "Sincronizando...",
                 isPositiveTrend = false,
                 icon = Icons.Default.Warning,
                 accentColor = Color(0xFFEF4444)
             )
         )
     }
+
+    val kpis = if (kpisFromApi.isNotEmpty()) kpisFromApi else defaultKpis
 
     val custosSemana = remember {
         listOf(
@@ -121,7 +129,7 @@ fun DashboardScreen(
         )
     }
 
-    val insumosCriticos = remember {
+    val insumosCriticos = if (insumosFromApi.isNotEmpty()) insumosFromApi else remember {
         listOf(
             InsumoCritico(1, "MDF Cru 15mm 2.75x1.85m", "Matéria Prima", 3.0, 10.0, "chapas"),
             InsumoCritico(2, "Cola de Contato 2.8kg", "Consumíveis", 1.0, 5.0, "galões"),
@@ -192,10 +200,10 @@ fun DashboardScreen(
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onBackground
                         )
-                        TextButton(onClick = { /* Atualizar dados */ }) {
+                        TextButton(onClick = { viewModel.carregarDashboard() }) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Atualizado", fontSize = 12.sp)
+                            Text(if (isLoading) "Atualizando..." else "Atualizar", fontSize = 12.sp)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))

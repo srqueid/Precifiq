@@ -33,7 +33,7 @@ object TenantContext {
         return SCHEMA_REGEX.matches(schema)
     }
 
-    fun generateTenantSchema(nome: String): String {
+    fun generateTenantSchema(nome: String, tipo: String = "FILIAL"): String {
         val normalized = Normalizer.normalize(nome, Normalizer.Form.NFD)
             .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
             .lowercase(Locale.ROOT)
@@ -41,7 +41,23 @@ object TenantContext {
             .replace(Regex("_+"), "_")
             .trim('_')
 
-        val base = if (normalized.startsWith("emp_")) normalized else "emp_$normalized"
+        val base = if (tipo.equals("MATRIZ", ignoreCase = true)) {
+            if (normalized == "matriz" || normalized.startsWith("matriz_")) normalized else "matriz"
+        } else {
+            if (normalized.startsWith("filial_")) normalized else "filial_$normalized"
+        }
+        return if (base.length > 60) base.substring(0, 60) else base
+    }
+
+    fun generateDatabaseName(nomeEmpresa: String): String {
+        val normalized = Normalizer.normalize(nomeEmpresa, Normalizer.Form.NFD)
+            .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
+            .lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]"), "_")
+            .replace(Regex("_+"), "_")
+            .trim('_')
+
+        val base = if (normalized.startsWith("bd_")) normalized else "bd_$normalized"
         return if (base.length > 60) base.substring(0, 60) else base
     }
 

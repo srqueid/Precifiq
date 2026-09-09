@@ -17,7 +17,13 @@ import {
   RefreshCw,
   UserPlus,
   Link2,
-  AlertCircle
+  AlertCircle,
+  Server,
+  HardDrive,
+  Wrench,
+  Lock,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { useTenant, EmpresaHierarquia, EmpresaItem } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,6 +57,19 @@ interface UsuarioGlobal {
   empresas?: UsuarioEmpresaVinculo[];
 }
 
+interface BancoStatusInfo {
+  empresaId: number;
+  nomeFantasia: string;
+  schemaName: string;
+  tabelasTotal: number;
+  tabelasEsperadas: number;
+  status: 'PROVISIONADO' | 'INCOMPLETO' | 'FALHA';
+  insumosTotal?: number;
+  unidadesMedidaTotal?: number;
+  mensagem?: string;
+  erro?: string;
+}
+
 export const GestaoGlobalPage: React.FC = () => {
   const { activeCompany, empresasHierarquia, selectCompany, refreshEmpresas, isLoadingEmpresas } = useTenant();
   const { isSuperuser } = useAuth();
@@ -63,6 +82,11 @@ export const GestaoGlobalPage: React.FC = () => {
   const [isLoadingUsuarios, setIsLoadingUsuarios] = useState(false);
   const [isLoadingPerfis, setIsLoadingPerfis] = useState(false);
   const [searchUser, setSearchUser] = useState('');
+
+  // Status de Bancos Isolados (DcSys Diagnóstico)
+  const [bancoStatusMap, setBancoStatusMap] = useState<Record<number, BancoStatusInfo>>({});
+  const [verificandoBancoId, setVerificandoBancoId] = useState<number | null>(null);
+  const [reprovisionandoId, setReprovisionandoId] = useState<number | null>(null);
 
   // Modais de Empresa
   const [isModalNovaMatrizOpen, setIsModalNovaMatrizOpen] = useState(false);
@@ -79,7 +103,11 @@ export const GestaoGlobalPage: React.FC = () => {
     nomeFantasia: '',
     razaoSocial: '',
     cnpj: '',
-    schemaName: ''
+    bancoDados: 'bd_controle',
+    schemaName: 'matriz',
+    adminNome: '',
+    adminEmail: '',
+    adminSenha: ''
   });
 
   const [formFilial, setFormFilial] = useState({
@@ -87,7 +115,10 @@ export const GestaoGlobalPage: React.FC = () => {
     nomeFantasia: '',
     razaoSocial: '',
     cnpj: '',
-    schemaName: ''
+    schemaName: 'filial_',
+    adminNome: '',
+    adminEmail: '',
+    adminSenha: ''
   });
 
   const [formUsuario, setFormUsuario] = useState({
@@ -149,6 +180,51 @@ export const GestaoGlobalPage: React.FC = () => {
     carregarPerfis();
   }, []);
 
+  // Diagnóstico de Banco de Dados Isolado (DcSys Suporte & Infraestrutura)
+  const verificarStatusBanco = async (empresaId: number) => {
+    try {
+      setVerificandoBancoId(empresaId);
+      const res = await fetch(`/api/global/empresas/${empresaId}/banco-status`);
+      if (res.ok) {
+        const data: BancoStatusInfo = await res.json();
+        setBancoStatusMap(prev => ({ ...prev, [empresaId]: data }));
+        showFeedback('success', `Banco [${data.schemaName}]: ${data.status} (${data.tabelasTotal}/${data.tabelasEsperadas} tabelas).`);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Erro ao verificar banco' }));
+        showFeedback('error', err.error || 'Erro ao consultar status do banco');
+      }
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Falha ao conectar com o banco de dados');
+    } finally {
+      setVerificandoBancoId(null);
+    }
+  };
+
+  const reprovisionarBanco = async (empresaId: number, nomeFantasia: string) => {
+    if (!window.confirm(`[DcSys Manutenção] Deseja reparar/reprovisionar a estrutura de tabelas e módulos para "${nomeFantasia}"?`)) {
+      return;
+    }
+
+    try {
+      setReprovisionandoId(empresaId);
+      const res = await fetch(`/api/global/empresas/${empresaId}/reprovisionar`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showFeedback('success', data.message || 'Banco de dados reprovisionado com sucesso!');
+        await verificarStatusBanco(empresaId);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Falha ao reprovisionar' }));
+        showFeedback('error', err.error || 'Erro ao reprovisionar banco de dados');
+      }
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Falha na requisição de reprovisionamento');
+    } finally {
+      setReprovisionandoId(null);
+    }
+  };
+
   // Handler para criar Matriz
   const handleCriarMatriz = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,13 +235,24 @@ export const GestaoGlobalPage: React.FC = () => {
 
     setIsSavingEmpresa(true);
     try {
+      const slug = formMatriz.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+      const dbAuto = formMatriz.bancoDados.trim() || ('bd_' + slug).substring(0, 50);
+      const schemaAuto = formMatriz.schemaName.trim() || 'matriz';
+
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formMatriz,
           tipo: 'MATRIZ',
-          matrizId: null
+          matrizId: null,
+          nomeFantasia: formMatriz.nomeFantasia.trim(),
+          razaoSocial: formMatriz.razaoSocial.trim() || formMatriz.nomeFantasia.trim(),
+          cnpj: formMatriz.cnpj.trim() || null,
+          bancoDados: dbAuto,
+          schemaName: schemaAuto,
+          adminNome: formMatriz.adminNome.trim() || null,
+          adminEmail: formMatriz.adminEmail.trim() || null,
+          adminSenha: formMatriz.adminSenha.trim() || null
         })
       });
 
@@ -174,9 +261,9 @@ export const GestaoGlobalPage: React.FC = () => {
         throw new Error(err.error || 'Erro ao cadastrar Matriz');
       }
 
-      showFeedback('success', 'Matriz cadastrada e banco isolado provisionado com sucesso!');
+      showFeedback('success', `Matriz cadastrada no banco '${dbAuto}' com schema '${schemaAuto}' e governança 'global'!`);
       setIsModalNovaMatrizOpen(false);
-      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', schemaName: '' });
+      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: 'bd_controle', schemaName: 'matriz', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
     } catch (err: any) {
       showFeedback('error', err.message || 'Erro inesperado ao criar matriz');
@@ -195,13 +282,24 @@ export const GestaoGlobalPage: React.FC = () => {
 
     setIsSavingEmpresa(true);
     try {
+      const matrizPai = empresasHierarquia.find(m => m.id === Number(formFilial.matrizId));
+      const slug = formFilial.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+      const schemaAuto = formFilial.schemaName.trim() || ('filial_' + slug).substring(0, 50);
+
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formFilial,
           tipo: 'FILIAL',
-          matrizId: Number(formFilial.matrizId)
+          matrizId: Number(formFilial.matrizId),
+          nomeFantasia: formFilial.nomeFantasia.trim(),
+          razaoSocial: formFilial.razaoSocial.trim() || formFilial.nomeFantasia.trim(),
+          cnpj: formFilial.cnpj.trim() || null,
+          bancoDados: matrizPai?.bancoDados || 'bd_controle',
+          schemaName: schemaAuto,
+          adminNome: formFilial.adminNome.trim() || null,
+          adminEmail: formFilial.adminEmail.trim() || null,
+          adminSenha: formFilial.adminSenha.trim() || null
         })
       });
 
@@ -210,9 +308,9 @@ export const GestaoGlobalPage: React.FC = () => {
         throw new Error(err.error || 'Erro ao cadastrar Filial');
       }
 
-      showFeedback('success', 'Filial cadastrada e base isolada provisionada com sucesso!');
+      showFeedback('success', `Filial cadastrada no schema '${schemaAuto}' dentro do banco '${matrizPai?.bancoDados || 'bd_controle'}'!`);
       setIsModalNovaFilialOpen(false);
-      setFormFilial({ matrizId: empresasHierarquia[0]?.id || 1, nomeFantasia: '', razaoSocial: '', cnpj: '', schemaName: '' });
+      setFormFilial({ matrizId: empresasHierarquia[0]?.id || 1, nomeFantasia: '', razaoSocial: '', cnpj: '', schemaName: 'filial_', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
     } catch (err: any) {
       showFeedback('error', err.message || 'Erro inesperado ao criar filial');
@@ -321,10 +419,14 @@ export const GestaoGlobalPage: React.FC = () => {
       nomeFantasia: m.nomeFantasia,
       razaoSocial: m.razaoSocial,
       cnpj: m.cnpj,
+      bancoDados: m.bancoDados || 'bd_controle',
       schemaName: m.schemaName,
       ativo: m.ativo
     });
-    m.filiais?.forEach(f => todasEmpresasLista.push(f));
+    m.filiais?.forEach(f => todasEmpresasLista.push({
+      ...f,
+      bancoDados: f.bancoDados || m.bancoDados || 'bd_controle'
+    }));
   });
 
   const usuariosFiltrados = usuarios.filter(u => 
@@ -376,50 +478,92 @@ export const GestaoGlobalPage: React.FC = () => {
         </div>
       )}
 
+      {/* Banner de Infraestrutura e Autorização Técnica DcSys */}
+      {isSuperuser ? (
+        <div className="p-4 rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 flex items-start justify-between gap-4 mb-6 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-lg bg-purple-600 text-white shadow-sm mt-0.5">
+              <Server size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-purple-950 m-0">Console Técnico de Infraestrutura • DcSys</h2>
+                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-purple-200 text-purple-900 uppercase tracking-wide flex items-center gap-1">
+                  <ShieldCheck size={12} />
+                  Superusuário Ativo
+                </span>
+              </div>
+              <p className="text-xs text-purple-800 mt-1 max-w-3xl leading-relaxed m-0">
+                Acesso técnico exclusivo da equipe <strong>DcSys</strong>: manutenção preventiva, diagnóstico de integridade de schemas e <strong>provisionamento automatizado de novos bancos de dados PostgreSQL para cada empresa cadastrada</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="hidden lg:flex flex-col items-end justify-center text-right shrink-0">
+            <span className="text-xs font-semibold text-purple-900">Provisionamento PostgreSQL</span>
+            <span className="text-[11px] text-purple-600 font-mono">16 tabelas isoladas / tenant</span>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/90 flex items-start gap-3 mb-6">
+          <div className="p-2 rounded-lg bg-amber-100 text-amber-700 mt-0.5">
+            <Lock size={20} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-amber-900 m-0">Provisionamento de Banco de Dados Restrito à Equipe DcSys</h3>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed m-0">
+              O cadastro de novas empresas e a criação de novos bancos de dados PostgreSQL isolados é uma atribuição exclusiva do <strong>Superusuário (DcSys)</strong> para suporte e governança de infraestrutura.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Cards de Métricas e Status Corporativo */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="p-4 rounded-xl border bg-white shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-blue-50 text-blue-600">
+      <div className="kpi-grid" style={{ marginBottom: '24px' }}>
+        <div className="kpi-card has-icon blue">
+          <div className="kpi-icon blue">
             <Building2 size={24} />
           </div>
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Matrizes</div>
-            <div className="text-2xl font-bold text-gray-900">{totalMatrizes}</div>
+          <div className="kpi-content">
+            <div className="kpi-label">Matrizes</div>
+            <div className="kpi-value blue">{totalMatrizes}</div>
+            <div className="kpi-trend">Sedes principais cadastradas</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border bg-white shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-green-50 text-green-600">
+        <div className="kpi-card has-icon green">
+          <div className="kpi-icon green">
             <GitFork size={24} />
           </div>
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Filiais Ativas</div>
-            <div className="text-2xl font-bold text-gray-900">{totalFiliais}</div>
+          <div className="kpi-content">
+            <div className="kpi-label">Filiais Ativas</div>
+            <div className="kpi-value green">{totalFiliais}</div>
+            <div className="kpi-trend">Unidades operacionais</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border bg-white shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-yellow-50 text-yellow-600">
+        <div className="kpi-card has-icon yellow">
+          <div className="kpi-icon yellow">
             <Users size={24} />
           </div>
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Usuários Centrais</div>
-            <div className="text-2xl font-bold text-gray-900">{totalUsuarios}</div>
+          <div className="kpi-content">
+            <div className="kpi-label">Usuários Centrais</div>
+            <div className="kpi-value yellow">{totalUsuarios}</div>
+            <div className="kpi-trend">Gestores e operadores</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border bg-white shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-blue-50 text-indigo-600">
+        <div className="kpi-card has-icon blue">
+          <div className="kpi-icon blue">
             <Database size={24} />
           </div>
-          <div className="overflow-hidden">
-            <div className="text-xs text-gray-500 font-medium">Base Ativa no Navegador</div>
-            <div className="text-sm font-bold text-gray-900 truncate" title={activeCompany?.nomeFantasia}>
+          <div className="kpi-content">
+            <div className="kpi-label">Base Ativa no Navegador</div>
+            <div className="kpi-value" style={{ fontSize: '15px', fontWeight: 700 }} title={activeCompany?.nomeFantasia}>
               {activeCompany?.nomeFantasia || 'Carregando...'}
             </div>
-            <span className="text-xs text-blue-600 font-mono">
+            <div className="kpi-trend" style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>
               schema: {activeCompany?.schemaName}
-            </span>
+            </div>
           </div>
         </div>
       </div>
@@ -473,19 +617,44 @@ export const GestaoGlobalPage: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setIsModalNovaMatrizOpen(true)}
-                className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-1.5 shadow-sm transition-colors"
+                onClick={() => {
+                  if (!isSuperuser) {
+                    showFeedback('error', 'Apenas o Superusuário DcSys possui permissão para provisionar novas empresas e criar novos bancos de dados.');
+                    return;
+                  }
+                  setIsModalNovaMatrizOpen(true);
+                }}
+                className={`px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 shadow-sm transition-colors ${
+                  isSuperuser 
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                    : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                }`}
+                title={isSuperuser ? 'Provisionar nova Matriz com banco de dados isolado (DcSys)' : 'Ação restrita ao Superusuário DcSys'}
               >
-                <Plus size={16} />
+                {isSuperuser ? <Plus size={16} /> : <Lock size={15} />}
                 <span>Nova Matriz</span>
+                {isSuperuser && <span className="text-[10px] px-1.5 py-0.5 bg-purple-700 rounded text-purple-100 font-bold">DCSYS</span>}
               </button>
+
               <button
-                onClick={() => setIsModalNovaFilialOpen(true)}
+                onClick={() => {
+                  if (!isSuperuser) {
+                    showFeedback('error', 'Apenas o Superusuário DcSys possui permissão para provisionar novas filiais e criar novos bancos de dados.');
+                    return;
+                  }
+                  setIsModalNovaFilialOpen(true);
+                }}
                 disabled={empresasHierarquia.length === 0}
-                className="px-3.5 py-2 border border-green-600 text-green-700 rounded-lg text-sm font-medium hover:bg-green-50 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                className={`px-3.5 py-2 border rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  isSuperuser
+                    ? 'border-green-600 text-green-700 hover:bg-green-50'
+                    : 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed'
+                } disabled:opacity-50`}
+                title={isSuperuser ? 'Provisionar nova Filial com banco de dados isolado (DcSys)' : 'Ação restrita ao Superusuário DcSys'}
               >
-                <GitFork size={16} />
+                {isSuperuser ? <GitFork size={16} /> : <Lock size={15} />}
                 <span>Nova Filial</span>
+                {isSuperuser && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 rounded text-green-800 font-bold">DCSYS</span>}
               </button>
             </div>
           </div>
@@ -503,6 +672,7 @@ export const GestaoGlobalPage: React.FC = () => {
             <div className="space-y-6">
               {empresasHierarquia.map((matriz) => {
                 const isMatrizAtiva = activeCompany?.id === matriz.id && activeCompany.tipo === 'MATRIZ';
+                const statusMatriz = bancoStatusMap[matriz.id];
 
                 return (
                   <div key={matriz.id} className="border rounded-xl bg-white shadow-sm overflow-hidden">
@@ -525,10 +695,55 @@ export const GestaoGlobalPage: React.FC = () => {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+
+                          <div className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                             {matriz.razaoSocial && <span>Razão: {matriz.razaoSocial}</span>}
                             {matriz.cnpj && <span>CNPJ: {matriz.cnpj}</span>}
-                            <span className="font-mono text-gray-600">Base/Schema: <strong>{matriz.schemaName}</strong></span>
+                            <span className="font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              Banco: <strong>{matriz.bancoDados || 'bd_controle'}</strong>
+                            </span>
+                            <span className="font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                              Schema Matriz: <strong>{matriz.schemaName}</strong>
+                            </span>
+                            <span className="font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Governança: <strong>global ({matriz.bancoDados || 'bd_controle'})</strong>
+                            </span>
+
+                            {/* Ferramentas de Diagnóstico e Reparo do Banco Isolado */}
+                            <button
+                              type="button"
+                              onClick={() => verificarStatusBanco(matriz.id)}
+                              disabled={verificandoBancoId === matriz.id}
+                              className="px-2 py-0.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded hover:bg-blue-50 flex items-center gap-1 transition-colors"
+                              title="Diagnosticar integridade do banco de dados PostgreSQL isolado"
+                            >
+                              {verificandoBancoId === matriz.id ? <Loader2 size={11} className="animate-spin" /> : <HardDrive size={11} />}
+                              <span>Status Banco</span>
+                            </button>
+
+                            {isSuperuser && (
+                              <button
+                                type="button"
+                                onClick={() => reprovisionarBanco(matriz.id, matriz.nomeFantasia)}
+                                disabled={reprovisionandoId === matriz.id}
+                                className="px-2 py-0.5 text-xs text-purple-700 hover:text-purple-900 border border-purple-200 rounded hover:bg-purple-50 flex items-center gap-1 transition-colors"
+                                title="Reprovisionar/Reparar tabelas e módulos da Matriz (DcSys)"
+                              >
+                                {reprovisionandoId === matriz.id ? <Loader2 size={11} className="animate-spin" /> : <Wrench size={11} />}
+                                <span>Reparar DDL</span>
+                              </button>
+                            )}
+
+                            {statusMatriz && (
+                              <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full flex items-center gap-1 ${
+                                statusMatriz.status === 'PROVISIONADO' 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                <Server size={11} />
+                                <span>{statusMatriz.tabelasTotal}/16 tabelas ({statusMatriz.status})</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -553,12 +768,19 @@ export const GestaoGlobalPage: React.FC = () => {
                         )}
                         <button
                           onClick={() => {
+                            if (!isSuperuser) {
+                              showFeedback('error', 'Apenas o Superusuário DcSys possui permissão para provisionar novas filiais e criar novos bancos de dados.');
+                              return;
+                            }
                             setFormFilial(prev => ({ ...prev, matrizId: matriz.id }));
                             setIsModalNovaFilialOpen(true);
                           }}
-                          className="px-3 py-1.5 text-xs font-semibold bg-white border text-gray-700 rounded-md hover:bg-gray-100 flex items-center gap-1 transition-colors"
+                          className={`px-3 py-1.5 text-xs font-semibold bg-white border rounded-md flex items-center gap-1 transition-colors ${
+                            isSuperuser ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                          title={isSuperuser ? 'Adicionar nova filial com banco próprio (DcSys)' : 'Apenas Superusuário DcSys pode criar filiais'}
                         >
-                          <Plus size={14} />
+                          {isSuperuser ? <Plus size={14} /> : <Lock size={12} />}
                           <span>Adicionar Filial</span>
                         </button>
                       </div>
@@ -573,12 +795,13 @@ export const GestaoGlobalPage: React.FC = () => {
 
                       {(!matriz.filiais || matriz.filiais.length === 0) ? (
                         <div className="p-4 bg-gray-50 border border-dashed rounded-lg text-center text-xs text-gray-500">
-                          Nenhuma filial vinculada a esta Matriz. Clique em "Adicionar Filial" para provisionar a primeira filial com banco próprio.
+                          Nenhuma filial vinculada a esta Matriz. {isSuperuser ? 'Clique em "Adicionar Filial" para provisionar a primeira filial com banco próprio.' : 'Solicite ao Superusuário DcSys para provisionar filiais.'}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {matriz.filiais.map((filial) => {
                             const isFilialAtiva = activeCompany?.id === filial.id && activeCompany.tipo === 'FILIAL';
+                            const statusFilial = bancoStatusMap[filial.id];
 
                             return (
                               <div
@@ -603,10 +826,47 @@ export const GestaoGlobalPage: React.FC = () => {
                                         </span>
                                       )}
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-gray-500 mt-1 space-y-1">
                                       {filial.cnpj && <div>CNPJ: {filial.cnpj}</div>}
-                                      <div className="font-mono text-gray-600 mt-0.5">
-                                        Schema isolado: <strong>{filial.schemaName}</strong>
+                                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                        <span className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                                          Banco: <strong>{filial.bancoDados || matriz.bancoDados || 'bd_controle'}</strong>
+                                        </span>
+                                        <span className="font-mono text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 text-[11px]">
+                                          Schema: <strong>{filial.schemaName}</strong>
+                                        </span>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => verificarStatusBanco(filial.id)}
+                                          disabled={verificandoBancoId === filial.id}
+                                          className="text-[11px] text-blue-600 hover:text-blue-800 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-50 inline-flex items-center gap-1"
+                                          title="Verificar integridade do banco de dados isolado da filial"
+                                        >
+                                          {verificandoBancoId === filial.id ? <Loader2 size={10} className="animate-spin" /> : <HardDrive size={10} />}
+                                          <span>Status</span>
+                                        </button>
+
+                                        {isSuperuser && (
+                                          <button
+                                            type="button"
+                                            onClick={() => reprovisionarBanco(filial.id, filial.nomeFantasia)}
+                                            disabled={reprovisionandoId === filial.id}
+                                            className="text-[11px] text-purple-700 hover:text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded hover:bg-purple-50 inline-flex items-center gap-1"
+                                            title="Reprovisionar/Reparar tabelas da filial (DcSys)"
+                                          >
+                                            {reprovisionandoId === filial.id ? <Loader2 size={10} className="animate-spin" /> : <Wrench size={10} />}
+                                            <span>Reparar</span>
+                                          </button>
+                                        )}
+
+                                        {statusFilial && (
+                                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                                            statusFilial.status === 'PROVISIONADO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                          }`}>
+                                            {statusFilial.tabelasTotal}/16 tabelas
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -847,62 +1107,143 @@ export const GestaoGlobalPage: React.FC = () => {
       {/* MODAL: NOVA MATRIZ */}
       {isModalNovaMatrizOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2">
-                <Building2 className="text-blue-600" size={20} />
-                <h3 className="text-base font-bold text-gray-900 m-0">Cadastrar Nova Matriz</h3>
+                <Building2 className="text-purple-600" size={20} />
+                <h3 className="text-base font-bold text-gray-900 m-0">Provisionar Nova Matriz (DcSys)</h3>
               </div>
               <button onClick={() => setIsModalNovaMatrizOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
 
+            {/* Banner de Infraestrutura DcSys no Modal */}
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-start gap-2.5 text-xs text-purple-900">
+              <Server size={18} className="text-purple-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <span>Arquitetura de Banco & Governança DcSys</span>
+                </div>
+                <p className="text-purple-800 leading-relaxed m-0 text-[11px]">
+                  O nome da empresa define o <strong>banco de dados PostgreSQL</strong> (ex.: <code>bd_controle</code>).
+                  A Matriz opera no schema <code>matriz</code> (ou <code>controle</code>), e o schema <code>global</code> de governança corporativa fica hospedado neste mesmo banco.
+                </p>
+              </div>
+            </div>
+
             <form onSubmit={handleCriarMatriz} className="space-y-3 text-sm">
               <div>
-                <label className="block font-medium text-gray-700 mb-1">Nome Fantasia *</label>
+                <label className="block font-medium text-gray-700 mb-1">Nome Fantasia da Matriz *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Grupo Silvia Cosméticos"
                   value={formMatriz.nomeFantasia}
-                  onChange={e => setFormMatriz({ ...formMatriz, nomeFantasia: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                  onChange={e => {
+                    const val = e.target.value;
+                    const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                    setFormMatriz(prev => ({
+                      ...prev,
+                      nomeFantasia: val,
+                      razaoSocial: prev.razaoSocial || val,
+                      bancoDados: slug ? `bd_${slug}` : 'bd_controle'
+                    }));
+                  }}
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
-              <div>
-                <label className="block font-medium text-gray-700 mb-1">Razão Social</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Silvia Artes e Perfumaria Ltda"
-                  value={formMatriz.razaoSocial}
-                  onChange={e => setFormMatriz({ ...formMatriz, razaoSocial: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">Razão Social</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Silvia Cosméticos Ltda"
+                    value={formMatriz.razaoSocial}
+                    onChange={e => setFormMatriz({ ...formMatriz, razaoSocial: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">CNPJ</label>
+                  <input
+                    type="text"
+                    placeholder="00.000.000/0001-00"
+                    value={formMatriz.cnpj}
+                    onChange={e => setFormMatriz({ ...formMatriz, cnpj: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-gray-700 mb-1">CNPJ</label>
-                <input
-                  type="text"
-                  placeholder="00.000.000/0001-00"
-                  value={formMatriz.cnpj}
-                  onChange={e => setFormMatriz({ ...formMatriz, cnpj: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">Banco de Dados PostgreSQL</label>
+                  <input
+                    type="text"
+                    required
+                    value={formMatriz.bancoDados}
+                    onChange={e => setFormMatriz({ ...formMatriz, bancoDados: e.target.value })}
+                    className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-purple-500 font-bold text-blue-700 bg-slate-50"
+                  />
+                  <span className="text-xs text-gray-400 mt-0.5 block">Convenção: bd_&lt;empresa&gt;</span>
+                </div>
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">Schema da Matriz</label>
+                  <input
+                    type="text"
+                    required
+                    value={formMatriz.schemaName}
+                    onChange={e => setFormMatriz({ ...formMatriz, schemaName: e.target.value })}
+                    className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-purple-500 font-bold text-purple-700 bg-slate-50"
+                  />
+                  <span className="text-xs text-gray-400 mt-0.5 block">Padrão: matriz ou controle</span>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-gray-700 mb-1">Identificador do Schema (Opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Automático (ex: emp_grupo_silvia)"
-                  value={formMatriz.schemaName}
-                  onChange={e => setFormMatriz({ ...formMatriz, schemaName: e.target.value })}
-                  className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-xs text-gray-400 mt-0.5 block">Se deixar em branco, o banco gerará com base no nome.</span>
+              {/* Administrador Inicial da Empresa */}
+              <div className="p-3 bg-gray-50 border rounded-lg space-y-2.5">
+                <div className="font-semibold text-xs text-gray-800 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={14} className="text-purple-600" />
+                    <span>Administrador Inicial da Empresa (Acesso do Cliente)</span>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-normal">Opcional</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Nome do Administrador</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Carlos Gerente"
+                      value={formMatriz.adminNome}
+                      onChange={e => setFormMatriz({ ...formMatriz, adminNome: e.target.value })}
+                      className="w-full p-2 border rounded-md text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">E-mail de Acesso</label>
+                    <input
+                      type="email"
+                      placeholder="carlos@empresa.com"
+                      value={formMatriz.adminEmail}
+                      onChange={e => setFormMatriz({ ...formMatriz, adminEmail: e.target.value })}
+                      className="w-full p-2 border rounded-md text-xs bg-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Senha Temporária de Acesso</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={formMatriz.adminSenha}
+                    onChange={e => setFormMatriz({ ...formMatriz, adminSenha: e.target.value })}
+                    className="w-full p-2 border rounded-md text-xs bg-white"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t flex justify-end gap-2">
@@ -916,10 +1257,10 @@ export const GestaoGlobalPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSavingEmpresa}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md font-medium hover:bg-purple-700 flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isSavingEmpresa && <Loader2 size={16} className="animate-spin" />}
-                  <span>Provisionar Matriz</span>
+                  <span>Provisionar Banco e Matriz</span>
                 </button>
               </div>
             </form>
@@ -930,16 +1271,38 @@ export const GestaoGlobalPage: React.FC = () => {
       {/* MODAL: NOVA FILIAL */}
       {isModalNovaFilialOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2">
                 <GitFork className="text-green-600" size={20} />
-                <h3 className="text-base font-bold text-gray-900 m-0">Cadastrar Nova Filial</h3>
+                <h3 className="text-base font-bold text-gray-900 m-0">Provisionar Nova Filial (DcSys)</h3>
               </div>
               <button onClick={() => setIsModalNovaFilialOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
+
+            {/* Banner de Infraestrutura DcSys no Modal */}
+            {(() => {
+              const matrizPai = empresasHierarquia.find(m => m.id === Number(formFilial.matrizId)) || empresasHierarquia[0];
+              const dbPai = matrizPai?.bancoDados || 'bd_controle';
+
+              return (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2.5 text-xs text-green-900">
+                  <Server size={18} className="text-green-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <span>Hospedagem no Banco da Matriz ({dbPai})</span>
+                      <span className="px-1.5 py-0.2 bg-green-200 text-green-900 text-[10px] rounded font-mono">16 tabelas</span>
+                    </div>
+                    <p className="text-green-800 leading-relaxed m-0 text-[11px]">
+                      A filial será criada no banco <strong>{dbPai}</strong> sob o schema dedicado (ex.: <code>filial_shopping</code>).
+                      A governança corporativa e autenticação global continuam centralizadas no schema <code>global</code> deste banco.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             <form onSubmit={handleCriarFilial} className="space-y-3 text-sm">
               <div>
@@ -947,10 +1310,12 @@ export const GestaoGlobalPage: React.FC = () => {
                 <select
                   value={formFilial.matrizId}
                   onChange={e => setFormFilial({ ...formFilial, matrizId: Number(e.target.value) })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 bg-white"
                 >
                   {empresasHierarquia.map(m => (
-                    <option key={m.id} value={m.id}>{m.nomeFantasia} (ID: {m.id})</option>
+                    <option key={m.id} value={m.id}>
+                      {m.nomeFantasia} (Banco: {m.bancoDados || 'bd_controle'})
+                    </option>
                   ))}
                 </select>
               </div>
@@ -962,43 +1327,96 @@ export const GestaoGlobalPage: React.FC = () => {
                   required
                   placeholder="Ex: Filial Shopping Sul"
                   value={formFilial.nomeFantasia}
-                  onChange={e => setFormFilial({ ...formFilial, nomeFantasia: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                  onChange={e => {
+                    const val = e.target.value;
+                    const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                    setFormFilial(prev => ({
+                      ...prev,
+                      nomeFantasia: val,
+                      schemaName: slug ? `filial_${slug}` : 'filial_'
+                    }));
+                  }}
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
-              <div>
-                <label className="block font-medium text-gray-700 mb-1">Razão Social</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Silvia Artes Filial 02 Ltda"
-                  value={formFilial.razaoSocial}
-                  onChange={e => setFormFilial({ ...formFilial, razaoSocial: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">Razão Social</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Silvia Artes Filial 02 Ltda"
+                    value={formFilial.razaoSocial}
+                    onChange={e => setFormFilial({ ...formFilial, razaoSocial: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-gray-700 mb-1">CNPJ da Filial</label>
+                  <input
+                    type="text"
+                    placeholder="00.000.000/0002-00"
+                    value={formFilial.cnpj}
+                    onChange={e => setFormFilial({ ...formFilial, cnpj: e.target.value })}
+                    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block font-medium text-gray-700 mb-1">CNPJ da Filial</label>
+                <label className="block font-medium text-gray-700 mb-1">Schema da Filial (PostgreSQL)</label>
                 <input
                   type="text"
-                  placeholder="00.000.000/0002-00"
-                  value={formFilial.cnpj}
-                  onChange={e => setFormFilial({ ...formFilial, cnpj: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-medium text-gray-700 mb-1">Identificador do Schema (Opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Automático (ex: emp_filial_shopping_sul)"
+                  placeholder="filial_shopping_sul"
                   value={formFilial.schemaName}
                   onChange={e => setFormFilial({ ...formFilial, schemaName: e.target.value })}
-                  className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-green-500 font-bold text-teal-700 bg-slate-50"
                 />
-                <span className="text-xs text-gray-400 mt-0.5 block">Um schema isolado será criado automaticamente no PostgreSQL.</span>
+                <span className="text-xs text-gray-400 mt-0.5 block">Convenção: filial_&lt;nome&gt;. Criado no banco de dados da Matriz.</span>
+              </div>
+
+              {/* Administrador Inicial da Filial */}
+              <div className="p-3 bg-gray-50 border rounded-lg space-y-2.5">
+                <div className="font-semibold text-xs text-gray-800 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={14} className="text-green-600" />
+                    <span>Administrador Inicial da Filial (Acesso do Cliente)</span>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-normal">Opcional</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Nome do Administrador</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Amanda Gerente Filial"
+                      value={formFilial.adminNome}
+                      onChange={e => setFormFilial({ ...formFilial, adminNome: e.target.value })}
+                      className="w-full p-2 border rounded-md text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">E-mail de Acesso</label>
+                    <input
+                      type="email"
+                      placeholder="amanda@filial.com"
+                      value={formFilial.adminEmail}
+                      onChange={e => setFormFilial({ ...formFilial, adminEmail: e.target.value })}
+                      className="w-full p-2 border rounded-md text-xs bg-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Senha Temporária de Acesso</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={formFilial.adminSenha}
+                    onChange={e => setFormFilial({ ...formFilial, adminSenha: e.target.value })}
+                    className="w-full p-2 border rounded-md text-xs bg-white"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t flex justify-end gap-2">
@@ -1015,7 +1433,7 @@ export const GestaoGlobalPage: React.FC = () => {
                   className="px-4 py-2 bg-green-600 text-white rounded-md font-medium hover:bg-green-700 flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isSavingEmpresa && <Loader2 size={16} className="animate-spin" />}
-                  <span>Provisionar Filial</span>
+                  <span>Provisionar Banco e Filial</span>
                 </button>
               </div>
             </form>

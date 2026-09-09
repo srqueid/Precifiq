@@ -1,10 +1,22 @@
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.precific.app.data.network.CriarOrcamentoRequest
+import com.precific.app.data.network.ItemOrcamentoDTO
+import com.precific.app.data.repository.PrecificRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 fun Double.format(digits: Int): String {
@@ -24,7 +36,8 @@ data class Orcamento(
     val titulo: String,
     val data: String,
     val status: Status,
-    val total: Double
+    val total: Double,
+    val clienteNome: String? = null
 )
 
 data class ItemOrcamento(
@@ -41,11 +54,14 @@ data class ItemOrcamento(
 data class Insumo(
     val id: Int,
     val nome: String,
-    val tipo: Tipo,
-    val precoUltCompra: Double,
-    val estoqueAtual: Double,
-    val estoqueMinimo: Double,
-    val unidade: String
+    val tipo: Tipo = Tipo.MP,
+    val precoUltCompra: Double = 0.0,
+    val estoqueAtual: Double = 0.0,
+    val estoqueMinimo: Double = 0.0,
+    val unidade: String = "unid",
+    val dataValidade: String? = null,
+    val lote: String? = null,
+    val codigoBarras: String? = null
 )
 
 data class Fornecedor(
@@ -79,45 +95,241 @@ fun StatusChip(status: Status) {
             text = label,
             color = textColor,
             fontSize = 12.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
 }
 
-class OrcamentosViewModel : ViewModel() {
-    private val _orcamentos = MutableStateFlow(
-        listOf(
-            Orcamento(101, "Mesa Madeira", "08/09/2026", Status.APROVADO, 3450.0),
-            Orcamento(102, "Armário Cozinha", "07/09/2026", Status.PENDENTE, 8900.0)
-        )
-    )
+// Injeção de dependência e factory para os ViewModels conectados à API
+@Composable
+inline fun <reified T : ViewModel> hiltViewModel(): T {
+    return when (T::class) {
+        OrcamentosViewModel::class -> remember { OrcamentosViewModel() } as T
+        InsumosViewModel::class -> remember { InsumosViewModel() } as T
+        FornecedoresViewModel::class -> remember { FornecedoresViewModel() } as T
+        OrcamentoFormViewModel::class -> remember { OrcamentoFormViewModel() } as T
+        DashboardViewModel::class -> remember { DashboardViewModel() } as T
+        else -> error("ViewModel ${T::class} não mapeado")
+    }
+}
+
+class DashboardViewModel(
+    private val repository: PrecificRepository = PrecificRepository()
+) : ViewModel() {
+
+    private val _kpis = MutableStateFlow<List<DashboardKPIData>>(emptyList())
+    val kpis: StateFlow<List<DashboardKPIData>> = _kpis.asStateFlow()
+
+    private val _insumosCriticos = MutableStateFlow<List<InsumoCritico>>(emptyList())
+    val insumosCriticos: StateFlow<List<InsumoCritico>> = _insumosCriticos.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    init {
+        carregarDashboard()
+    }
+
+    fun carregarDashboard() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.getDashboard()
+            result.onSuccess { data ->
+                _kpis.value = listOf(
+                    DashboardKPIData(
+                        title = "Valor em Estoque",
+                        value = "R$ " + data.totalEstoqueEstimado.format(2),
+                        trendText = "Giro: " + data.giroEstoque.format(1) + "x/mês",
+                        isPositiveTrend = true,
+                        icon = Icons.Default.Inventory,
+                        accentColor = Color(0xFF2563EB)
+                    ),
+                    DashboardKPIData(
+                        title = "Vendas Realizadas",
+                        value = "R$ " + data.vendasTotalMes.format(2),
+                        trendText = "Lucro: R$ " + data.lucroBrutoMes.format(2),
+                        isPositiveTrend = data.lucroBrutoMes >= 0,
+                        icon = Icons.Default.TrendingUp,
+                        accentColor = Color(0xFF10B981)
+                    ),
+                    DashboardKPIData(
+                        title = "Orçamentos Aprovados",
+                        value = data.orcamentosAprovados.toString(),
+                        trendText = data.orcamentosPendentes.toString() + " pendentes",
+                        isPositiveTrend = true,
+                        icon = Icons.Default.CheckCircle,
+                        accentColor = Color(0xFFF59E0B)
+                    ),
+                    DashboardKPIData(
+                        title = "Validade Crítica",
+                        value = data.insumosValidadeCritica.size.toString(),
+                        trendText = "Itens demandando atenção",
+                        isPositiveTrend = data.insumosValidadeCritica.isEmpty(),
+                        icon = Icons.Default.Warning,
+                        accentColor = Color(0xFFEF4444)
+                    )
+                )
+
+                _insumosCriticos.value = data.insumosValidadeCritica.map { item ->
+                    InsumoCritico(
+                        id = item.id,
+                        nome = item.nome,
+                        categoria = item.lote?.let { "Lote: $it" } ?: "Insumo",
+                        estoqueAtual = item.estoque,
+                        estoqueMinimo = 1.0,
+                        unidade = item.unidade ?: "unid"
+                    )
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Erro ao carregar dashboard"
+            }
+            _isLoading.value = false
+        }
+    }
+}
+
+class InsumosViewModel(
+    private val repository: PrecificRepository = PrecificRepository()
+) : ViewModel() {
+    private val _insumos = MutableStateFlow<List<Insumo>>(emptyList())
+    val insumos: StateFlow<List<Insumo>> = _insumos.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    init {
+        carregarInsumos()
+    }
+
+    fun carregarInsumos() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.getInsumos()
+            result.onSuccess { dtoList ->
+                _insumos.value = dtoList.map { dto ->
+                    Insumo(
+                        id = dto.id,
+                        nome = dto.nome,
+                        tipo = when (dto.categoria?.uppercase()) {
+                            "CONSUMIVEL", "CONSUMÍVEIS" -> Tipo.CONSUMIVEL
+                            "FERRAGEM", "FERRAGENS" -> Tipo.FERRAGEM
+                            "ACABAMENTO" -> Tipo.ACABAMENTO
+                            else -> Tipo.MP
+                        },
+                        precoUltCompra = dto.preco,
+                        estoqueAtual = dto.estoque,
+                        estoqueMinimo = dto.estoqueMinimo,
+                        unidade = dto.unidadeMedida ?: "unid",
+                        dataValidade = dto.dataValidade,
+                        lote = dto.lote,
+                        codigoBarras = dto.codigoBarras
+                    )
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Erro ao carregar insumos"
+            }
+            _isLoading.value = false
+        }
+    }
+}
+
+class FornecedoresViewModel(
+    private val repository: PrecificRepository = PrecificRepository()
+) : ViewModel() {
+    private val _fornecedores = MutableStateFlow<List<Fornecedor>>(emptyList())
+    val fornecedores: StateFlow<List<Fornecedor>> = _fornecedores.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    init {
+        carregarFornecedores()
+    }
+
+    fun carregarFornecedores() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.getFornecedores()
+            result.onSuccess { dtoList ->
+                _fornecedores.value = dtoList.map { dto ->
+                    Fornecedor(
+                        id = dto.id,
+                        razaoSocial = dto.nome,
+                        nomeFantasia = dto.nomeFantasia ?: dto.nome,
+                        cidadeUf = listOfNotNull(dto.cidade, dto.uf).joinToString("/").ifBlank { "Não informado" },
+                        email = dto.email ?: "",
+                        telefone = dto.telefones ?: ""
+                    )
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Erro ao carregar fornecedores"
+            }
+            _isLoading.value = false
+        }
+    }
+}
+
+class OrcamentosViewModel(
+    private val repository: PrecificRepository = PrecificRepository()
+) : ViewModel() {
+    private val _orcamentos = MutableStateFlow<List<Orcamento>>(emptyList())
     val orcamentos: StateFlow<List<Orcamento>> = _orcamentos.asStateFlow()
 
-    private val _uiState = MutableStateFlow("OK")
-    val uiState: StateFlow<String> = _uiState.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    init {
+        carregarOrcamentos()
+    }
+
+    fun carregarOrcamentos() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.getOrcamentos()
+            result.onSuccess { dtoList ->
+                _orcamentos.value = dtoList.map { dto ->
+                    Orcamento(
+                        id = dto.id,
+                        titulo = dto.titulo,
+                        data = dto.dataCriacao ?: "Recente",
+                        status = when (dto.status.uppercase()) {
+                            "APROVADO" -> Status.APROVADO
+                            "REJEITADO" -> Status.REJEITADO
+                            "RASCUNHO" -> Status.RASCUNHO
+                            else -> Status.PENDENTE
+                        },
+                        total = dto.total,
+                        clienteNome = dto.clienteNome
+                    )
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Erro ao carregar orçamentos"
+            }
+            _isLoading.value = false
+        }
+    }
 }
 
-class InsumosViewModel : ViewModel() {
-    private val _insumos = MutableStateFlow(
-        listOf(
-            Insumo(1, "MDF 15mm", Tipo.MP, 180.0, 3.0, 10.0, "chapas"),
-            Insumo(2, "Cola Contato", Tipo.CONSUMIVEL, 45.0, 1.0, 5.0, "galões")
-        )
-    )
-    val insumos: StateFlow<List<Insumo>> = _insumos.asStateFlow()
-}
-
-class FornecedoresViewModel : ViewModel() {
-    private val _fornecedores = MutableStateFlow(
-        listOf(
-            Fornecedor(1, "Madeiras Brasil LTDA", "Madeiras Brasil", "São Paulo/SP", "contato@madeirasbrasil.com", "(11) 9999-8888")
-        )
-    )
-    val fornecedores: StateFlow<List<Fornecedor>> = _fornecedores.asStateFlow()
-}
-
-class OrcamentoFormViewModel : ViewModel() {
+class OrcamentoFormViewModel(
+    private val repository: PrecificRepository = PrecificRepository()
+) : ViewModel() {
     private val _formState = MutableStateFlow(OrcamentoFormState())
     val formState: StateFlow<OrcamentoFormState> = _formState.asStateFlow()
 
@@ -126,6 +338,12 @@ class OrcamentoFormViewModel : ViewModel() {
 
     private val _total = MutableStateFlow(0.0)
     val total: StateFlow<Double> = _total.asStateFlow()
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _saveMessage = MutableStateFlow<String?>(null)
+    val saveMessage: StateFlow<String?> = _saveMessage.asStateFlow()
 
     fun updateTitulo(titulo: String) {
         _formState.value = _formState.value.copy(titulo = titulo)
@@ -137,15 +355,49 @@ class OrcamentoFormViewModel : ViewModel() {
 
     fun adicionarItem() {
         _itens.value = _itens.value + ItemOrcamento(id = _itens.value.size + 1)
+        recalcularTotal()
     }
 
     fun updateItem(item: ItemOrcamento) {
         _itens.value = _itens.value.map { if (it.id == item.id) item else it }
+        recalcularTotal()
     }
 
     fun removerItem(id: Int) {
         _itens.value = _itens.value.filterNot { it.id == id }
+        recalcularTotal()
     }
 
-    fun salvarEEnviarAprovacao() {}
+    private fun recalcularTotal() {
+        _total.value = _itens.value.sumOf { it.quantidade * it.precoUnitario }
+    }
+
+    fun salvarEEnviarAprovacao(onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            _isSaving.value = true
+            _saveMessage.value = null
+            val request = CriarOrcamentoRequest(
+                titulo = _formState.value.titulo.ifBlank { "Orçamento Mobile" },
+                clienteNome = _formState.value.cliente,
+                margemLucro = 25.0,
+                itens = _itens.value.map {
+                    ItemOrcamentoDTO(
+                        insumoId = it.insumoId.takeIf { id -> id > 0 },
+                        nome = it.insumoNome.ifBlank { it.insumo },
+                        quantidade = it.quantidade.toDouble(),
+                        precoUnitario = it.precoUnitario,
+                        subtotal = it.quantidade * it.precoUnitario
+                    )
+                }
+            )
+            val result = repository.criarOrcamento(request)
+            _isSaving.value = false
+            result.onSuccess {
+                _saveMessage.value = "Orçamento criado com sucesso!"
+                onSuccess()
+            }.onFailure { err ->
+                _saveMessage.value = "Falha ao salvar: ${err.message}"
+            }
+        }
+    }
 }

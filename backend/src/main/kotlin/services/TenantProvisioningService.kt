@@ -18,29 +18,37 @@ class TenantProvisioningService {
 
         val ddlContent = carregarTemplateDdl(schemaName)
 
+        // 1. Cria o schema explicitamente
         transaction {
-            connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
-            
-            val cleanDdl = ddlContent.lines()
-                .filterNot { it.trim().startsWith("--") }
-                .joinToString("\n")
+            try {
+                exec("CREATE SCHEMA IF NOT EXISTS \"$schemaName\";")
+            } catch (e: Exception) {
+                System.err.println("Erro ao criar schema $schemaName: ${e.message}")
+            }
+        }
 
-            val statements = cleanDdl.split(";")
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
+        val cleanDdl = ddlContent.lines()
+            .filterNot { it.trim().startsWith("--") }
+            .joinToString("\n")
 
-            for (stmt in statements) {
-                try {
+        val statements = cleanDdl.split(";")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        // 2. Executa cada instrução DDL em sua própria transação para não abortar todo o bloco
+        for (stmt in statements) {
+            try {
+                transaction {
                     exec(stmt)
-                } catch (e: Exception) {
-                    if (e.message?.contains("already exists", ignoreCase = true) == false) {
-                        System.err.println("Aviso ao executar instrução DDL no schema $schemaName: ${e.message}")
-                    }
+                }
+            } catch (e: Exception) {
+                if (e.message?.contains("already exists", ignoreCase = true) == false) {
+                    System.err.println("Aviso ao executar instrução DDL no schema $schemaName: ${e.message}")
                 }
             }
-
-            println("INFO: Schema '$schemaName' provisionado com sucesso com isolamento total.")
         }
+
+        println("INFO: Schema '$schemaName' provisionado com sucesso com isolamento total.")
     }
 
     /**
@@ -67,6 +75,8 @@ class TenantProvisioningService {
 
     private fun gerarFallbackDdl(s: String): String {
         return """
+            CREATE SCHEMA IF NOT EXISTS $s;
+
             CREATE TABLE IF NOT EXISTS $s.unidade_medida (
                 id SERIAL PRIMARY KEY,
                 nome VARCHAR(100) UNIQUE NOT NULL,
@@ -336,8 +346,11 @@ class TenantProvisioningService {
                 id SERIAL PRIMARY KEY,
                 nome VARCHAR(255) NOT NULL,
                 codigo VARCHAR(100) UNIQUE,
+                codigo_barras VARCHAR(50),
                 descricao TEXT,
-                preco_venda DOUBLE PRECISION NOT NULL,
+                margem_lucro DOUBLE PRECISION DEFAULT 0.0,
+                custo_total_calculado DOUBLE PRECISION DEFAULT 0.0,
+                preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
                 ativo BOOLEAN NOT NULL DEFAULT TRUE,
                 criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -346,7 +359,7 @@ class TenantProvisioningService {
             CREATE TABLE IF NOT EXISTS $s.kit_itens (
                 id SERIAL PRIMARY KEY,
                 kit_id INTEGER NOT NULL REFERENCES $s.kits(id) ON DELETE CASCADE,
-                variacao_id INTEGER NOT NULL REFERENCES $s.produto_variacao(id) ON DELETE RESTRICT,
+                produto_variacao_id INTEGER NOT NULL REFERENCES $s.produto_variacao(id) ON DELETE RESTRICT,
                 quantidade INTEGER NOT NULL DEFAULT 1,
                 desconto_percentual DOUBLE PRECISION NOT NULL DEFAULT 0.0
             );

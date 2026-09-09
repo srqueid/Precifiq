@@ -16,7 +16,8 @@ import {
   Sparkles,
   DollarSign,
   Percent,
-  Copy
+  Copy,
+  Barcode
 } from 'lucide-react';
 
 interface ProdutoFinal {
@@ -445,6 +446,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
   const [tamanhoMedida, setTamanhoMedida] = useState('');
   const [unidadeMedidaTamanhoId, setUnidadeMedidaTamanhoId] = useState('');
   const [margemLucro, setMargemLucro] = useState<string>('300');
+  const [novoVarCodigoBarras, setNovoVarCodigoBarras] = useState('');
 
   // Materiais da nova variação sendo criada
   const [novosMateriais, setNovosMateriais] = useState<Array<{ insumoId: number; quantidade: number }>>([]);
@@ -458,6 +460,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
   const [editVarMedida, setEditVarMedida] = useState('');
   const [editVarUnidadeId, setEditVarUnidadeId] = useState('');
   const [editVarMargem, setEditVarMargem] = useState('300');
+  const [editVarCodigoBarras, setEditVarCodigoBarras] = useState('');
   const [editVarMateriais, setEditVarMateriais] = useState<Array<{ id?: number; insumoId: number; quantidade: number; insumoNome?: string; unidadeSigla?: string; custoUnitario?: number }>>([]);
   const [editMaterialInsumoId, setEditMaterialInsumoId] = useState('');
   const [editMaterialQtd, setEditMaterialQtd] = useState('1');
@@ -483,6 +486,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
+          codigoBarras: editVarCodigoBarras.trim() || null,
           materiais: editVarMateriais
         })
       });
@@ -523,6 +527,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
     setEditVarMedida(String(v.tamanhoMedida || ''));
     setEditVarUnidadeId(String(v.unidadeMedidaTamanhoId || ''));
     setEditVarMargem(String(v.margemLucro !== undefined && v.margemLucro !== null ? v.margemLucro : 300));
+    setEditVarCodigoBarras(v.codigoBarras || '');
     setEditVarMateriais(v.materiais && v.materiais.length > 0 ? [...v.materiais] : (v.embalagemInsumoId ? [{ insumoId: v.embalagemInsumoId, quantidade: 1 }] : []));
     setEditMaterialInsumoId('');
     setEditMaterialQtd('1');
@@ -550,6 +555,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
           tamanhoMedida: Number(tamanhoMedida),
           unidadeMedidaTamanhoId: Number(unidadeMedidaTamanhoId),
           embalagemInsumoId: novosMateriais.length > 0 ? novosMateriais[0].insumoId : null,
+          codigoBarras: novoVarCodigoBarras.trim() || null,
           tempoProducaoMinutos: 0,
           margemLucro: margem,
           precoVenda: 0,
@@ -565,6 +571,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
       setTamanhoMedida('');
       setUnidadeMedidaTamanhoId('');
       setMargemLucro('300');
+      setNovoVarCodigoBarras('');
       setNovosMateriais([]);
       setNovoMaterialInsumoId('');
       setNovoMaterialQtd('1');
@@ -1169,6 +1176,15 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       </span>
                     </div>
                   </div>
+                  <div className="form-group" style={{ flex: 1.5, minWidth: '130px', marginBottom: 0 }}>
+                    <label htmlFor="var-barcode">Cód. Barras (EAN)</label>
+                    <input 
+                      id="var-barcode"
+                      placeholder="Ex: 789123456789" 
+                      value={novoVarCodigoBarras} 
+                      onChange={e => setNovoVarCodigoBarras(e.target.value)} 
+                    />
+                  </div>
                 </div>
 
                 {/* Materiais e Componentes da Variação (Frasco, Tampas, Pérolas, Fitas, etc.) */}
@@ -1323,6 +1339,11 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       <tr key={v.id}>
                         <td className="table-cell font-medium">
                           <strong>{v.nomeTamanho}</strong>
+                          {v.codigoBarras && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--muted)', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: '4px', marginTop: '3px' }}>
+                              <Barcode size={12} /> {v.codigoBarras}
+                            </div>
+                          )}
                         </td>
                         <td className="table-cell text-right td-mono">
                           {v.tamanhoMedida} {un}
@@ -1457,15 +1478,26 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                   custoUnitarioCalculado: 0.0
                 });
               }}>
-                <div className="form-group" style={{ marginBottom: '14px' }}>
-                  <label className="required">Nome do Tamanho / Variação</label>
-                  <input
-                    type="text"
-                    required
-                    value={editVarNome}
-                    onChange={e => setEditVarNome(e.target.value)}
-                    placeholder="Ex: 250ml Frasco Vidro"
-                  />
+                <div className="form-row" style={{ marginBottom: '14px' }}>
+                  <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                    <label className="required">Nome do Tamanho / Variação</label>
+                    <input
+                      type="text"
+                      required
+                      value={editVarNome}
+                      onChange={e => setEditVarNome(e.target.value)}
+                      placeholder="Ex: 250ml Frasco Vidro"
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
+                    <label>Cód. Barras (EAN)</label>
+                    <input
+                      type="text"
+                      value={editVarCodigoBarras}
+                      onChange={e => setEditVarCodigoBarras(e.target.value)}
+                      placeholder="Ex: 789123456789"
+                    />
+                  </div>
                 </div>
 
                 <div className="form-row" style={{ marginBottom: '14px' }}>

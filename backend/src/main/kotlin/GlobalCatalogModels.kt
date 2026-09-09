@@ -18,6 +18,7 @@ object EmpresasTable : Table("empresa") {
     val razaoSocial = varchar("razao_social", 255).nullable()
     val cnpj = varchar("cnpj", 20).nullable().uniqueIndex()
     val schemaName = varchar("schema_name", 63).uniqueIndex()
+    val bancoDados = varchar("banco_dados", 100).default("bd_controle")
     val ativo = bool("ativo").default(true)
     val criadoEm = datetime("criado_em").defaultExpression(CurrentDateTime)
     val atualizadoEm = datetime("atualizado_em").defaultExpression(CurrentDateTime)
@@ -73,6 +74,7 @@ data class EmpresaDTO(
     val razaoSocial: String?,
     val cnpj: String?,
     val schemaName: String,
+    val bancoDados: String = "bd_controle",
     val ativo: Boolean,
     val criadoEm: String? = null
 )
@@ -84,6 +86,7 @@ data class EmpresaHierarquiaDTO(
     val razaoSocial: String?,
     val cnpj: String?,
     val schemaName: String,
+    val bancoDados: String = "bd_controle",
     val ativo: Boolean,
     val filiais: List<EmpresaDTO> = emptyList(),
     val totalProdutos: Long = 0,
@@ -96,7 +99,11 @@ data class CriarEmpresaRequest(
     val cnpj: String? = null,
     val tipo: String = "MATRIZ", // 'MATRIZ' ou 'FILIAL'
     val matrizId: Int? = null,
-    val schemaName: String? = null // Se omitido, será gerado automaticamente
+    val schemaName: String? = null, // Se omitido, será gerado automaticamente (ex: matriz ou filial_shopping)
+    val bancoDados: String? = null, // Se omitido, será gerado (ex: bd_controle)
+    val adminNome: String? = null,
+    val adminEmail: String? = null,
+    val adminSenha: String? = null
 )
 
 data class PerfilDTO(
@@ -105,6 +112,19 @@ data class PerfilDTO(
     val nome: String,
     val descricao: String?,
     val permissoes: String?
+)
+
+data class CriarPerfilRequest(
+    val codigo: String,
+    val nome: String,
+    val descricao: String? = null,
+    val permissoes: String? = null
+)
+
+data class AtualizarPerfilRequest(
+    val nome: String? = null,
+    val descricao: String? = null,
+    val permissoes: String? = null
 )
 
 data class UsuarioEmpresaVinculoDTO(

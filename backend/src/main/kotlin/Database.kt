@@ -64,10 +64,12 @@ object DatabaseConfig {
                         razao_social VARCHAR(255),
                         cnpj VARCHAR(20) UNIQUE,
                         schema_name VARCHAR(63) UNIQUE NOT NULL,
+                        banco_dados VARCHAR(100) NOT NULL DEFAULT 'bd_controle',
                         ativo BOOLEAN NOT NULL DEFAULT TRUE,
                         criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
+                    ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS banco_dados VARCHAR(100) DEFAULT 'bd_controle';
                 """.trimIndent())
 
                 exec("""
@@ -116,6 +118,9 @@ object DatabaseConfig {
                         nome = EXCLUDED.nome,
                         descricao = EXCLUDED.descricao,
                         permissoes = EXCLUDED.permissoes;
+                    DO ${'$'}${'$'} BEGIN
+                        PERFORM setval('global.perfil_id_seq', (SELECT GREATEST(MAX(id), 4) FROM global.perfil));
+                    END ${'$'}${'$'};
                 """.trimIndent())
 
                 // Seed da Matriz Inicial (schema controle)
@@ -217,6 +222,76 @@ object DatabaseConfig {
                     );
 
                     CREATE INDEX IF NOT EXISTS idx_variacao_material_var ON variacao_material(variacao_id);
+
+                    -- Evoluções: Validade, Código de Barras e Integração de Vendas
+                    ALTER TABLE insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
+                    ALTER TABLE insumo ADD COLUMN IF NOT EXISTS lote VARCHAR(50);
+                    ALTER TABLE insumo ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(50);
+
+                    ALTER TABLE movimento_estoque_insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
+                    ALTER TABLE movimento_estoque_insumo ADD COLUMN IF NOT EXISTS lote VARCHAR(50);
+
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(50);
+
+                    CREATE TABLE IF NOT EXISTS kits (
+                        id SERIAL PRIMARY KEY,
+                        nome VARCHAR(255) NOT NULL,
+                        codigo VARCHAR(100),
+                        codigo_barras VARCHAR(50),
+                        descricao TEXT,
+                        margem_lucro DOUBLE PRECISION DEFAULT 0.0,
+                        custo_total_calculado DOUBLE PRECISION DEFAULT 0.0,
+                        preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS codigo VARCHAR(100);
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(50);
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS descricao TEXT;
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS margem_lucro DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS custo_total_calculado DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS preco_venda DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE kits ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+
+                    CREATE TABLE IF NOT EXISTS kit_itens (
+                        id SERIAL PRIMARY KEY,
+                        kit_id INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
+                        produto_variacao_id INTEGER NOT NULL REFERENCES produto_variacao(id) ON DELETE RESTRICT,
+                        quantidade INTEGER NOT NULL DEFAULT 1
+                    );
+                    ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS kit_id INTEGER;
+                    ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS produto_variacao_id INTEGER;
+                    ALTER TABLE kit_itens ADD COLUMN IF NOT EXISTS quantidade INTEGER DEFAULT 1;
+
+                    DO $$ 
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='variacao_id') 
+                           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='kit_itens' AND column_name='produto_variacao_id') THEN
+                            ALTER TABLE kit_itens RENAME COLUMN variacao_id TO produto_variacao_id;
+                        END IF;
+                    END $$;
+
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
+
+                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS kit_id INTEGER;
+                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS custo_unitario DOUBLE PRECISION DEFAULT 0.0;
+
+                    CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
+                        id SERIAL PRIMARY KEY,
+                        variacao_id INTEGER REFERENCES produto_variacao(id) ON DELETE CASCADE,
+                        tipo VARCHAR(30) NOT NULL,
+                        quantidade DOUBLE PRECISION NOT NULL,
+                        motivo VARCHAR(255),
+                        origem VARCHAR(100),
+                        data_movimentacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_insumo_cod_barras ON insumo(codigo_barras);
+                    CREATE INDEX IF NOT EXISTS idx_insumo_validade ON insumo(data_validade);
+                    CREATE INDEX IF NOT EXISTS idx_prod_var_cod_barras ON produto_variacao(codigo_barras);
+                    CREATE INDEX IF NOT EXISTS idx_kits_cod_barras ON kits(codigo_barras);
                 """.trimIndent())
                 
                 // Unificação de Medida Base: converter L para ml e kg para g

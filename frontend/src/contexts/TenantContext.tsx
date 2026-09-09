@@ -8,6 +8,7 @@ export interface EmpresaItem {
   razaoSocial?: string;
   cnpj?: string;
   schemaName: string;
+  bancoDados?: string;
   ativo: boolean;
   criadoEm?: string;
 }
@@ -19,6 +20,7 @@ export interface EmpresaHierarquia {
   razaoSocial?: string;
   cnpj?: string;
   schemaName: string;
+  bancoDados?: string;
   ativo: boolean;
   filiais: EmpresaItem[];
   totalProdutos?: number;
@@ -43,6 +45,7 @@ const DEFAULT_COMPANY: EmpresaItem = {
   razaoSocial: 'Silvia Artes & Cosméticos Ltda',
   cnpj: '12.345.678/0001-90',
   schemaName: 'controle',
+  bancoDados: 'bd_controle',
   ativo: true
 };
 
@@ -78,6 +81,29 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       if (!headers.has('X-Company-Schema')) {
         headers.set('X-Company-Schema', currentSchema);
+      }
+
+      if (!headers.has('X-User-Email')) {
+        try {
+          const authSaved = localStorage.getItem('precific_auth_user');
+          if (authSaved) {
+            const parsed = JSON.parse(authSaved);
+            if (parsed?.email) {
+              headers.set('X-User-Email', parsed.email);
+            }
+          } else {
+            headers.set('X-User-Email', 'admin@dcsys.com');
+          }
+        } catch {
+          headers.set('X-User-Email', 'admin@dcsys.com');
+        }
+      }
+
+      if (!headers.has('Authorization')) {
+        const token = localStorage.getItem('precific_auth_token');
+        if (token) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
       }
 
       modifiedInit.headers = headers;

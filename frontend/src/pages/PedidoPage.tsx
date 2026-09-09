@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, ShoppingCart, Users, Search, Truck, CheckCircle, X, Package, Trash2, FileText, Edit2 } from 'lucide-react';
+import { Plus, ShoppingCart, Users, Search, Truck, CheckCircle, X, Package, Trash2, FileText, Edit2, Barcode, DollarSign, TrendingUp } from 'lucide-react';
 
 // Toast utility
 const toast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -25,6 +25,7 @@ interface ProdutoItem {
   tipo?: 'PRODUTO' | 'KIT' | 'OUTRO';
   precoOriginal?: number;
   desconto?: number;
+  custoUnitario?: number;
 }
 
 interface ProdutoDisponivel {
@@ -34,6 +35,7 @@ interface ProdutoDisponivel {
   custoUnitarioCalculado: number;
   precoVenda: number;
   margemLucro: number;
+  codigoBarras?: string;
 }
 
 interface KitDisponivel {
@@ -43,6 +45,7 @@ interface KitDisponivel {
   margemLucro?: number;
   custoTotalCalculado?: number;
   precoVenda: number;
+  codigoBarras?: string;
 }
 
 interface Pedido {
@@ -52,6 +55,8 @@ interface Pedido {
   produtos?: ProdutoItem[];
   itens?: ProdutoItem[];
   valor?: number;
+  valorCustoTotal?: number;
+  lucroBruto?: number;
   formaPagamento: string;
   dataPagamento?: string;
   entregue: boolean;
@@ -97,6 +102,8 @@ const normalizarPedido = (pedido: any): Pedido => {
     produtos,
     itens: produtos,
     valor: toNumber(pedido.valor ?? pedido.valorTotal ?? pedido.valorFinalConfirmado, valorFallback),
+    valorCustoTotal: pedido.valorCustoTotal !== undefined && pedido.valorCustoTotal !== null ? toNumber(pedido.valorCustoTotal) : undefined,
+    lucroBruto: pedido.lucroBruto !== undefined && pedido.lucroBruto !== null ? toNumber(pedido.lucroBruto) : undefined,
     formaPagamento: String(pedido.formaPagamento ?? '—'),
     dataPagamento: pedido.dataPagamento ? String(pedido.dataPagamento) : undefined,
     entregue: Boolean(pedido.entregue),
@@ -140,6 +147,8 @@ const PedidoPage: React.FC = () => {
   const [pedidoData, setPedidoData] = useState('');
   const [pedidoEntregue, setPedidoEntregue] = useState(false);
   const [relatorioClienteId, setRelatorioClienteId] = useState<number | ''>('');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
 
   const { data, isLoading: queryLoading, error } = useQuery({
     queryKey: ['pedidos'],
@@ -388,6 +397,108 @@ const PedidoPage: React.FC = () => {
   const removerItemDaLista = (index: number) => {
     const novosItens = itensDoPedidoAtual.filter((_, i) => i !== index);
     setItensDoPedidoAtual(novosItens);
+  };
+
+  const handleScanBarcode = async (codigoDigitado?: string) => {
+    const code = (codigoDigitado || barcodeInput).trim();
+    if (!code) {
+      toast('Digite ou escaneie o código de barras.', 'error');
+      return;
+    }
+    setBarcodeLoading(true);
+    try {
+      const res = await fetch(`/api/codigo-barras/${encodeURIComponent(code)}`);
+      if (!res.ok) throw new Error('Erro ao consultar código de barras');
+      const data = await res.json();
+      if (!data.encontrado) {
+        toast(`Código de barras "${code}" não encontrado no sistema.`, 'error');
+        return;
+      }
+
+      if (data.tipo === 'VARIACAO') {
+        const itemNomeCompleto = `${data.produtoNome} (${data.nomeTamanho})`;
+        const preco = Number(data.precoVenda) || 0;
+        setItensDoPedidoAtual((prev) => {
+          const idx = prev.findIndex((it) => it.nome.toLowerCase() === itemNomeCompleto.toLowerCase());
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], qtd: copy[idx].qtd + 1 };
+            return copy;
+          } else {
+            return [
+              ...prev,
+              {
+                nome: itemNomeCompleto,
+                qtd: 1,
+                preco: preco,
+                tipo: 'PRODUTO',
+                precoOriginal: preco,
+                desconto: 0
+              }
+            ];
+          }
+        });
+        toast(`"${itemNomeCompleto}" bipado com sucesso!`, 'success');
+        setBarcodeInput('');
+      } else if (data.tipo === 'KIT') {
+        const itemNomeCompleto = `Kit: ${data.nome}`;
+        const preco = Number(data.precoVenda) || 0;
+        setItensDoPedidoAtual((prev) => {
+          const idx = prev.findIndex((it) => it.nome.toLowerCase() === itemNomeCompleto.toLowerCase());
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], qtd: copy[idx].qtd + 1 };
+            return copy;
+          } else {
+            return [
+              ...prev,
+              {
+                nome: itemNomeCompleto,
+                qtd: 1,
+                preco: preco,
+                tipo: 'KIT',
+                precoOriginal: preco,
+                desconto: 0
+              }
+            ];
+          }
+        });
+        toast(`Kit "${data.nome}" bipado com sucesso!`, 'success');
+        setBarcodeInput('');
+      } else if (data.tipo === 'INSUMO') {
+        toast(`Código "${code}" pertence ao insumo "${data.nome}". No pedido são aceitos produtos finais e kits.`, 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Falha na busca de código de barras', 'error');
+    } finally {
+      setBarcodeLoading(false);
+    }
+  };
+
+  const calcularAnaliseFinanceiraPedido = () => {
+    let totalCusto = 0;
+    itensDoPedidoAtual.forEach((item) => {
+      let custoUnit = 0;
+      if (item.tipo === 'PRODUTO') {
+        const p = produtosDisponiveis.find(
+          (prod) =>
+            `${prod.produtoNome} (${prod.nomeTamanho})`.toLowerCase() === item.nome.toLowerCase() ||
+            item.nome.toLowerCase().startsWith(`${prod.produtoNome} (${prod.nomeTamanho})`.toLowerCase())
+        );
+        if (p) custoUnit = p.custoUnitarioCalculado || 0;
+      } else if (item.tipo === 'KIT') {
+        const kitNomePuro = item.nome.replace(/^Kit:\s*/i, '').trim().toLowerCase();
+        const k = kitsDisponiveis.find((kit) => kit.nome.toLowerCase() === kitNomePuro);
+        if (k) custoUnit = k.custoTotalCalculado || 0;
+      }
+      totalCusto += custoUnit * item.qtd;
+    });
+
+    const totalVenda = itensDoPedidoAtual.reduce((acc, i) => acc + i.qtd * i.preco, 0);
+    const lucroBruto = totalVenda - totalCusto;
+    const margemPercentual = totalVenda > 0 ? (lucroBruto / totalVenda) * 100 : 0;
+
+    return { totalCusto, totalVenda, lucroBruto, margemPercentual };
   };
 
   const abrirModalCliente = (cliente?: Cliente) => {
@@ -747,7 +858,14 @@ const PedidoPage: React.FC = () => {
                           <td className="table-cell" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stringProdutos}>
                             {stringProdutos || '—'}
                           </td>
-                          <td className="table-cell text-right font-medium td-mono td-blue">R$ {(p.valor ?? 0).toFixed(2)}</td>
+                          <td className="table-cell text-right font-medium td-mono td-blue">
+                            <div>R$ {(p.valor ?? 0).toFixed(2)}</div>
+                            {p.lucroBruto !== undefined && p.lucroBruto !== null && (
+                              <div style={{ fontSize: '11px', color: p.lucroBruto >= 0 ? '#059669' : '#dc2626', fontWeight: 600 }}>
+                                Lucro: R$ {p.lucroBruto.toFixed(2)}
+                              </div>
+                            )}
+                          </td>
                           <td className="table-cell"><span className="badge badge-gray">{p.formaPagamento}</span></td>
                           <td className="table-cell">{dataFormatada}</td>
                           <td className="table-cell">{statusBadge}</td>
@@ -957,7 +1075,7 @@ const PedidoPage: React.FC = () => {
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              backgroundColor: pedidoClienteId === cliente.id ? 'var(--green-dim)' : 'transparent'
+                              backgroundColor: Number(pedidoClienteId) === cliente.id ? 'var(--green-dim)' : 'transparent'
                             }}
                           >
                             <strong>{cliente.nome}</strong>
@@ -971,9 +1089,47 @@ const PedidoPage: React.FC = () => {
               </div>
 
               <div className="item-add-box" style={{ background: 'var(--surface-2, #f8fafc)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '14px', marginBottom: '16px' }}>
+                {/* Leitor Rápido de Código de Barras */}
+                <div
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--accent, #3b82f6)',
+                    borderRadius: 'var(--radius)',
+                    padding: '8px 12px',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  <Barcode size={22} color="var(--accent, #3b82f6)" />
+                  <input
+                    type="text"
+                    placeholder="Bipar ou digitar código de barras (EAN) e pressionar Enter..."
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleScanBarcode();
+                      }
+                    }}
+                    style={{ flex: 1, height: '36px', fontSize: '13px' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleScanBarcode()}
+                    disabled={barcodeLoading || !barcodeInput.trim()}
+                    style={{ height: '36px', padding: '0 12px', whiteSpace: 'nowrap' }}
+                  >
+                    {barcodeLoading ? 'Buscando...' : 'Bipar Item'}
+                  </button>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                   <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-secondary)' }}>
-                    Adicionar Item ao Pedido
+                    Ou Adicionar Manualmente pelo Catálogo:
                   </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
@@ -1293,9 +1449,74 @@ const PedidoPage: React.FC = () => {
                 </table>
               </div>
 
-              <div style={{ textAlign: 'right', marginTop: '12px', fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>
-                Total do Pedido: <span id="p-pedido-total-label">R$ {totalPedidoAtual.toFixed(2)}</span>
-              </div>
+              {/* Painel Financeiro do Pedido: CMV, Lucro Bruto e Margem */}
+              {(() => {
+                const { totalCusto, totalVenda, lucroBruto, margemPercentual } = calcularAnaliseFinanceiraPedido();
+                return (
+                  <div
+                    style={{
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius)',
+                      padding: '12px 16px',
+                      marginTop: '16px',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+                        Custo Estimado (CMV)
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>
+                        R$ {totalCusto.toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+                        Lucro Bruto Projetado
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          color: lucroBruto >= 0 ? '#10b981' : '#ef4444'
+                        }}
+                      >
+                        R$ {lucroBruto.toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+                        Margem Projetada
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          color: margemPercentual >= 30 ? '#10b981' : margemPercentual > 0 ? '#f59e0b' : '#ef4444'
+                        }}
+                      >
+                        {margemPercentual.toFixed(1)}%
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+                        Total do Pedido
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)' }} id="p-pedido-total-label">
+                        R$ {totalVenda.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <hr style={{ margin: '16px 0' }} />
 

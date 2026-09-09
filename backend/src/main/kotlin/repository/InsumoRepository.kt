@@ -28,7 +28,10 @@ class InsumoRepository {
                 preco = it[InsumosTable.preco],
                 isEmbalagem = it[InsumosTable.isEmbalagem],
                 estoque = it[InsumosTable.estoque],
-                estoqueMinimo = minMap[it[InsumosTable.id]] ?: 0.0
+                estoqueMinimo = minMap[it[InsumosTable.id]] ?: 0.0,
+                dataValidade = it[InsumosTable.dataValidade]?.toString(),
+                lote = it[InsumosTable.lote],
+                codigoBarras = it[InsumosTable.codigoBarras]
             )
         }
     }
@@ -52,12 +55,21 @@ class InsumoRepository {
                 preco = it[InsumosTable.preco],
                 isEmbalagem = it[InsumosTable.isEmbalagem],
                 estoque = it[InsumosTable.estoque],
-                estoqueMinimo = min
+                estoqueMinimo = min,
+                dataValidade = it[InsumosTable.dataValidade]?.toString(),
+                lote = it[InsumosTable.lote],
+                codigoBarras = it[InsumosTable.codigoBarras]
             )
         }
     }
 
     fun criar(i: Insumo) = transaction {
+        val parsedValidade = try {
+            i.dataValidade?.takeIf { it.isNotBlank() }?.let { java.time.LocalDate.parse(it.trim()) }
+        } catch (e: Exception) {
+            null
+        }
+
         val novoId = InsumosTable.insert {
             it[nome] = i.nome
             it[unidadeMedidaId] = i.unidadeMedidaId
@@ -67,6 +79,9 @@ class InsumoRepository {
             it[preco] = i.preco
             it[isEmbalagem] = i.isEmbalagem
             it[estoque] = i.estoque
+            it[dataValidade] = parsedValidade
+            it[lote] = i.lote?.takeIf { l -> l.isNotBlank() }
+            it[codigoBarras] = i.codigoBarras?.takeIf { c -> c.isNotBlank() }
         } get InsumosTable.id
 
         if (i.estoqueMinimo != null && i.estoqueMinimo!! > 0) {
@@ -80,6 +95,12 @@ class InsumoRepository {
     }
 
     fun atualizar(id: Int, i: Insumo) = transaction {
+        val parsedValidade = try {
+            i.dataValidade?.takeIf { it.isNotBlank() }?.let { java.time.LocalDate.parse(it.trim()) }
+        } catch (e: Exception) {
+            null
+        }
+
         InsumosTable.update({ InsumosTable.id eq id }) {
             it[nome] = i.nome
             it[unidadeMedidaId] = i.unidadeMedidaId
@@ -89,6 +110,9 @@ class InsumoRepository {
             it[preco] = i.preco
             it[isEmbalagem] = i.isEmbalagem
             it[estoque] = i.estoque
+            it[dataValidade] = parsedValidade
+            it[lote] = i.lote?.takeIf { l -> l.isNotBlank() }
+            it[codigoBarras] = i.codigoBarras?.takeIf { c -> c.isNotBlank() }
         }
         if (i.estoqueMinimo != null) {
             try {

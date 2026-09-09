@@ -25,7 +25,10 @@ import {
   ShoppingBag,
   ArrowRight,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Calendar,
+  Barcode,
+  Clock
 } from 'lucide-react';
 
 interface Insumo {
@@ -39,6 +42,9 @@ interface Insumo {
   estoque?: number;
   estoqueMinimo?: number;
   unidadeSigla?: string;
+  dataValidade?: string;
+  lote?: string;
+  codigoBarras?: string;
 }
 
 interface MovimentoEstoque {
@@ -123,7 +129,58 @@ const initialForm = {
   preco: '0.00',
   isEmbalagem: 'false',
   estoque: '0',
-  estoqueMinimo: '0'
+  estoqueMinimo: '0',
+  dataValidade: '',
+  lote: '',
+  codigoBarras: ''
+};
+
+export interface ValidadeInfo {
+  status: 'SEM_VALIDADE' | 'VENCIDO' | 'A_VENCER' | 'VALIDO';
+  label: string;
+  diffDays: number | null;
+  badgeClass: string;
+}
+
+export const getValidadeInfo = (dataValidade?: string): ValidadeInfo => {
+  if (!dataValidade) {
+    return { status: 'SEM_VALIDADE', label: 'Não informada', diffDays: null, badgeClass: 'badge-gray' };
+  }
+  try {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const [year, month, day] = dataValidade.split('-').map(Number);
+    const val = new Date(year, month - 1, day);
+    val.setHours(0, 0, 0, 0);
+    const diffMs = val.getTime() - hoje.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const dataFmt = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+
+    if (diffDays < 0) {
+      return {
+        status: 'VENCIDO',
+        label: `Vencido há ${Math.abs(diffDays)}d (${dataFmt})`,
+        diffDays,
+        badgeClass: 'badge-red'
+      };
+    } else if (diffDays <= 30) {
+      return {
+        status: 'A_VENCER',
+        label: diffDays === 0 ? `Vence hoje (${dataFmt})` : `Vence em ${diffDays}d (${dataFmt})`,
+        diffDays,
+        badgeClass: 'badge-yellow'
+      };
+    } else {
+      return {
+        status: 'VALIDO',
+        label: `Válido até ${dataFmt}`,
+        diffDays,
+        badgeClass: 'badge-green'
+      };
+    }
+  } catch {
+    return { status: 'SEM_VALIDADE', label: dataValidade, diffDays: null, badgeClass: 'badge-gray' };
+  }
 };
 
 const fmtBrl = (value: number | undefined | null) => {
@@ -181,6 +238,7 @@ const InsumosPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState<'TODOS' | 'Matéria-prima' | 'Embalagem'>('TODOS');
   const [filterStatus, setFilterStatus] = useState<'TODOS' | 'NORMAL' | 'BAIXO' | 'ZERADO'>('TODOS');
+  const [filterValidade, setFilterValidade] = useState<'TODOS' | 'VENCIDOS' | 'A_VENCER' | 'VALIDOS'>('TODOS');
 
   // Estados de Ordenação
   const [sortField, setSortField] = useState<SortField>('nome');
@@ -460,6 +518,10 @@ const InsumosPage: React.FC = () => {
   const estoqueZerado = insumos.filter(i => (i.estoque ?? 0) === 0).length;
   const valorTotalEstoque = insumos.reduce((acc, i) => acc + getValorTotalInsumo(i), 0);
 
+  // Estatísticas de Validade
+  const insumosVencidos = insumos.filter(i => getValidadeInfo(i.dataValidade).status === 'VENCIDO').length;
+  const insumosAVencer = insumos.filter(i => getValidadeInfo(i.dataValidade).status === 'A_VENCER').length;
+
   // Manipulação de Ordenação
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -484,9 +546,11 @@ const InsumosPage: React.FC = () => {
   // Filtragem e Ordenação
   const filteredAndSortedInsumos = useMemo(() => {
     const filtered = insumos.filter(i => {
-      const matchSearch =
-        searchTerm.trim() === '' ||
-        removeAccents(i.nome.toLowerCase()).includes(removeAccents(searchTerm.toLowerCase()));
+      const termo = removeAccents(searchTerm.trim().toLowerCase());
+      const nomeMatch = removeAccents(i.nome.toLowerCase()).includes(termo);
+      const codigoMatch = Boolean(i.codigoBarras && i.codigoBarras.toLowerCase().includes(termo));
+      const loteMatch = Boolean(i.lote && removeAccents(i.lote.toLowerCase()).includes(termo));
+      const matchSearch = termo === '' || nomeMatch || codigoMatch || loteMatch;
 
       const matchTipo =
         filterTipo === 'TODOS'
@@ -507,7 +571,17 @@ const InsumosPage: React.FC = () => {
                 ? (i.estoque ?? 0) > min
                 : true;
 
-      return matchSearch && matchTipo && matchStatus;
+      const valInfo = getValidadeInfo(i.dataValidade);
+      const matchValidade =
+        filterValidade === 'TODOS'
+          ? true
+          : filterValidade === 'VENCIDOS'
+            ? valInfo.status === 'VENCIDO'
+            : filterValidade === 'A_VENCER'
+              ? valInfo.status === 'A_VENCER'
+              : valInfo.status === 'VALIDO';
+
+      return matchSearch && matchTipo && matchStatus && matchValidade;
     });
 
     return [...filtered].sort((a, b) => {
@@ -563,7 +637,7 @@ const InsumosPage: React.FC = () => {
 
       return sortDirection === 'asc' ? result : -result;
     });
-  }, [insumos, searchTerm, filterTipo, filterStatus, sortField, sortDirection, unidades]);
+  }, [insumos, searchTerm, filterTipo, filterStatus, filterValidade, sortField, sortDirection, unidades]);
 
   // Handlers de Modais
   const handleOpenCadastroModal = (i?: Insumo) => {
@@ -577,7 +651,10 @@ const InsumosPage: React.FC = () => {
         preco: i.preco !== undefined && i.preco !== null ? i.preco.toString() : '0.00',
         isEmbalagem: i.isEmbalagem ? 'true' : 'false',
         estoque: i.estoque !== undefined && i.estoque !== null ? i.estoque.toString() : '0',
-        estoqueMinimo: i.estoqueMinimo !== undefined && i.estoqueMinimo !== null ? i.estoqueMinimo.toString() : '0'
+        estoqueMinimo: i.estoqueMinimo !== undefined && i.estoqueMinimo !== null ? i.estoqueMinimo.toString() : '0',
+        dataValidade: i.dataValidade || '',
+        lote: i.lote || '',
+        codigoBarras: i.codigoBarras || ''
       });
     } else {
       setEditingId(null);
@@ -676,6 +753,44 @@ const InsumosPage: React.FC = () => {
         </div>
       </section>
 
+      {/* Banner de Alerta de Validade Expirada */}
+      {insumosVencidos > 0 && (
+        <div
+          style={{
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            borderRadius: 'var(--radius)',
+            padding: '14px 18px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            color: '#991b1b'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertCircle size={24} color="#dc2626" />
+            <div>
+              <strong style={{ display: 'block', fontSize: '15px' }}>
+                Atenção Crítica: {insumosVencidos} insumo(s) com validade vencida!
+              </strong>
+              <span style={{ fontSize: '13px', color: '#b91c1c' }}>
+                Insumos vencidos não devem ser utilizados na fabricação de novos produtos para assegurar a integridade e segurança das fórmulas.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: '#dc2626', color: '#fff', border: 'none', whiteSpace: 'nowrap', fontWeight: 600, padding: '8px 14px' }}
+            onClick={() => setFilterValidade('VENCIDOS')}
+          >
+            Ver Apenas Vencidos ({insumosVencidos})
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="kpi-grid" style={{ marginBottom: '24px' }}>
         <div className="kpi-card">
@@ -710,6 +825,40 @@ const InsumosPage: React.FC = () => {
             <div className="kpi-trend">Custo real proporcional fracionado</div>
           </div>
         </div>
+        <div className="kpi-card">
+          <div
+            className="kpi-icon"
+            style={{
+              backgroundColor: insumosVencidos > 0 ? '#fee2e2' : insumosAVencer > 0 ? '#fef3c7' : '#dcfce7',
+              color: insumosVencidos > 0 ? '#ef4444' : insumosAVencer > 0 ? '#d97706' : '#16a34a'
+            }}
+          >
+            <Calendar size={20} />
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Controle de Validade</div>
+            <div
+              className="kpi-value"
+              style={{
+                color: insumosVencidos > 0 ? '#ef4444' : insumosAVencer > 0 ? '#d97706' : '#16a34a',
+                fontSize: insumosVencidos > 0 ? '19px' : undefined
+              }}
+            >
+              {insumosVencidos > 0
+                ? `${insumosVencidos} Vencido(s)`
+                : insumosAVencer > 0
+                  ? `${insumosAVencer} A Vencer`
+                  : 'Validade 100% OK'}
+            </div>
+            <div className="kpi-trend">
+              {insumosVencidos > 0
+                ? `${insumosAVencer} a vencer nos próx. 30 dias`
+                : insumosAVencer > 0
+                  ? 'Atenção nos próximos 30 dias'
+                  : 'Nenhum insumo crítico'}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filtros e Busca */}
@@ -723,11 +872,11 @@ const InsumosPage: React.FC = () => {
               <input
                 id="busca-insumo"
                 type="text"
-                placeholder="Digite o nome do insumo..."
+                placeholder="Buscar por nome, código de barras ou lote..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ paddingLeft: '38px' }}
-                aria-label="Buscar insumo por nome"
+                aria-label="Buscar insumo por nome, código de barras ou lote"
               />
             </div>
           </div>
@@ -754,6 +903,19 @@ const InsumosPage: React.FC = () => {
               <option value="NORMAL">Normal (≥ 5)</option>
               <option value="BAIXO">Estoque Baixo (&lt; 5)</option>
               <option value="ZERADO">Estoque Zerado (0)</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="filtro-validade">Controle de Validade</label>
+            <select
+              id="filtro-validade"
+              value={filterValidade}
+              onChange={(e) => setFilterValidade(e.target.value as any)}
+            >
+              <option value="TODOS">Todas as Validades</option>
+              <option value="VENCIDOS">🔴 Vencidos</option>
+              <option value="A_VENCER">🟡 A Vencer (≤ 30 dias)</option>
+              <option value="VALIDOS">🟢 Válidos (&gt; 30 dias)</option>
             </select>
           </div>
         </div>
@@ -865,6 +1027,11 @@ const InsumosPage: React.FC = () => {
                     </button>
                   </th>
 
+                  {/* Validade & Lote */}
+                  <th className="table-cell" style={{ width: '160px' }}>
+                    <span>Validade & Lote</span>
+                  </th>
+
                   {/* Status */}
                   <th className="table-cell" style={{ width: '100px' }}>
                     <span>Status</span>
@@ -879,18 +1046,18 @@ const InsumosPage: React.FC = () => {
               <tbody>
                 {filteredAndSortedInsumos.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-12">
+                    <td colSpan={10} className="p-12">
                       <div className="empty-state">
                         <div className="empty-state-icon">
                           <Package className="w-16 h-16 mx-auto" />
                         </div>
                         <h3 className="empty-state-title">
-                          {searchTerm || filterTipo !== 'TODOS' || filterStatus !== 'TODOS'
+                          {searchTerm || filterTipo !== 'TODOS' || filterStatus !== 'TODOS' || filterValidade !== 'TODOS'
                             ? 'Nenhum insumo encontrado'
                             : 'Nenhum insumo cadastrado'}
                         </h3>
                         <p className="empty-state-description">
-                          {searchTerm || filterTipo !== 'TODOS' || filterStatus !== 'TODOS'
+                          {searchTerm || filterTipo !== 'TODOS' || filterStatus !== 'TODOS' || filterValidade !== 'TODOS'
                             ? 'Tente ajustar os filtros ou termos da busca para encontrar o item desejado.'
                             : 'Comece cadastrando seu primeiro insumo clicando no botão "Novo Insumo".'}
                         </p>
@@ -914,11 +1081,16 @@ const InsumosPage: React.FC = () => {
                         {/* Insumo */}
                         <td className="table-cell">
                           <strong>{i.nome}</strong>
-                          {i.fornecedorId && (
-                            <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                              Forn: {getFornecedorNome(i.fornecedorId)}
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--muted)', marginTop: '2px', alignItems: 'center' }}>
+                            {i.fornecedorId && (
+                              <span>Forn: {getFornecedorNome(i.fornecedorId)}</span>
+                            )}
+                            {i.codigoBarras && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: '4px' }}>
+                                <Barcode size={12} /> {i.codigoBarras}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Tipo */}
@@ -963,6 +1135,26 @@ const InsumosPage: React.FC = () => {
                         {/* Valor Total em Estoque */}
                         <td className="table-cell text-right td-mono td-blue" style={{ fontWeight: 600 }}>
                           {fmtBrl(valorTotal)}
+                        </td>
+
+                        {/* Validade & Lote */}
+                        <td className="table-cell">
+                          {(() => {
+                            const val = getValidadeInfo(i.dataValidade);
+                            return (
+                              <div>
+                                <span className={`badge ${val.badgeClass}`} style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  {val.status === 'VENCIDO' && <Clock size={11} />}
+                                  {val.label}
+                                </span>
+                                {i.lote && (
+                                  <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '3px' }}>
+                                    Lote: <span style={{ fontWeight: 600, color: 'var(--text)' }}>{i.lote}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Status */}
@@ -1498,6 +1690,50 @@ const InsumosPage: React.FC = () => {
                       Custo Unitário Base: R$ {(parseFloat(formData.preco) / parseFloat(formData.quantidadePorEmbalagem)).toFixed(5)} por {getUnidadeSigla(parseInt(formData.unidadeMedidaId)) || 'un'}
                     </div>
                   )}
+                </div>
+                <div className="form-group">
+                  <label htmlFor="codigoBarras">Código de Barras (EAN / Barcode)</label>
+                  <input
+                    type="text"
+                    id="codigoBarras"
+                    name="codigoBarras"
+                    value={formData.codigoBarras}
+                    onChange={e => setFormData({ ...formData, codigoBarras: e.target.value })}
+                    className="w-full"
+                    placeholder="Ex: 7891234567890"
+                  />
+                  <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                    Código de barras do fabricante para leitura por leitor óptico.
+                  </small>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="lote">Lote de Fabricação / Fornecedor</label>
+                  <input
+                    type="text"
+                    id="lote"
+                    name="lote"
+                    value={formData.lote}
+                    onChange={e => setFormData({ ...formData, lote: e.target.value })}
+                    className="w-full"
+                    placeholder="Ex: LOT-2026-X1"
+                  />
+                  <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                    Rastreabilidade em caso de recolhimento ou auditoria.
+                  </small>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="dataValidade">Data de Validade</label>
+                  <input
+                    type="date"
+                    id="dataValidade"
+                    name="dataValidade"
+                    value={formData.dataValidade}
+                    onChange={e => setFormData({ ...formData, dataValidade: e.target.value })}
+                    className="w-full"
+                  />
+                  <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                    O sistema alertará com antecedência quando estiver a 30 dias do vencimento.
+                  </small>
                 </div>
               </form>
             </div>

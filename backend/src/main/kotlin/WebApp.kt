@@ -13,6 +13,7 @@ import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.forwardedheaders.*
 import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.runBlocking
@@ -236,6 +237,88 @@ fun Application.configureRouting(db: AppDatabase) {
                     totalUnidadesProdutosEstoque += est
                 }
 
+                // Indicadores de Vendas e Lucro Realizado (Módulo Comercial)
+                val pedidos = PedidosTable.selectAll().toList()
+                val vendasTotalMes = pedidos.sumOf { it[PedidosTable.valor] ?: 0.0 }
+                val vendasCustoMes = pedidos.sumOf { it[PedidosTable.valorCustoTotal] }
+                val lucroBrutoMes = if (vendasTotalMes > 0.0) (vendasTotalMes - vendasCustoMes) else 0.0
+                val margemLucroRealizada = if (vendasTotalMes > 0.0) (lucroBrutoMes / vendasTotalMes) * 100.0 else 0.0
+                val pedidosCount = pedidos.size
+
+                // Indicadores de Giro de Estoque (Turnover Ratio)
+                val estoqueTotalCusto = valorEstoqueInsumos + valorEstoqueProdutosCusto
+                val giroEstoque = if (estoqueTotalCusto > 0.0 && vendasCustoMes > 0.0) {
+                    (vendasCustoMes / estoqueTotalCusto)
+                } else if (estoqueTotalCusto > 0.0 && vendasTotalMes > 0.0) {
+                    ((vendasTotalMes * 0.4) / estoqueTotalCusto)
+                } else 0.0
+
+                val diasGiroEstoque = if (giroEstoque > 0.0) {
+                    (30.0 / giroEstoque).coerceAtMost(365.0)
+                } else 0.0
+
+                // Indicadores de Validade de Insumos
+                val hoje = LocalDate.now()
+                val daqui30Dias = hoje.plusDays(30)
+                var insumosVencidosCount = 0
+                var insumosAVencerCount = 0
+                val insumosValidadeCritica = mutableListOf<Map<String, Any?>>()
+
+                InsumosTable.selectAll().forEach { row ->
+                    val validade = row[InsumosTable.dataValidade]
+                    val est = row[InsumosTable.estoque] ?: 0.0
+                    if (validade != null && est > 0.0) {
+                        if (validade.isBefore(hoje)) {
+                            insumosVencidosCount++
+                            if (insumosValidadeCritica.size < 8) {
+                                insumosValidadeCritica.add(mapOf(
+                                    "id" to row[InsumosTable.id],
+                                    "nome" to row[InsumosTable.nome],
+                                    "estoque" to est,
+                                    "lote" to row[InsumosTable.lote],
+                                    "dataValidade" to validade.toString(),
+                                    "status" to "VENCIDO"
+                                ))
+                            }
+                        } else if (!validade.isAfter(daqui30Dias)) {
+                            insumosAVencerCount++
+                            if (insumosValidadeCritica.size < 8) {
+                                insumosValidadeCritica.add(mapOf(
+                                    "id" to row[InsumosTable.id],
+                                    "nome" to row[InsumosTable.nome],
+                                    "estoque" to est,
+                                    "lote" to row[InsumosTable.lote],
+                                    "dataValidade" to validade.toString(),
+                                    "status" to "A_VENCER"
+                                ))
+                            }
+                        }
+                    }
+                }
+
+                // Ranking dos Produtos Mais Vendidos
+                val topProdutosVendidos = try {
+                    PedidoItensTable.selectAll()
+                        .groupBy { it[PedidoItensTable.nomeProduto] }
+                        .map { (nome, itens) ->
+                            val qtdTotal = itens.sumOf { it[PedidoItensTable.quantidade] }
+                            val receitaTotal = itens.sumOf { it[PedidoItensTable.precoUnitario] * it[PedidoItensTable.quantidade] }
+                            val custoTotal = itens.sumOf { it[PedidoItensTable.custoUnitario] * it[PedidoItensTable.quantidade] }
+                            val lucroTotal = receitaTotal - custoTotal
+                            mapOf(
+                                "nome" to nome,
+                                "quantidade" to qtdTotal,
+                                "receitaTotal" to receitaTotal,
+                                "custoTotal" to custoTotal,
+                                "lucroTotal" to lucroTotal
+                            )
+                        }
+                        .sortedByDescending { (it["quantidade"] as? Number)?.toDouble() ?: 0.0 }
+                        .take(5)
+                } catch (e: Exception) {
+                    emptyList<Map<String, Any?>>()
+                }
+
                 mapOf(
                     "precos" to precos,
                     "estoque" to estoque,
@@ -251,11 +334,156 @@ fun Application.configureRouting(db: AppDatabase) {
                     "totalProdutos" to totalProdutos,
                     "totalVariacoes" to totalVariacoes,
                     "margemMedia" to margemMedia,
-                    "ticketMedio" to ticketMedio
+                    "ticketMedio" to ticketMedio,
+                    // Novos indicadores de Vendas & Lucro
+                    "vendasTotalMes" to vendasTotalMes,
+                    "vendasCustoMes" to vendasCustoMes,
+                    "lucroBrutoMes" to lucroBrutoMes,
+                    "margemLucroRealizada" to margemLucroRealizada,
+                    "pedidosCount" to pedidosCount,
+                    // Indicadores de Giro de Estoque
+                    "giroEstoque" to giroEstoque,
+                    "diasGiroEstoque" to diasGiroEstoque,
+                    // Indicadores de Validade de Insumos
+                    "insumosVencidosCount" to insumosVencidosCount,
+                    "insumosAVencerCount" to insumosAVencerCount,
+                    "insumosValidadeCritica" to insumosValidadeCritica,
+                    "topProdutosVendidos" to topProdutosVendidos
                 )
            }
 
            respond(dashboardData)
+       }
+
+       suspend fun ApplicationCall.lookupBarcode(codigoRaw: String) {
+           val codigo = codigoRaw.trim()
+           if (codigo.isBlank()) {
+               respond(HttpStatusCode.BadRequest, mapOf("error" to "Código de barras inválido"))
+               return
+           }
+           val resultado = transaction {
+               // 1. Procurar em ProdutoVariacoesTable
+               val varRow = (ProdutoVariacoesTable innerJoin ProdutosFinaisTable)
+                   .select { ProdutoVariacoesTable.codigoBarras eq codigo }
+                   .firstOrNull()
+
+               if (varRow != null) {
+                   val varId = varRow[ProdutoVariacoesTable.id]
+                   val est = EstoqueVariacaoAuxTable.select { EstoqueVariacaoAuxTable.variacaoId eq varId }
+                       .singleOrNull()?.get(EstoqueVariacaoAuxTable.estoque) ?: 0.0
+                   return@transaction mapOf(
+                       "encontrado" to true,
+                       "tipo" to "PRODUTO",
+                       "id" to varId,
+                       "produtoId" to varRow[ProdutoVariacoesTable.produtoId],
+                       "nome" to "${varRow[ProdutosFinaisTable.nome]} - ${varRow[ProdutoVariacoesTable.nomeTamanho]}",
+                       "produtoNome" to varRow[ProdutosFinaisTable.nome],
+                       "nomeTamanho" to varRow[ProdutoVariacoesTable.nomeTamanho],
+                       "precoVenda" to varRow[ProdutoVariacoesTable.precoVenda],
+                       "custoUnitario" to varRow[ProdutoVariacoesTable.custoUnitarioCalculado],
+                       "estoque" to est,
+                       "codigoBarras" to codigo
+                   )
+               }
+
+               // 2. Procurar em KitsTable (por codigoBarras ou codigo)
+               val kitRow = KitsTable.select { (KitsTable.codigoBarras eq codigo) or (KitsTable.codigo eq codigo) }
+                   .firstOrNull()
+
+               if (kitRow != null) {
+                   val kitId = kitRow[KitsTable.id]
+                   return@transaction mapOf(
+                       "encontrado" to true,
+                       "tipo" to "KIT",
+                       "id" to kitId,
+                       "nome" to kitRow[KitsTable.nome],
+                       "precoVenda" to kitRow[KitsTable.precoVenda],
+                       "custoUnitario" to kitRow[KitsTable.custoTotalCalculado],
+                       "estoque" to 999.0,
+                       "codigoBarras" to codigo
+                   )
+               }
+
+               // 3. Procurar em InsumosTable
+               val insumoRow = (InsumosTable leftJoin UnidadesMedidaTable)
+                   .select { InsumosTable.codigoBarras eq codigo }
+                   .firstOrNull()
+
+               if (insumoRow != null) {
+                   return@transaction mapOf(
+                       "encontrado" to true,
+                       "tipo" to "INSUMO",
+                       "id" to insumoRow[InsumosTable.id],
+                       "nome" to insumoRow[InsumosTable.nome],
+                       "precoVenda" to insumoRow[InsumosTable.preco],
+                       "custoUnitario" to insumoRow[InsumosTable.preco],
+                       "estoque" to (insumoRow[InsumosTable.estoque] ?: 0.0),
+                       "unidadeSigla" to insumoRow[UnidadesMedidaTable.sigla].orEmpty(),
+                       "dataValidade" to insumoRow[InsumosTable.dataValidade]?.toString(),
+                       "lote" to insumoRow[InsumosTable.lote],
+                       "codigoBarras" to codigo
+                   )
+               }
+
+               // 4. Procurar em UnidadesCompraInsumoTable
+               val embRow = (UnidadesCompraInsumoTable innerJoin InsumosTable)
+                   .select { UnidadesCompraInsumoTable.codigoBarras eq codigo }
+                   .firstOrNull()
+
+               if (embRow != null) {
+                   return@transaction mapOf(
+                       "encontrado" to true,
+                       "tipo" to "INSUMO_EMBALAGEM",
+                       "id" to embRow[InsumosTable.id],
+                       "nome" to "${embRow[InsumosTable.nome]} - ${embRow[UnidadesCompraInsumoTable.nomeEmbalagem]}",
+                       "precoVenda" to (embRow[UnidadesCompraInsumoTable.precoEmbalagem] ?: embRow[InsumosTable.preco]),
+                       "custoUnitario" to (embRow[UnidadesCompraInsumoTable.precoEmbalagem] ?: embRow[InsumosTable.preco]),
+                       "estoque" to (embRow[InsumosTable.estoque] ?: 0.0),
+                       "codigoBarras" to codigo
+                   )
+               }
+
+               mapOf("encontrado" to false, "mensagem" to "Nenhum produto ou insumo com o código '$codigo'")
+           }
+
+           respond(resultado)
+       }
+
+       suspend fun ApplicationCall.respondInsumosValidade() {
+           val hoje = LocalDate.now()
+           val daqui30 = hoje.plusDays(30)
+           val resultado = transaction {
+               val todos = (InsumosTable leftJoin UnidadesMedidaTable).selectAll().map {
+                   val validade = it[InsumosTable.dataValidade]
+                   val est = it[InsumosTable.estoque] ?: 0.0
+                   val status = when {
+                       validade == null -> "SEM_VALIDADE"
+                       validade.isBefore(hoje) -> "VENCIDO"
+                       !validade.isAfter(daqui30) -> "A_VENCER"
+                       else -> "EM_DIA"
+                   }
+                   mapOf(
+                       "id" to it[InsumosTable.id],
+                       "nome" to it[InsumosTable.nome],
+                       "estoque" to est,
+                       "unidadeSigla" to it[UnidadesMedidaTable.sigla].orEmpty(),
+                       "dataValidade" to validade?.toString(),
+                       "lote" to it[InsumosTable.lote],
+                       "codigoBarras" to it[InsumosTable.codigoBarras],
+                       "status" to status
+                   )
+               }
+               val vencidos = todos.filter { it["status"] == "VENCIDO" && ((it["estoque"] as? Number)?.toDouble() ?: 0.0) > 0 }
+               val aVencer = todos.filter { it["status"] == "A_VENCER" && ((it["estoque"] as? Number)?.toDouble() ?: 0.0) > 0 }
+               mapOf(
+                   "totalVencidos" to vencidos.size,
+                   "totalAVencer" to aVencer.size,
+                   "vencidos" to vencidos,
+                   "aVencer" to aVencer,
+                   "todos" to todos
+               )
+           }
+           respond(resultado)
        }
 
         // --- ROTAS DA API ---
@@ -267,25 +495,46 @@ fun Application.configureRouting(db: AppDatabase) {
             get("/dashboard/json") {
                 call.respondDashboardJson()
             }
+            get("/codigo-barras/{codigo}") {
+                val codigo = call.parameters["codigo"] ?: ""
+                call.lookupBarcode(codigo)
+            }
+            get("/insumos/validade") {
+                call.respondInsumosValidade()
+            }
         }
 
         get("/health") {
             call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
         }
 
-        // Rota usada pelo Vite, porque o proxy remove o prefixo /api antes de encaminhar
         get("/dashboard/json") {
             call.respondDashboardJson()
+        }
+
+        get("/codigo-barras/{codigo}") {
+            val codigo = call.parameters["codigo"] ?: ""
+            call.lookupBarcode(codigo)
+        }
+
+        get("/insumos/validade") {
+            call.respondInsumosValidade()
         }
 
         if (frontendDistExists) {
             staticFiles("/assets", File(frontendDir, "dist/assets"))
             get("{...}") {
-                val file = File(frontendDir, "dist/index.html")
-                if (file.exists()) {
-                    call.respondFile(file)
+                val path = call.request.uri.substringBefore('?').removePrefix("/")
+                val candidateFile = File(frontendDir, "dist/$path")
+                if (path.isNotEmpty() && candidateFile.exists() && candidateFile.isFile) {
+                    call.respondFile(candidateFile)
                 } else {
-                    call.respondText("index.html not found", status = HttpStatusCode.NotFound)
+                    val file = File(frontendDir, "dist/index.html")
+                    if (file.exists()) {
+                        call.respondFile(file)
+                    } else {
+                        call.respondText("index.html not found", status = HttpStatusCode.NotFound)
+                    }
                 }
             }
         }

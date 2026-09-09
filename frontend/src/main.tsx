@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client'
 import App from './App'
 import './styles.css'
 import './css/app.css'
-import './js/app.js'
+import './js/app'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {ThemeProvider} from './contexts/ThemeContext'
 

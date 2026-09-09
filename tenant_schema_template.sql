@@ -60,7 +60,10 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.insumo (
     preco DOUBLE PRECISION NOT NULL,
     is_embalagem BOOLEAN NOT NULL DEFAULT FALSE,
     estoque DOUBLE PRECISION DEFAULT 0.0,
-    estoque_minimo DOUBLE PRECISION DEFAULT 0.0
+    estoque_minimo DOUBLE PRECISION DEFAULT 0.0,
+    data_validade DATE,
+    lote VARCHAR(50),
+    codigo_barras VARCHAR(50)
 );
 
 -- 5. Tabelas Auxiliares e Movimentações de Insumo
@@ -94,6 +97,8 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.movimento_estoque_insumo (
     origem_referencia VARCHAR(50),
     referencia_id INTEGER,
     motivo TEXT,
+    data_validade DATE,
+    lote VARCHAR(50),
     criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     criado_por INTEGER
 );
@@ -117,6 +122,7 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.produto_variacao (
     custo_fixo_rateado DOUBLE PRECISION NOT NULL,
     peso_g DOUBLE PRECISION,
     preco_venda_manual DOUBLE PRECISION,
+    codigo_barras VARCHAR(50),
     descricao_visual TEXT
 );
 
@@ -247,6 +253,8 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido (
     data_pedido TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) NOT NULL,
     valor_total DOUBLE PRECISION NOT NULL,
+    valor_custo_total DOUBLE PRECISION DEFAULT 0.0,
+    lucro_bruto DOUBLE PRECISION DEFAULT 0.0,
     canal_venda VARCHAR(50),
     observacoes TEXT
 );
@@ -255,10 +263,12 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido_item (
     id SERIAL PRIMARY KEY,
     pedido_id INTEGER NOT NULL REFERENCES %SCHEMA%.pedido(id) ON DELETE CASCADE,
     variacao_id INTEGER REFERENCES %SCHEMA%.produto_variacao(id),
+    kit_id INTEGER REFERENCES %SCHEMA%.kits(id),
     produto_nome VARCHAR(255),
     tamanho VARCHAR(255),
     quantidade INTEGER NOT NULL,
     preco_unitario DOUBLE PRECISION NOT NULL,
+    custo_unitario DOUBLE PRECISION DEFAULT 0.0,
     valor_total DOUBLE PRECISION NOT NULL
 );
 
@@ -302,8 +312,11 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.kits (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
     codigo VARCHAR(100) UNIQUE,
+    codigo_barras VARCHAR(50),
     descricao TEXT,
-    preco_venda DOUBLE PRECISION NOT NULL,
+    margem_lucro DOUBLE PRECISION DEFAULT 0.0,
+    custo_total_calculado DOUBLE PRECISION DEFAULT 0.0,
+    preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -312,7 +325,7 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.kits (
 CREATE TABLE IF NOT EXISTS %SCHEMA%.kit_itens (
     id SERIAL PRIMARY KEY,
     kit_id INTEGER NOT NULL REFERENCES %SCHEMA%.kits(id) ON DELETE CASCADE,
-    variacao_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_variacao(id) ON DELETE RESTRICT,
+    produto_variacao_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_variacao(id) ON DELETE RESTRICT,
     quantidade INTEGER NOT NULL DEFAULT 1,
     desconto_percentual DOUBLE PRECISION NOT NULL DEFAULT 0.0
 );
@@ -352,8 +365,11 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.historico_cobranca (
 -- 14. Índices de Desempenho
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_fornecedor ON %SCHEMA%.insumo(fornecedor_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_unidade ON %SCHEMA%.insumo(unidade_medida_id);
+CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_cod_barras ON %SCHEMA%.insumo(codigo_barras);
+CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_validade ON %SCHEMA%.insumo(data_validade);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_mov_insumo_id ON %SCHEMA%.movimento_estoque_insumo(insumo_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_prod_var_prod ON %SCHEMA%.produto_variacao(produto_id);
+CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_prod_var_cod_barras ON %SCHEMA%.produto_variacao(codigo_barras);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_var_mat_var ON %SCHEMA%.variacao_material(variacao_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_var_mat_ins ON %SCHEMA%.variacao_material(insumo_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_rec_ins_prod ON %SCHEMA%.receita_insumo(produto_id);
@@ -366,6 +382,7 @@ CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_item_comp_comp ON %SCHEMA%.item_compra(c
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_ped_cliente ON %SCHEMA%.pedido(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_ped_item_ped ON %SCHEMA%.pedido_item(pedido_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_kit_itens_kit ON %SCHEMA%.kit_itens(kit_id);
+CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_kits_cod_barras ON %SCHEMA%.kits(codigo_barras);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_ped_fin_cliente ON %SCHEMA%.pedidos_financeiro(cliente_id);
 
 -- 15. Unidades de Medida Básicas Iniciais

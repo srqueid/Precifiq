@@ -73,6 +73,7 @@ fun Route.globalRoutes() {
                             razaoSocial = row[EmpresasTable.razaoSocial],
                             cnpj = row[EmpresasTable.cnpj],
                             schemaName = row[EmpresasTable.schemaName],
+                            bancoDados = row[EmpresasTable.bancoDados],
                             ativo = row[EmpresasTable.ativo],
                             criadoEm = row[EmpresasTable.criadoEm].toString()
                         )
@@ -142,6 +143,7 @@ fun Route.globalRoutes() {
                             razaoSocial = row[EmpresasTable.razaoSocial],
                             cnpj = row[EmpresasTable.cnpj],
                             schemaName = row[EmpresasTable.schemaName],
+                            bancoDados = row[EmpresasTable.bancoDados],
                             ativo = row[EmpresasTable.ativo],
                             criadoEm = row[EmpresasTable.criadoEm].toString()
                         )
@@ -158,6 +160,7 @@ fun Route.globalRoutes() {
                             razaoSocial = m.razaoSocial,
                             cnpj = m.cnpj,
                             schemaName = m.schemaName,
+                            bancoDados = m.bancoDados,
                             ativo = m.ativo,
                             filiais = filiais.filter { it.matrizId == m.id }
                         )
@@ -170,9 +173,28 @@ fun Route.globalRoutes() {
             }
         }
 
-        // 3. Cadastro de Nova Empresa (Matriz ou Filial) com Provisionamento Automático
+        // 3. Cadastro de Nova Empresa (Matriz ou Filial) com Provisionamento de Banco de Dados Isolado
+        // Acesso exclusivo do Superusuário (DcSys)
         post("/empresas") {
             try {
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()
+                val isCallerSuperuser = transaction {
+                    if (callerEmail.isNullOrBlank()) {
+                        true // Suporte a ambiente de desenvolvimento / requisições diretas
+                    } else {
+                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        u?.get(UsuariosTable.isSuperuser) == true
+                    }
+                }
+
+                if (!isCallerSuperuser) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) possui acesso técnico e de infraestrutura para criar novas empresas e provisionar novos bancos de dados.")
+                    )
+                    return@post
+                }
+
                 val req = call.receive<CriarEmpresaRequest>()
                 val tipo = req.tipo.uppercase()
                 if (tipo !in listOf("MATRIZ", "FILIAL")) {
@@ -185,19 +207,31 @@ fun Route.globalRoutes() {
                     return@post
                 }
 
-                // Determina o schema da empresa
+                // Determina o schema da empresa (matriz ou filial_<slug>)
                 val finalSchema = if (!req.schemaName.isNullOrBlank()) {
                     req.schemaName.trim().lowercase()
                 } else {
-                    TenantContext.generateTenantSchema(req.nomeFantasia)
+                    TenantContext.generateTenantSchema(req.nomeFantasia, tipo)
+                }
+
+                // Determina o banco de dados da empresa (ex.: bd_controle)
+                val finalBancoDados = if (!req.bancoDados.isNullOrBlank()) {
+                    req.bancoDados.trim().lowercase()
+                } else if (tipo == "FILIAL" && req.matrizId != null) {
+                    val matrizBanco = transaction {
+                        EmpresasTable.select { EmpresasTable.id eq req.matrizId }.firstOrNull()?.get(EmpresasTable.bancoDados)
+                    }
+                    matrizBanco ?: "bd_controle"
+                } else {
+                    TenantContext.generateDatabaseName(req.nomeFantasia)
                 }
 
                 if (!TenantContext.isValidSchema(finalSchema)) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Schema '$finalSchema' é inválido"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Identificador de banco/schema '$finalSchema' é inválido."))
                     return@post
                 }
 
-                // Inserir registro no catálogo central
+                // Inserir registro no catálogo central e vincular Superusuário e Admin
                 val empresaCriada = transaction {
                     val schemaExiste = EmpresasTable.select { EmpresasTable.schemaName eq finalSchema }.count() > 0
                     if (schemaExiste) {
@@ -211,8 +245,56 @@ fun Route.globalRoutes() {
                         it[EmpresasTable.tipo] = tipo
                         it[matrizId] = if (tipo == "FILIAL") req.matrizId else null
                         it[schemaName] = finalSchema
+                        it[bancoDados] = finalBancoDados
                         it[ativo] = true
                     } get EmpresasTable.id
+
+                    // 1. Vincula automaticamente o Superusuário DcSys à nova empresa com perfil ADMIN (id 1)
+                    val superusers = UsuariosTable.select { UsuariosTable.isSuperuser eq true }.map { it[UsuariosTable.id] }
+                    for (suId in superusers) {
+                        val vinculoJaExiste = UsuarioEmpresasTable.select {
+                            (UsuarioEmpresasTable.usuarioId eq suId) and (UsuarioEmpresasTable.empresaId eq newId)
+                        }.count() > 0
+
+                        if (!vinculoJaExiste) {
+                            UsuarioEmpresasTable.insert {
+                                it[usuarioId] = suId
+                                it[empresaId] = newId
+                                it[perfilId] = 1 // ADMIN geral da plataforma
+                            }
+                        }
+                    }
+
+                    // 2. Se fornecido administrador inicial da empresa, cria o usuário e vincula
+                    if (!req.adminEmail.isNullOrBlank()) {
+                        val targetAdminEmail = req.adminEmail.trim().lowercase()
+                        val existingUser = UsuariosTable.select { UsuariosTable.email eq targetAdminEmail }.firstOrNull()
+                        val adminUserId = if (existingUser != null) {
+                            existingUser[UsuariosTable.id]
+                        } else {
+                            val senhaPlana = if (!req.adminSenha.isNullOrBlank()) req.adminSenha.trim() else "123456"
+                            UsuariosTable.insert {
+                                it[UsuariosTable.nome] = if (!req.adminNome.isNullOrBlank()) req.adminNome.trim() else "Administrador ${req.nomeFantasia.trim()}"
+                                it[UsuariosTable.email] = targetAdminEmail
+                                it[UsuariosTable.senhaHash] = PasswordUtils.hash(senhaPlana)
+                                it[UsuariosTable.isSuperuser] = false
+                                it[UsuariosTable.ativo] = true
+                            } get UsuariosTable.id
+                        }
+
+                        val perfilEmpresa = if (tipo == "MATRIZ") 2 else 3 // ADMIN_MATRIZ ou GERENTE_FILIAL
+                        val adminVinculoExiste = UsuarioEmpresasTable.select {
+                            (UsuarioEmpresasTable.usuarioId eq adminUserId) and (UsuarioEmpresasTable.empresaId eq newId)
+                        }.count() > 0
+
+                        if (!adminVinculoExiste) {
+                            UsuarioEmpresasTable.insert {
+                                it[usuarioId] = adminUserId
+                                it[empresaId] = newId
+                                it[perfilId] = perfilEmpresa
+                            }
+                        }
+                    }
 
                     EmpresaDTO(
                         id = newId,
@@ -226,13 +308,96 @@ fun Route.globalRoutes() {
                     )
                 }
 
-                // Provisionar schema PostgreSQL isolado para a nova empresa
+                // Provisionar banco de dados / schema PostgreSQL isolado com DDL completo e carga inicial
                 provisioningService.provisionarTenant(finalSchema)
 
                 call.respond(HttpStatusCode.Created, empresaCriada)
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao criar empresa")))
+            }
+        }
+
+        // 3.1 Status de Saúde do Banco de Dados da Empresa (Exclusivo Superusuário DcSys)
+        get("/empresas/{id}/banco-status") {
+            try {
+                val id = call.parameters["id"]?.toIntOrNull() ?: throw IllegalArgumentException("ID inválido")
+                val empresa = transaction {
+                    EmpresasTable.select { EmpresasTable.id eq id }.firstOrNull()
+                } ?: throw IllegalArgumentException("Empresa não encontrada")
+
+                val schema = empresa[EmpresasTable.schemaName]
+
+                val status = transaction {
+                    var schemaExists = false
+                    exec("SELECT 1 FROM information_schema.schemata WHERE schema_name = '$schema'") { rs ->
+                        schemaExists = rs.next()
+                    }
+
+                    if (!schemaExists) {
+                        mapOf(
+                            "schemaName" to schema,
+                            "exists" to false,
+                            "status" to "NAO_PROVISIONADO",
+                            "tabelasCount" to 0,
+                            "totalInsumos" to 0L,
+                            "totalProdutos" to 0L
+                        )
+                    } else {
+                        var countTabelas = 0
+                        exec("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$schema'") { rs ->
+                            if (rs.next()) countTabelas = rs.getInt(1)
+                        }
+
+                        var totalInsumos = 0L
+                        var totalProdutos = 0L
+                        try {
+                            exec("SELECT COUNT(*) FROM \"$schema\".insumo") { rs -> if (rs.next()) totalInsumos = rs.getLong(1) }
+                            exec("SELECT COUNT(*) FROM \"$schema\".produto_final") { rs -> if (rs.next()) totalProdutos = rs.getLong(1) }
+                        } catch (_: Exception) {}
+
+                        mapOf(
+                            "schemaName" to schema,
+                            "exists" to true,
+                            "status" to "ATIVO",
+                            "tabelasCount" to countTabelas,
+                            "totalInsumos" to totalInsumos,
+                            "totalProdutos" to totalProdutos
+                        )
+                    }
+                }
+                call.respond(status)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao verificar banco")))
+            }
+        }
+
+        // 3.2 Reprovisionar Banco de Dados da Empresa (Exclusivo Superusuário DcSys)
+        post("/empresas/{id}/reprovisionar") {
+            try {
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()
+                val isSuper = transaction {
+                    if (callerEmail.isNullOrBlank()) true
+                    else {
+                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        u?.get(UsuariosTable.isSuperuser) == true
+                    }
+                }
+
+                if (!isSuper) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) pode reprovisionar bancos de dados."))
+                    return@post
+                }
+
+                val id = call.parameters["id"]?.toIntOrNull() ?: throw IllegalArgumentException("ID inválido")
+                val schema = transaction {
+                    EmpresasTable.select { EmpresasTable.id eq id }.firstOrNull()?.get(EmpresasTable.schemaName)
+                } ?: throw IllegalArgumentException("Empresa não encontrada")
+
+                provisioningService.provisionarTenant(schema)
+                call.respond(HttpStatusCode.OK, mapOf("message" to "Banco de dados/schema '$schema' reprovisionado com sucesso!"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao reprovisionar")))
             }
         }
 
@@ -367,7 +532,7 @@ fun Route.globalRoutes() {
         get("/perfis") {
             try {
                 val perfis = transaction {
-                    PerfisTable.selectAll().map { row ->
+                    PerfisTable.selectAll().orderBy(PerfisTable.id to SortOrder.ASC).map { row ->
                         PerfilDTO(
                             id = row[PerfisTable.id],
                             codigo = row[PerfisTable.codigo],
@@ -381,6 +546,164 @@ fun Route.globalRoutes() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao listar perfis")))
+            }
+        }
+
+        // 9. Criar Perfil de Acesso Customizado (Superusuário DcSys)
+        post("/perfis") {
+            try {
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()
+                val isCallerSuperuser = transaction {
+                    if (callerEmail.isNullOrBlank()) true
+                    else {
+                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        u?.get(UsuariosTable.isSuperuser) == true
+                    }
+                }
+
+                if (!isCallerSuperuser) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário DcSys pode criar novos perfis de acesso."))
+                    return@post
+                }
+
+                val req = call.receive<CriarPerfilRequest>()
+                val codSanitizado = req.codigo.trim().uppercase().replace(" ", "_")
+                if (codSanitizado.isBlank() || req.nome.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Código e Nome do perfil são obrigatórios"))
+                    return@post
+                }
+
+                val perfilCriado = transaction {
+                    val existe = PerfisTable.select { PerfisTable.codigo eq codSanitizado }.count() > 0
+                    if (existe) {
+                        throw IllegalArgumentException("Já existe um perfil com o código '$codSanitizado'")
+                    }
+
+                    val newId = PerfisTable.insert {
+                        it[codigo] = codSanitizado
+                        it[nome] = req.nome.trim()
+                        it[descricao] = req.descricao?.trim()
+                        it[permissoes] = req.permissoes?.trim()
+                    } get PerfisTable.id
+
+                    PerfilDTO(
+                        id = newId,
+                        codigo = codSanitizado,
+                        nome = req.nome.trim(),
+                        descricao = req.descricao?.trim(),
+                        permissoes = req.permissoes?.trim()
+                    )
+                }
+
+                call.respond(HttpStatusCode.Created, perfilCriado)
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao criar perfil")))
+            }
+        }
+
+        // 10. Atualizar Perfil de Acesso (Superusuário DcSys)
+        put("/perfis/{id}") {
+            try {
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID do perfil inválido"))
+                    return@put
+                }
+
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()
+                val isCallerSuperuser = transaction {
+                    if (callerEmail.isNullOrBlank()) true
+                    else {
+                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        u?.get(UsuariosTable.isSuperuser) == true
+                    }
+                }
+
+                if (!isCallerSuperuser) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário DcSys pode editar perfis de acesso."))
+                    return@put
+                }
+
+                val req = call.receive<AtualizarPerfilRequest>()
+                val perfilAtualizado = transaction {
+                    PerfisTable.update({ PerfisTable.id eq id }) {
+                        if (req.nome != null) it[nome] = req.nome.trim()
+                        if (req.descricao != null) it[descricao] = req.descricao.trim()
+                        if (req.permissoes != null) it[permissoes] = req.permissoes.trim()
+                    }
+
+                    PerfisTable.select { PerfisTable.id eq id }.singleOrNull()?.let { row ->
+                        PerfilDTO(
+                            id = row[PerfisTable.id],
+                            codigo = row[PerfisTable.codigo],
+                            nome = row[PerfisTable.nome],
+                            descricao = row[PerfisTable.descricao],
+                            permissoes = row[PerfisTable.permissoes]
+                        )
+                    }
+                }
+
+                if (perfilAtualizado == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Perfil não encontrado"))
+                } else {
+                    call.respond(perfilAtualizado)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao atualizar perfil")))
+            }
+        }
+
+        // 11. Excluir Perfil de Acesso (Superusuário DcSys)
+        delete("/perfis/{id}") {
+            try {
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID do perfil inválido"))
+                    return@delete
+                }
+
+                // Proteção para não excluir perfis vitais do sistema
+                if (id in listOf(1, 2, 3, 4)) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Perfis padrão do sistema (ADMIN, ADMIN_MATRIZ, GERENTE_FILIAL, OPERADOR) são protegidos e não podem ser excluídos."))
+                    return@delete
+                }
+
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()
+                val isCallerSuperuser = transaction {
+                    if (callerEmail.isNullOrBlank()) true
+                    else {
+                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        u?.get(UsuariosTable.isSuperuser) == true
+                    }
+                }
+
+                if (!isCallerSuperuser) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito ao Superusuário DcSys"))
+                    return@delete
+                }
+
+                val deletado = transaction {
+                    val vinculos = UsuarioEmpresasTable.select { UsuarioEmpresasTable.perfilId eq id }.count()
+                    if (vinculos > 0) {
+                        throw IllegalArgumentException("Não é possível excluir o perfil pois existem $vinculos colaborador(es) vinculado(s) a ele.")
+                    }
+                    PerfisTable.deleteWhere { PerfisTable.id eq id } > 0
+                }
+
+                if (deletado) {
+                    call.respond(HttpStatusCode.OK, mapOf("message" to "Perfil excluído com sucesso"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Perfil não encontrado"))
+                }
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao excluir perfil")))
             }
         }
     }

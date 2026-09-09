@@ -13,7 +13,8 @@ import {
   ExternalLink,
   DollarSign,
   AlertTriangle,
-  Layers
+  Layers,
+  Barcode
 } from 'lucide-react';
 
 interface ProdutoEstoque {
@@ -29,6 +30,7 @@ interface ProdutoEstoque {
   margemLucro: number;
   tempoProducaoMinutos: number;
   estoque: number;
+  codigoBarras?: string;
 }
 
 interface ProdutoBase {
@@ -133,7 +135,8 @@ const EstoquePage: React.FC = () => {
     const filtered = produtos.filter(p => {
       const termo = removeAccents(searchTerm.toLowerCase().trim());
       const nomeCompleto = removeAccents(`${p.produtoNome} ${p.nomeTamanho}`.toLowerCase());
-      const matchSearch = termo === '' || nomeCompleto.includes(termo);
+      const barcodeMatch = Boolean(p.codigoBarras && p.codigoBarras.toLowerCase().includes(termo));
+      const matchSearch = termo === '' || nomeCompleto.includes(termo) || barcodeMatch;
 
       const matchBase =
         filterProdutoBase === 'TODOS'
@@ -293,11 +296,11 @@ const EstoquePage: React.FC = () => {
               <input
                 id="busca-produto"
                 type="text"
-                placeholder="Ex: Sabonete Líquido, 200ml..."
+                placeholder="Ex: Sabonete Líquido, 200ml ou código de barras..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ paddingLeft: '38px' }}
-                aria-label="Buscar produto ou tamanho"
+                aria-label="Buscar produto, tamanho ou código de barras"
               />
             </div>
           </div>
@@ -479,8 +482,13 @@ const EstoquePage: React.FC = () => {
                       {/* Produto & Tamanho */}
                       <td className="table-cell">
                         <strong>{p.produtoNome}</strong>
-                        <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                          Variação: {p.nomeTamanho}
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span>Variação: {p.nomeTamanho}</span>
+                          {p.codigoBarras && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: '4px', fontSize: '11px' }}>
+                              <Barcode size={12} /> {p.codigoBarras}
+                            </span>
+                          )}
                         </div>
                       </td>
 

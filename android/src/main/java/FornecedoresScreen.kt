@@ -29,6 +29,11 @@ fun FornecedoresScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Fornecedores") },
+                actions = {
+                    IconButton(onClick = { viewModel.carregarFornecedores() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Atualizar", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White

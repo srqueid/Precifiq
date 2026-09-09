@@ -26,7 +26,14 @@ fun InsumosScreen(viewModel: InsumosViewModel = hiltViewModel()) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Gestão de Insumos") })
+            TopAppBar(
+                title = { Text("Gestão de Insumos") },
+                actions = {
+                    IconButton(onClick = { viewModel.carregarInsumos() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Atualizar Insumos")
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { /* Novo Insumo */ }) {
@@ -43,7 +50,7 @@ fun InsumosScreen(viewModel: InsumosViewModel = hiltViewModel()) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Buscar insumo") },
+                    label = { Text("Buscar insumo ou cód. barras") },
                     modifier = Modifier.weight(1f),
                     leadingIcon = { Icon(Icons.Default.Search, null) }
                 )
@@ -68,14 +75,14 @@ fun InsumoCard(insumo: Insumo) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(6.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isLowStock) Color(0xFFFFF3E0) else Color.White
+            containerColor = if (isLowStock) Color(0xFFFFF7ED) else Color.White
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text(text = insumo.nome, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(text = insumo.nome, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text(
                     text = insumo.tipo.name,
                     style = MaterialTheme.typography.labelMedium,
@@ -83,12 +90,49 @@ fun InsumoCard(insumo: Insumo) {
                 )
             }
 
+            // Badges de Rastreabilidade (Código de Barras, Lote e Validade)
+            if (!insumo.codigoBarras.isNullOrBlank() || !insumo.dataValidade.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!insumo.codigoBarras.isNullOrBlank()) {
+                        Surface(
+                            color = Color(0xFFF1F5F9),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "EAN: ${insumo.codigoBarras}",
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = Color(0xFF475569),
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                    }
+                    if (!insumo.dataValidade.isNullOrBlank()) {
+                        Surface(
+                            color = Color(0xFFFEF3C7),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "Val: ${insumo.dataValidade}",
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = Color(0xFF92400E),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Column {
                     Text("R$ ${insumo.precoUltCompra.format(2)}", fontWeight = FontWeight.SemiBold)
-                    Text("Últ. Compra", style = MaterialTheme.typography.bodySmall)
+                    Text("Custo Unit.", style = MaterialTheme.typography.bodySmall)
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
@@ -106,16 +150,9 @@ fun InsumoCard(insumo: Insumo) {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red)
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Estoque Baixo!", color = Color.Red, fontWeight = FontWeight.Medium)
-                }
-            }
-
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { /* Editar */ }) { Text("Editar") }
-                TextButton(onClick = { /* Excluir */ }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)) {
-                    Text("Excluir")
+                    Text("Abaixo do estoque mínimo", color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }

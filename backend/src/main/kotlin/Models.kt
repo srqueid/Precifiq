@@ -98,7 +98,10 @@ data class Insumo(
     var preco: Double, // Preço da última compra
     var isEmbalagem: Boolean = false,
     var estoque: Double? = 0.0,
-    var estoqueMinimo: Double? = 0.0
+    var estoqueMinimo: Double? = 0.0,
+    var dataValidade: String? = null,
+    var lote: String? = null,
+    var codigoBarras: String? = null
 )
 
 // Unidade de Compra / Fator de Conversão de Embalagem
@@ -116,6 +119,8 @@ data class UnidadeCompraInsumo(
 enum class TipoMovimentoEstoque(val valor: String) {
     ENTRADA_COMPRA("ENTRADA_COMPRA"),
     SAIDA_PRODUCAO("SAIDA_PRODUCAO"),
+    SAIDA_VENDA("SAIDA_VENDA"),
+    SAIDA_VENDA_KIT("SAIDA_VENDA_KIT"),
     AJUSTE_INVENTARIO("AJUSTE_INVENTARIO"),
     PERDA("PERDA"),
     ESTORNO("ESTORNO")
@@ -132,6 +137,8 @@ data class MovimentoEstoqueInsumo(
     val origemReferencia: String? = null,
     val referenciaId: Int? = null,
     val motivo: String? = null,
+    val dataValidade: String? = null,
+    val lote: String? = null,
     val criadoEm: LocalDateTime = LocalDateTime.now(),
     val criadoPor: Int? = null,
     val insumoNome: String? = null,
@@ -180,6 +187,7 @@ data class ProdutoVariacao(
     var precoVenda: Double = 0.0,
     var custoUnitarioCalculado: Double = 0.0,
     var estoque: Double = 0.0,
+    var codigoBarras: String? = null,
     var materiais: List<VariacaoMaterial> = emptyList()
 )
 
@@ -415,6 +423,8 @@ data class Pedido(
     var clienteId: Int? = null,
     var clienteNome: String? = null,
     var valor: Double? = null,
+    var valorCustoTotal: Double? = 0.0,
+    var lucroBruto: Double? = 0.0,
     var formaPagamento: String = "",
     var dataPagamento: String? = null,
     var entregue: Boolean = false,
@@ -426,5 +436,9 @@ data class PedidoItem(
     val pedidoId: Int = 0,
     var nome: String = "",
     var qtd: Int = 0,
-    var preco: Double = 0.0
+    var preco: Double = 0.0,
+    var variacaoId: Int? = null,
+    var kitId: Int? = null,
+    var tipo: String? = null, // "PRODUTO", "KIT", "OUTRO"
+    var custoUnitario: Double? = 0.0
 )

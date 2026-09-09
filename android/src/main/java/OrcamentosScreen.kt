@@ -23,7 +23,12 @@ fun OrcamentosScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Orçamentos & Compras") },
+                title = { Text("Orçamentos & Vendas", color = Color.White) },
+                actions = {
+                    IconButton(onClick = { viewModel.carregarOrcamentos() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Atualizar", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
             )
         },

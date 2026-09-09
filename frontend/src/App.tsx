@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 
 // Importando os provedores de contexto
 import { TenantProvider } from './contexts/TenantContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Importando os componentes
 import Sidebar from './Sidebar';
@@ -24,10 +24,14 @@ import PedidoPage from './pages/PedidoPage';
 import EstoquePage from './pages/EstoquePage';
 import KitsPage from './pages/KitsPage';
 import GestaoGlobalPage from './pages/GestaoGlobalPage';
+import SuperAdminPage from './pages/SuperAdminPage';
+import { LoginPage } from './pages/LoginPage';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const location = useLocation();
 
   const handleMenuToggle = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -49,42 +53,64 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Se não estiver autenticado: index (/) ou qualquer rota exibe a tela de login
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    );
+  }
+
+  // Se estiver autenticado e tentar acessar /login, direciona para o index (Dashboard)
+  if (location.pathname === '/login') {
+    return <Navigate to="/" replace />;
+  }
+
+  return (
+    <div className="app-shell">
+      <Sidebar 
+        isOpen={isMenuOpen}
+        onToggle={handleMenuToggle}
+        onClose={handleMenuClose}
+        onOpenCopilot={() => setIsCopilotOpen(true)}
+      />
+      <main className="app-main">
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/fornecedores" element={<FornecedoresPage />} />
+          <Route path="/insumos" element={<InsumosPage />} />
+          <Route path="/unidades" element={<UnidadesMedidaPage />} />
+          <Route path="/produtos" element={<ProdutosFinaisPage />} />
+          <Route path="/kits" element={<KitsPage />} />
+          <Route path="/orcamentos" element={<OrcamentosPage />} />
+          <Route path="/pedido-compra/:id" element={<PedidoCompraPage />} />
+          <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+          <Route path="/pedidos" element={<PedidoComprasPage />} />
+          <Route path="/pedido" element={<PedidoPage />} />
+          <Route path="/compras" element={<ComprasPage />} />
+          <Route path="/estoque" element={<EstoquePage />} />
+          <Route path="/gestao-global" element={<GestaoGlobalPage />} />
+          <Route path="/superadmin" element={<SuperAdminPage />} />
+        </Routes>
+      </main>
+
+      {/* Modal Global do Copilot Operacional com Text-to-SQL (Spotlight Ctrl+K) */}
+      <CopilotModal 
+        isOpen={isCopilotOpen} 
+        onClose={() => setIsCopilotOpen(false)} 
+      />
+    </div>
+  );
+};
+
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <TenantProvider>
         <BrowserRouter>
-          <div className="app-shell">
-            <Sidebar 
-              isOpen={isMenuOpen}
-              onToggle={handleMenuToggle}
-              onClose={handleMenuClose}
-              onOpenCopilot={() => setIsCopilotOpen(true)}
-            />
-            <main className="app-main">
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/fornecedores" element={<FornecedoresPage />} />
-                <Route path="/insumos" element={<InsumosPage />} />
-                <Route path="/unidades" element={<UnidadesMedidaPage />} />
-                <Route path="/produtos" element={<ProdutosFinaisPage />} />
-                <Route path="/kits" element={<KitsPage />} />
-                <Route path="/orcamentos" element={<OrcamentosPage />} />
-                <Route path="/pedido-compra/:id" element={<PedidoCompraPage />} />
-                <Route path="/configuracoes" element={<ConfiguracoesPage />} />
-                <Route path="/pedidos" element={<PedidoComprasPage />} />
-                <Route path="/pedido" element={<PedidoPage />} />
-                <Route path="/compras" element={<ComprasPage />} />
-                <Route path="/estoque" element={<EstoquePage />} />
-                <Route path="/gestao-global" element={<GestaoGlobalPage />} />
-              </Routes>
-            </main>
-          </div>
-
-          {/* Modal Global do Copilot Operacional com Text-to-SQL (Spotlight Ctrl+K) */}
-          <CopilotModal 
-            isOpen={isCopilotOpen} 
-            onClose={() => setIsCopilotOpen(false)} 
-          />
+          <AppContent />
         </BrowserRouter>
       </TenantProvider>
     </AuthProvider>

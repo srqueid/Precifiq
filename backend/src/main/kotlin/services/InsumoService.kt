@@ -180,7 +180,10 @@ private suspend fun ApplicationCall.insumoFromParameters(db: AppDatabase): Insum
         preco = preco,
         isEmbalagem = isEmbalagem,
         estoque = estoque,
-        estoqueMinimo = estoqueMinimo
+        estoqueMinimo = estoqueMinimo,
+        dataValidade = p["dataValidade"]?.takeIf { it.isNotBlank() },
+        lote = p["lote"]?.takeIf { it.isNotBlank() },
+        codigoBarras = p["codigoBarras"]?.takeIf { it.isNotBlank() }
     )
 }
 

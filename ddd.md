@@ -137,10 +137,10 @@ Definição de preço de venda
 Controle de estoque final
 
 
-💡 Extras (opcional, mas valioso)
-Você pode evoluir o sistema com:
+💡 Extras (Implementados)
+Evoluções concluídas no sistema:
 
-Controle de validade de insumos
-Código de barras
-Integração com vendas
-Dashboard com indicadores (lucro, giro de estoque)
+- [x] **Controle de validade de insumos**: Rastreamento de `data_validade` e `lote` em insumos e no livro razão (`movimento_estoque_insumo`). Alertas visuais preventivos (vencidos, a vencer em ≤ 30 dias, válidos), filtros e prevenção de uso de insumos vencidos na produção.
+- [x] **Código de barras**: Mapeamento de `codigo_barras` em insumos, variações de produtos finais e kits montados. Endpoint unificado `/api/codigo-barras/{codigo}` e campo de bipagem/leitor óptico integrado.
+- [x] **Integração com vendas**: Registro automático de saída de estoque para produtos finais e componentes de kits (`SAIDA_VENDA`, `SAIDA_VENDA_KIT`), rastreabilidade no razão `movimentacoes_estoque`, cálculo snapshot de CMV/Custo Total e Lucro Bruto por pedido, com baixa e integração ao faturamento.
+- [x] **Dashboard com indicadores**: Indicadores em tempo real de faturamento do mês, lucro bruto realizado (R$ e margem %), giro de estoque (giro mensal e ciclo de renovação em dias), alerta de insumos com validade crítica e ranking dos produtos mais vendidos e mais lucrativos.

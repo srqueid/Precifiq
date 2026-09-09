@@ -13,7 +13,12 @@ import {
   DollarSign, 
   Layers, 
   Percent, 
-  Boxes
+  Boxes,
+  Calendar,
+  Clock,
+  Flame,
+  CheckCircle2,
+  ArrowRight
 } from 'lucide-react';
 
 // Interfaces
@@ -27,6 +32,9 @@ interface Insumo {
   estoque?: number;
   estoqueMinimo?: number;
   unidadeSigla?: string;
+  dataValidade?: string;
+  lote?: string;
+  codigoBarras?: string;
 }
 
 interface Preco {
@@ -45,6 +53,24 @@ interface CompraPendente {
   status: string;
 }
 
+export interface TopProduto {
+  nome: string;
+  quantidadeVendida: number;
+  totalVendido: number;
+  lucroGerado: number;
+}
+
+export interface InsumoCritico {
+  id: number;
+  nome: string;
+  lote?: string;
+  dataValidade?: string;
+  estoque: number;
+  unidade: string;
+  status: string;
+  diasAteVencimento: number;
+}
+
 interface DashboardData {
   comprasPendentesCount?: number;
   orcamentosCount?: number;
@@ -60,6 +86,18 @@ interface DashboardData {
   totalUnidadesProdutosEstoque?: number;
   precos?: Preco[];
   estoque?: Insumo[];
+  // Novos indicadores de Vendas, Lucro e Giro
+  vendasTotalMes?: number;
+  vendasCustoMes?: number;
+  lucroBrutoMes?: number;
+  margemLucroRealizada?: number;
+  pedidosCount?: number;
+  giroEstoque?: number;
+  diasGiroEstoque?: number;
+  insumosVencidosCount?: number;
+  insumosAVencerCount?: number;
+  insumosValidadeCritica?: InsumoCritico[];
+  topProdutosVendidos?: TopProduto[];
 }
 
 // Helpers
@@ -154,8 +192,50 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Grid 0: Desempenho Comercial, Lucro Realizado e Giro de Estoque */}
+      <div style={{ marginBottom: '8px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+          Desempenho Comercial, Lucro Bruto & Giro de Estoque
+        </h2>
+      </div>
+      <div className="kpi-grid" style={{ marginBottom: '24px' }}>
+        <KpiCard 
+          label="Vendas Realizadas (Mês)" 
+          value={fmtBrl(dashboardData?.vendasTotalMes)} 
+          trend={`${dashboardData?.pedidosCount || 0} pedido(s) faturados/entregues`} 
+          color="green" 
+          icon={<ShoppingCart size={20} />} 
+        />
+        <KpiCard 
+          label="Lucro Bruto Realizado" 
+          value={fmtBrl(dashboardData?.lucroBrutoMes)} 
+          trend={`Margem sobre vendas: ${fmtPct(dashboardData?.margemLucroRealizada)}`} 
+          color="green" 
+          icon={<DollarSign size={20} />} 
+        />
+        <KpiCard 
+          label="Giro de Estoque" 
+          value={`${dashboardData?.giroEstoque || 0}x / mês`} 
+          trend={`Renovação média: cada ${dashboardData?.diasGiroEstoque || 0} dias`} 
+          color="blue" 
+          icon={<TrendingUp size={20} />} 
+        />
+        <KpiCard 
+          label="Insumos com Validade Crítica" 
+          value={`${dashboardData?.insumosVencidosCount || 0} Vencido(s)`} 
+          trend={`${dashboardData?.insumosAVencerCount || 0} a vencer em ≤ 30 dias`} 
+          color={(dashboardData?.insumosVencidosCount || 0) > 0 ? 'red' : (dashboardData?.insumosAVencerCount || 0) > 0 ? 'yellow' : 'green'} 
+          icon={<Calendar size={20} />} 
+        />
+      </div>
+
       {/* Grid 1: Compras e Orçamentos */}
-      <div className="kpi-grid">
+      <div style={{ marginBottom: '8px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+          Compras e Suprimentos
+        </h2>
+      </div>
+      <div className="kpi-grid" style={{ marginBottom: '24px' }}>
         <KpiCard 
           label="Compras Aguardando" 
           value={fmtNum(dashboardData?.comprasPendentesCount)} 
@@ -187,6 +267,11 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Grid 2: Estoque de Insumos */}
+      <div style={{ marginBottom: '8px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+          Estoque Físico de Insumos & Produtos
+        </h2>
+      </div>
       <div className="kpi-grid">
         <KpiCard 
           label="Total de Insumos" 
@@ -219,7 +304,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Grid 3: Catálogo & Produtos Acabados */}
-      <div className="kpi-grid">
+      <div className="kpi-grid" style={{ marginTop: '20px' }}>
         <KpiCard 
           label="Produtos Cadastrados" 
           value={fmtNum(dashboardData?.totalProdutos)} 
@@ -248,6 +333,110 @@ const DashboardPage: React.FC = () => {
           color="green" 
           icon={<Boxes size={20} />} 
         />
+      </div>
+
+      {/* Seção Operacional: Validade Crítica & Produtos Mais Vendidos */}
+      <div className="responsive-grid" style={{ marginTop: '24px' }}>
+        {/* Insumos com Validade Crítica */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} color="#ef4444" /> Insumos com Validade Crítica
+            </h2>
+            <span className="badge badge-gray" style={{ fontSize: '11px' }}>
+              {(dashboardData?.insumosValidadeCritica || []).length} item(ns)
+            </span>
+          </div>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Lote</th>
+                  <th className="text-right">Saldo</th>
+                  <th>Validade</th>
+                  <th className="text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && <tr><td colSpan={5}>Carregando alertas...</td></tr>}
+                {!isLoading && (!dashboardData?.insumosValidadeCritica || dashboardData.insumosValidadeCritica.length === 0) ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)' }}>
+                      <CheckCircle2 size={18} color="#10b981" style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                      Todos os insumos estão com validade regular (sem vencimentos próximos).
+                    </td>
+                  </tr>
+                ) : (
+                  dashboardData?.insumosValidadeCritica?.map((item) => {
+                    const isVencido = item.status === 'VENCIDO';
+                    const dataFmt = item.dataValidade ? item.dataValidade.split('-').reverse().join('/') : '—';
+                    return (
+                      <tr key={item.id}>
+                        <td><strong>{item.nome}</strong></td>
+                        <td className="td-muted">{item.lote || '—'}</td>
+                        <td className="td-mono text-right">{fmtNum(item.estoque)} {item.unidade}</td>
+                        <td>{dataFmt}</td>
+                        <td className="text-center">
+                          <span className={`badge ${isVencido ? 'badge-red' : 'badge-yellow'}`}>
+                            {isVencido ? `Venceu há ${Math.abs(item.diasAteVencimento)}d` : `Vence em ${item.diasAteVencimento}d`}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Top 5 Produtos Mais Vendidos e Lucro */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={18} color="#f59e0b" /> Top Produtos Mais Vendidos & Lucro
+            </h2>
+            <span className="badge badge-gray" style={{ fontSize: '11px' }}>
+              {(dashboardData?.topProdutosVendidos || []).length} produto(s)
+            </span>
+          </div>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th className="text-right">Qtd</th>
+                  <th className="text-right">Faturamento</th>
+                  <th className="text-right">Lucro Bruto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && <tr><td colSpan={4}>Carregando ranking...</td></tr>}
+                {!isLoading && (!dashboardData?.topProdutosVendidos || dashboardData.topProdutosVendidos.length === 0) ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)' }}>
+                      Nenhuma venda registrada ainda no período.
+                    </td>
+                  </tr>
+                ) : (
+                  dashboardData?.topProdutosVendidos?.map((prod, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <span style={{ fontWeight: 600, color: idx === 0 ? '#d97706' : 'var(--text)' }}>
+                          {idx + 1}º {prod.nome}
+                        </span>
+                      </td>
+                      <td className="td-mono text-right">{prod.quantidadeVendida} un</td>
+                      <td className="td-mono text-right">{fmtBrl(prod.totalVendido)}</td>
+                      <td className="td-mono text-right td-green font-medium">{fmtBrl(prod.lucroGerado)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Tabelas de Acompanhamento */}
