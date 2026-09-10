@@ -23,7 +23,7 @@ object DatabaseConfig {
 
     fun connect() {
         val host = env("DB_HOST") ?: "postgres"
-        val port = env("DB_PORT") ?: "5432"
+        val port = env("DB_PORT") ?: "5444"
         val dbName = env("DB_NAME") ?: "precifiq_db"
         val user = env("DB_USER") ?: "precifiq_user"
         val password = env("DB_PASSWORD") ?: "p2QL+2Svy&3cQUaM"
