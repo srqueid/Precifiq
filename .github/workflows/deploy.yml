@@ -20,7 +20,7 @@ jobs:
           timeout: 60s
           script: |
             set -e
-            cd /opt/controle-silvia
+            cd /opt/precifiq 2>/dev/null || cd /opt/controle-silvia
             
             # 2. Grava o commit ATUAL em uma variável para ser usado caso necessite de Rollback
             # Se ainda não houver nenhum commit validado (primeiro deploy), usa HEAD
@@ -45,8 +45,9 @@ jobs:
             
             # 4. Atualiza o código-fonte (Requer chave SSH no servidor sem passphrase!)
             git remote set-url origin "git@github.com:${{ github.repository }}.git"
-            git fetch origin master
-            git reset --hard origin/master
+            BRANCH_TO_PULL="${{ github.ref_name }}"
+            git fetch origin "$BRANCH_TO_PULL"
+            git reset --hard "origin/$BRANCH_TO_PULL"
             
             # Gera o arquivo .env correto (evitando expor no terminal em caso de erro)
             printf '%s\n' "${{ secrets.ENV_FILE_CONTENT }}" > .env

@@ -30,8 +30,8 @@ newgrp docker
 ## Passo 2: Clonar o Repositório
 
 ```bash
-git clone <seu-repositorio> /opt/controle-silvia
-cd /opt/controle-silvia
+git clone https://github.com/srqueid/precifiq.git /opt/precifiq
+cd /opt/precifiq
 ```
 
 ## Passo 3: Configurar Variáveis de Ambiente
@@ -120,31 +120,25 @@ curl http://localhost:8081/api/health
 curl http://localhost
 ```
 
-## SSL/HTTPS com Let's Encrypt
+## SSL/HTTPS e Roteamento com Traefik
 
-Para adicionar HTTPS, você pode usar o Caddy como reverse proxy:
+A aplicação está configurada para roteamento automático via **Traefik** com TLS automático Let's Encrypt para o domínio `precifiq.dcsys.info`:
 
-```bash
-# Instalar Caddy
-sudo apt install caddy -y
+- **Rede Compartilhada:** O Traefik e a aplicação se comunicam através da rede Docker `app-network`.
+  ```bash
+  # Criar a rede caso ainda não exista na VPS
+  docker network create app-network 2>/dev/null || true
+  ```
 
-# Configurar Caddyfile
-sudo nano /etc/caddy/Caddyfile
-```
+- **Roteamento Configurado:**
+  - `https://precifiq.dcsys.info/api/*` -> Encaminhado para o container `backend` (porta interna `8081`).
+  - `https://precifiq.dcsys.info/*` -> Encaminhado para o container `frontend` (porta interna `80`).
+  - Certificado SSL obtido automaticamente pelo `certresolver=letsencrypt`.
 
-Exemplo de `Caddyfile`:
-```
-seu-dominio.com {
-    reverse_proxy localhost:80
-}
-```
-
-```bash
-# Reiniciar Caddy
-sudo systemctl reload caddy
-```
-
-O Caddy automaticamente obtém e renova certificados SSL.
+- **DNS Necessário:**
+  - Crie uma entrada DNS **Tipo A** no seu gerenciador de domínio:
+    - Host: `precifiq.dcsys.info` (ou subdomínio desejado)
+    - Valor: IP público da sua VPS Hostinger
 
 ## Comandos Úteis
 
@@ -179,7 +173,7 @@ docker-compose exec -T postgres psql -U controle_user -d controle_silvia < backu
 Para atualizar a aplicação:
 
 ```bash
-cd /opt/controle-silvia
+cd /opt/precifiq
 git pull
 ./deploy.sh
 ```
