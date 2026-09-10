@@ -14,16 +14,20 @@ object DatabaseConfig {
     }
 
     private fun env(key: String): String? {
-        return System.getenv(key) ?: dotenv[key]
+        val sysVal = System.getenv(key)
+        if (!sysVal.isNullOrBlank()) return sysVal
+        val dotVal = dotenv[key]
+        if (!dotVal.isNullOrBlank()) return dotVal
+        return null
     }
 
     fun connect() {
-        val host = env("DB_HOST") ?: "localhost"
+        val host = env("DB_HOST") ?: "postgres"
         val port = env("DB_PORT") ?: "5432"
-        val dbName = env("DB_NAME") ?: throw IllegalStateException("DB_NAME is required")
-        val user = env("DB_USER") ?: throw IllegalStateException("DB_USER is required")
-        val password = env("DB_PASSWORD") ?: throw IllegalStateException("DB_PASSWORD is required")
-        val sslMode = env("DB_SSLMODE") ?: "require" // Default to 'require' for safety
+        val dbName = env("DB_NAME") ?: "precifiq_db"
+        val user = env("DB_USER") ?: "precifiq_user"
+        val password = env("DB_PASSWORD") ?: "p2QL+2Svy&3cQUaM"
+        val sslMode = env("DB_SSLMODE") ?: if (host == "postgres" || host == "localhost" || host == "127.0.0.1") "disable" else "require"
         val schema = env("DB_SCHEMA") ?: "controle"
 
         // Monta a URL base
