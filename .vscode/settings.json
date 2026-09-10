@@ -23,5 +23,14 @@
             "path": "C:\\Program Files\\Java\\jdk-21",
             "default": true
         }
-    ]
+    ],
+    "yaml.schemas": {
+        "./.vscode/compose-spec.json": [
+            "docker-compose.yml",
+            "docker-compose.*.yml",
+            "compose.yml",
+            "compose.*.yml"
+        ],
+        "https://raw.githubusercontent.com/compose-spec/compose-go/master/schema/compose-spec.json": []
+    }
 }
