@@ -11,8 +11,8 @@ services:
     environment:
       - DB_HOST=postgres
       - POSTGRES_HOST=postgres
-      - DB_PORT=5432
-      - POSTGRES_PORT=5432
+      - DB_PORT=5444
+      - POSTGRES_PORT=5444
       - DB_NAME=${DB_NAME:-precifiq_db}
       - POSTGRES_DB=${DB_NAME:-precifiq_db}
       - DB_USER=${DB_USER:-precifiq_user}
@@ -20,8 +20,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
       - DB_SSLMODE=disable
-      - DATABASE_URL=jdbc:postgresql://postgres:5432/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
-      - DB_URL=jdbc:postgresql://postgres:5432/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
+      - DATABASE_URL=jdbc:postgresql://postgres:5444/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
+      - DB_URL=jdbc:postgresql://postgres:5444/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
     restart: unless-stopped
     depends_on:
       postgres:
@@ -43,7 +43,7 @@ services:
       - "traefik.http.middlewares.backend-https-scheme.headers.customrequestheaders.X-Forwarded-Proto=https"
       - "traefik.http.routers.backend.middlewares=backend-https-scheme"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/api/health" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -69,7 +69,7 @@ services:
       - "traefik.docker.network=app-network"
       - "traefik.http.middlewares.headers.headers.customrequestheaders.X-Forwarded-Proto=https"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/"]
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:80/" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -83,14 +83,14 @@ services:
       POSTGRES_USER: ${DB_USER:-precifiq_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5444:5444"
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres-data:/var/lib/postgresql/data
     networks:
       - precifiq-app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER:-precifiq_user} -d $${DB_NAME:-precifiq_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U $${DB_USER:-precifiq_user} -d $${DB_NAME:-precifiq_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5

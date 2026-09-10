@@ -19,7 +19,7 @@ case "$ACTION" in
         echo "🐘 Starting PostgreSQL container (profile: db)..."
         $DOCKER_COMPOSE --profile db up -d postgres
         echo "⏳ Waiting for PostgreSQL to be ready..."
-        $DOCKER_COMPOSE --profile db exec -T postgres pg_isready -U "${DB_USER:-controle_user}" -d "${DB_NAME:-controle_silvia}" || true
+        $DOCKER_COMPOSE --profile db exec -T postgres pg_isready -U "${DB_USER:-precifiq_user}" -d "${DB_NAME:-precifiq_db}" || true
         echo "✅ PostgreSQL is running!"
         ;;
     stop)
