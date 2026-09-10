@@ -55,11 +55,11 @@ jobs:
             # 5. Inicialização do banco e migration no primeiro deploy (desabilita nos próximos)
             if [ ! -f .migration_completed ] || [ "$FORCE_MIGRATION" = "true" ]; then
               echo "🚀 [PRIMEIRO DEPLOY DETECTADO] Inicializando banco e executando migration no schema 'controle'..."
-              docker compose --profile db up -d postgres
+              docker compose up -d postgres
               
               echo "⏳ Aguardando PostgreSQL ficar pronto..."
               for i in {1..30}; do
-                if docker compose --profile db exec -T postgres pg_isready > /dev/null 2>&1; then
+                if docker compose exec -T postgres pg_isready > /dev/null 2>&1; then
                   echo "✅ PostgreSQL pronto para receber comandos."
                   break
                 fi
@@ -67,7 +67,7 @@ jobs:
               done
               
               echo "⚙️ Aplicando schema 'controle' e carga inicial de dados..."
-              docker compose --profile db exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
+              docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
               
               touch .migration_completed
               echo "🔒 Trava .migration_completed criada com sucesso! Migration desabilitada para deploys futuros."
