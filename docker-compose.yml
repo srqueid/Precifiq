@@ -6,6 +6,20 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      - DB_HOST=postgres
+      - POSTGRES_HOST=postgres
+      - DB_PORT=5432
+      - POSTGRES_PORT=5432
+      - DB_NAME=precifiq_db
+      - POSTGRES_DB=precifiq_db
+      - DB_USER=precifiq_user
+      - POSTGRES_USER=precifiq_user
+      - DB_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
+      - DB_SSLMODE=disable
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/precifiq_db?sslmode=disable&currentSchema=controle
+      - DB_URL=jdbc:postgresql://postgres:5432/precifiq_db?sslmode=disable&currentSchema=controle
     restart: unless-stopped
     networks:
       - app-network
