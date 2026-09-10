@@ -1,4 +1,6 @@
 # yaml-language-server: $schema=./.vscode/compose-spec.json
+name: precifiq
+
 services:
   backend:
     build:
@@ -11,16 +13,19 @@ services:
       - POSTGRES_HOST=postgres
       - DB_PORT=5432
       - POSTGRES_PORT=5432
-      - DB_NAME=precifiq_db
-      - POSTGRES_DB=precifiq_db
-      - DB_USER=precifiq_user
-      - POSTGRES_USER=precifiq_user
+      - DB_NAME=${DB_NAME:-precifiq_db}
+      - POSTGRES_DB=${DB_NAME:-precifiq_db}
+      - DB_USER=${DB_USER:-precifiq_user}
+      - POSTGRES_USER=${DB_USER:-precifiq_user}
       - DB_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
       - DB_SSLMODE=disable
-      - DATABASE_URL=jdbc:postgresql://postgres:5432/precifiq_db?sslmode=disable&currentSchema=controle
-      - DB_URL=jdbc:postgresql://postgres:5432/precifiq_db?sslmode=disable&currentSchema=controle
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
+      - DB_URL=jdbc:postgresql://postgres:5432/${DB_NAME:-precifiq_db}?sslmode=disable&currentSchema=controle
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
       - precifiq-app-network
@@ -72,12 +77,11 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    profiles: ["db", "local-db"] # Não é deployado no fluxo padrão de CI/CD ou deploy da aplicação
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-precifiq_db}
+      POSTGRES_USER: ${DB_USER:-precifiq_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -86,7 +90,7 @@ services:
     networks:
       - precifiq-app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER:-precifiq_user} -d $${DB_NAME:-precifiq_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
