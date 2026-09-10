@@ -83,7 +83,7 @@ services:
       POSTGRES_USER: ${DB_USER:-precifiq_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres-data:/var/lib/postgresql/data
