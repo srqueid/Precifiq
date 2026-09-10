@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+      - precifiq-app-network
     expose:
       - "8081"
     labels:
@@ -94,6 +95,9 @@ networks:
   precifiq-app-network:
     name: precifiq-app-network
     driver: bridge
+  app-network:
+    name: app-network
+    external: true
 
 volumes:
   postgres-data:
