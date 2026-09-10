@@ -1,5 +1,7 @@
 cGLUkdd1cYj6/vX1
 
+p2QL+2Svy&3cQUaM
+
 📋 Requisitos do Sistema
 Sistema de Controle de Orçamento, Compras e Estoque
 🎯 Objetivo
