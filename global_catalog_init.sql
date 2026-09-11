@@ -69,6 +69,21 @@ CREATE TABLE IF NOT EXISTS global.usuario_empresa (
 CREATE INDEX IF NOT EXISTS idx_ue_usuario ON global.usuario_empresa(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_ue_empresa ON global.usuario_empresa(empresa_id);
 
+-- 5. Log de Auditoria Central
+CREATE TABLE IF NOT EXISTS global.log_auditoria (
+    id SERIAL PRIMARY KEY,
+    usuario VARCHAR(150) NOT NULL,
+    funcao VARCHAR(100) NOT NULL DEFAULT 'GERAL',
+    atividade_realizada TEXT NOT NULL,
+    tabela VARCHAR(100),
+    registro_id INTEGER,
+    ip_origem VARCHAR(45),
+    data_hora TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ga_data_hora ON global.log_auditoria(data_hora);
+CREATE INDEX IF NOT EXISTS idx_ga_usuario ON global.log_auditoria(usuario);
+
 -- ==============================================================================
 -- CARGA INICIAL (SEEDS)
 -- ==============================================================================

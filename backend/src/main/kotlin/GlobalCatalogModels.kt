@@ -62,6 +62,19 @@ object UsuarioEmpresasTable : Table("usuario_empresa") {
     }
 }
 
+object GlobalAuditoriaTable : Table("log_auditoria") {
+    val id = integer("id").autoIncrement()
+    val usuario = varchar("usuario", 150)
+    val funcao = varchar("funcao", 100).default("GERAL")
+    val atividadeRealizada = text("atividade_realizada")
+    val tabela = varchar("tabela", 100).nullable()
+    val registroId = integer("registro_id").nullable()
+    val ipOrigem = varchar("ip_origem", 45).nullable()
+    val dataHora = datetime("data_hora").defaultExpression(CurrentDateTime)
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 // ==============================================================================
 // DTOs & MODELOS DE DOMÍNIO
 // ==============================================================================
@@ -177,6 +190,17 @@ data class LoginResponse(
     val token: String,
     val usuario: UsuarioGlobalDTO,
     val empresasHierarquia: List<EmpresaHierarquiaDTO>
+)
+
+data class LogAuditoriaGlobalDTO(
+    val id: Int,
+    val usuario: String,
+    val funcao: String,
+    val atividadeRealizada: String,
+    val tabela: String?,
+    val registroId: Int?,
+    val ipOrigem: String?,
+    val dataHora: String
 )
 
 object PasswordUtils {

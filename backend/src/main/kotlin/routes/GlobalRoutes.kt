@@ -2,6 +2,7 @@ package org.example.routes
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -11,6 +12,49 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
+
+private fun registrarAuditoriaGlobal(
+    usuario: String?,
+    funcao: String,
+    atividadeRealizada: String,
+    tabela: String? = null,
+    registroId: Int? = null,
+    ipOrigem: String? = null
+) {
+    try {
+        val userIdent = if (!usuario.isNullOrBlank()) usuario.trim() else "superusuario"
+        transaction {
+            GlobalAuditoriaTable.insert {
+                it[GlobalAuditoriaTable.usuario] = userIdent
+                it[GlobalAuditoriaTable.funcao] = funcao
+                it[GlobalAuditoriaTable.atividadeRealizada] = atividadeRealizada
+                it[GlobalAuditoriaTable.tabela] = tabela
+                it[GlobalAuditoriaTable.registroId] = registroId
+                it[GlobalAuditoriaTable.ipOrigem] = ipOrigem
+            }
+        }
+    } catch (e: Exception) {
+        println("WARN: Falha ao registrar log de auditoria global: ${e.message}")
+    }
+}
+
+private fun ApplicationCall.getCallerIp(): String {
+    return request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+        ?: request.local.remoteHost
+}
+
+private fun ApplicationCall.checkSuperuser(): Pair<Boolean, String?> {
+    val callerEmail = request.headers["X-User-Email"]?.trim()
+    val isSuper = transaction {
+        if (callerEmail.isNullOrBlank()) {
+            true // Ambiente de desenvolvimento / requisições diretas
+        } else {
+            val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+            u?.get(UsuariosTable.isSuperuser) == true
+        }
+    }
+    return Pair(isSuper, callerEmail)
+}
 
 fun Route.globalRoutes() {
     val provisioningService = TenantProvisioningService()
@@ -117,6 +161,16 @@ fun Route.globalRoutes() {
                 // Gera token de sessão opaco
                 val token = "jwt_" + UUID.randomUUID().toString().replace("-", "")
 
+                // Registro no log de auditoria
+                registrarAuditoriaGlobal(
+                    usuario = user[UsuariosTable.email],
+                    funcao = if (isSuperuser) "SUPERUSER" else "AUTENTICACAO",
+                    atividadeRealizada = "Login realizado com sucesso no sistema",
+                    tabela = "usuario",
+                    registroId = userId,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(
                     LoginResponse(
                         token = token,
@@ -177,17 +231,8 @@ fun Route.globalRoutes() {
         // Acesso exclusivo do Superusuário (DcSys)
         post("/empresas") {
             try {
-                val callerEmail = call.request.headers["X-User-Email"]?.trim()
-                val isCallerSuperuser = transaction {
-                    if (callerEmail.isNullOrBlank()) {
-                        true // Suporte a ambiente de desenvolvimento / requisições diretas
-                    } else {
-                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
-                        u?.get(UsuariosTable.isSuperuser) == true
-                    }
-                }
-
-                if (!isCallerSuperuser) {
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                if (!isSuper) {
                     call.respond(
                         HttpStatusCode.Forbidden,
                         mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) possui acesso técnico e de infraestrutura para criar novas empresas e provisionar novos bancos de dados.")
@@ -311,6 +356,16 @@ fun Route.globalRoutes() {
                 // Provisionar banco de dados / schema PostgreSQL isolado com DDL completo e carga inicial
                 provisioningService.provisionarTenant(finalSchema)
 
+                // Registro no log de auditoria
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Criada $tipo '${empresaCriada.nomeFantasia}' (schema: '$finalSchema') com provisionamento de banco",
+                    tabela = "empresa",
+                    registroId = empresaCriada.id,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.Created, empresaCriada)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -375,15 +430,7 @@ fun Route.globalRoutes() {
         // 3.2 Reprovisionar Banco de Dados da Empresa (Exclusivo Superusuário DcSys)
         post("/empresas/{id}/reprovisionar") {
             try {
-                val callerEmail = call.request.headers["X-User-Email"]?.trim()
-                val isSuper = transaction {
-                    if (callerEmail.isNullOrBlank()) true
-                    else {
-                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
-                        u?.get(UsuariosTable.isSuperuser) == true
-                    }
-                }
-
+                val (isSuper, callerEmail) = call.checkSuperuser()
                 if (!isSuper) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) pode reprovisionar bancos de dados."))
                     return@post
@@ -395,9 +442,165 @@ fun Route.globalRoutes() {
                 } ?: throw IllegalArgumentException("Empresa não encontrada")
 
                 provisioningService.provisionarTenant(schema)
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Reprovisionado banco/schema '$schema' da empresa ID $id",
+                    tabela = "empresa",
+                    registroId = id,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.OK, mapOf("message" to "Banco de dados/schema '$schema' reprovisionado com sucesso!"))
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao reprovisionar")))
+            }
+        }
+
+        // 3.3 Exclusão de Empresa ou Filial (Exclusivo Superusuário DcSys)
+        delete("/empresas/{id}") {
+            try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                if (!isSuper) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) possui permissão para excluir empresas e filiais.")
+                    )
+                    return@delete
+                }
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID de empresa inválido"))
+                    return@delete
+                }
+
+                val empresa = transaction {
+                    EmpresasTable.select { EmpresasTable.id eq id }.firstOrNull()
+                }
+
+                if (empresa == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Empresa não encontrada"))
+                    return@delete
+                }
+
+                val tipo = empresa[EmpresasTable.tipo]
+                val nome = empresa[EmpresasTable.nomeFantasia]
+                val schema = empresa[EmpresasTable.schemaName]
+                val ip = call.getCallerIp()
+
+                if (tipo.equals("MATRIZ", ignoreCase = true)) {
+                    val filiais = transaction {
+                        EmpresasTable.select { EmpresasTable.matrizId eq id }.map { row ->
+                            Triple(row[EmpresasTable.id], row[EmpresasTable.nomeFantasia], row[EmpresasTable.schemaName])
+                        }
+                    }
+
+                    for ((fId, fNome, fSchema) in filiais) {
+                        transaction {
+                            UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq fId }
+                            EmpresasTable.deleteWhere { EmpresasTable.id eq fId }
+                            try {
+                                exec("DROP SCHEMA IF EXISTS \"$fSchema\" CASCADE;")
+                            } catch (_: Exception) {}
+                        }
+                        registrarAuditoriaGlobal(
+                            usuario = callerEmail,
+                            funcao = "SUPERUSER",
+                            atividadeRealizada = "Excluída Filial '$fNome' (schema: $fSchema) em cascata com a Matriz ID $id",
+                            tabela = "empresa",
+                            registroId = fId,
+                            ipOrigem = ip
+                        )
+                    }
+
+                    transaction {
+                        UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq id }
+                        EmpresasTable.deleteWhere { EmpresasTable.id eq id }
+                        try {
+                            exec("DROP SCHEMA IF EXISTS \"$schema\" CASCADE;")
+                        } catch (_: Exception) {}
+                    }
+
+                    registrarAuditoriaGlobal(
+                        usuario = callerEmail,
+                        funcao = "SUPERUSER",
+                        atividadeRealizada = "Excluída Matriz '$nome' (schema: $schema) e todas as suas filiais vinculadas",
+                        tabela = "empresa",
+                        registroId = id,
+                        ipOrigem = ip
+                    )
+
+                    call.respond(
+                        HttpStatusCode.OK,
+                        mapOf("message" to "Matriz '$nome' e suas filiais vinculadas foram excluídas com sucesso.")
+                    )
+                } else {
+                    transaction {
+                        UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq id }
+                        EmpresasTable.deleteWhere { EmpresasTable.id eq id }
+                        try {
+                            exec("DROP SCHEMA IF EXISTS \"$schema\" CASCADE;")
+                        } catch (_: Exception) {}
+                    }
+
+                    registrarAuditoriaGlobal(
+                        usuario = callerEmail,
+                        funcao = "SUPERUSER",
+                        atividadeRealizada = "Excluída Filial '$nome' (schema: $schema)",
+                        tabela = "empresa",
+                        registroId = id,
+                        ipOrigem = ip
+                    )
+
+                    call.respond(
+                        HttpStatusCode.OK,
+                        mapOf("message" to "Filial '$nome' foi excluída com sucesso.")
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao excluir empresa/filial")))
+            }
+        }
+
+        // 3.4 Execução Automatizada de Migration no Banco de Dados (Exclusivo Superusuário DcSys)
+        post("/migration/executar") {
+            try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                if (!isSuper) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) possui permissão para executar migrations no banco de dados.")
+                    )
+                    return@post
+                }
+
+                val resultados = provisioningService.executarMigrationTodosTenants()
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Executado deploy de migration em massa para todos os schemas do banco (${resultados.size} schemas processados)",
+                    tabela = "empresa",
+                    ipOrigem = call.getCallerIp()
+                )
+
+                call.respond(
+                    HttpStatusCode.OK,
+                    mapOf(
+                        "message" to "Deploy de migration executado com sucesso.",
+                        "totalSchemasProcessados" to resultados.size,
+                        "detalhes" to resultados
+                    )
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    mapOf("error" to (e.message ?: "Erro ao executar migration nos bancos de dados"))
+                )
             }
         }
 
@@ -444,6 +647,7 @@ fun Route.globalRoutes() {
         // 5. Criar Novo Usuário Global
         post("/usuarios") {
             try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
                 val req = call.receive<CriarUsuarioRequest>()
                 if (req.nome.isBlank() || req.email.isBlank() || req.senha.isBlank()) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Nome, e-mail e senha são obrigatórios"))
@@ -482,6 +686,15 @@ fun Route.globalRoutes() {
                     )
                 }
 
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = if (isSuper) "SUPERUSER" else "ADMINISTRACAO",
+                    atividadeRealizada = "Criado usuário '${usuarioCriado.email}' (isSuperuser=${usuarioCriado.isSuperuser})",
+                    tabela = "usuario",
+                    registroId = usuarioCriado.id,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.Created, usuarioCriado)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -492,6 +705,7 @@ fun Route.globalRoutes() {
         // 6. Atribuir Vínculo Usuário x Empresa x Perfil
         post("/usuarios/atribuir-empresa") {
             try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
                 val req = call.receive<AtribuirEmpresaUsuarioRequest>()
                 transaction {
                     // Remove vínculo anterior se existir para essa mesma empresa
@@ -505,6 +719,16 @@ fun Route.globalRoutes() {
                         it[perfilId] = req.perfilId
                     }
                 }
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = if (isSuper) "SUPERUSER" else "ADMINISTRACAO",
+                    atividadeRealizada = "Atribuída Empresa ID ${req.empresaId} com Perfil ID ${req.perfilId} ao Usuário ID ${req.usuarioId}",
+                    tabela = "usuario_empresa",
+                    registroId = req.usuarioId,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.OK, mapOf("message" to "Vínculo atribuído com sucesso"))
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -515,12 +739,23 @@ fun Route.globalRoutes() {
         // 7. Desvincular Usuário de Empresa
         delete("/usuarios/desvincular-empresa") {
             try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
                 val req = call.receive<DesvincularEmpresaUsuarioRequest>()
                 transaction {
                     UsuarioEmpresasTable.deleteWhere {
                         (UsuarioEmpresasTable.usuarioId eq req.usuarioId) and (UsuarioEmpresasTable.empresaId eq req.empresaId)
                     }
                 }
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = if (isSuper) "SUPERUSER" else "ADMINISTRACAO",
+                    atividadeRealizada = "Desvinculada Empresa ID ${req.empresaId} do Usuário ID ${req.usuarioId}",
+                    tabela = "usuario_empresa",
+                    registroId = req.usuarioId,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.OK, mapOf("message" to "Vínculo removido com sucesso"))
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -552,15 +787,7 @@ fun Route.globalRoutes() {
         // 9. Criar Perfil de Acesso Customizado (Superusuário DcSys)
         post("/perfis") {
             try {
-                val callerEmail = call.request.headers["X-User-Email"]?.trim()
-                val isCallerSuperuser = transaction {
-                    if (callerEmail.isNullOrBlank()) true
-                    else {
-                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
-                        u?.get(UsuariosTable.isSuperuser) == true
-                    }
-                }
-
+                val (isCallerSuperuser, callerEmail) = call.checkSuperuser()
                 if (!isCallerSuperuser) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário DcSys pode criar novos perfis de acesso."))
                     return@post
@@ -595,6 +822,15 @@ fun Route.globalRoutes() {
                     )
                 }
 
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Criado novo perfil de acesso RBAC '${perfilCriado.codigo}' (${perfilCriado.nome})",
+                    tabela = "perfil",
+                    registroId = perfilCriado.id,
+                    ipOrigem = call.getCallerIp()
+                )
+
                 call.respond(HttpStatusCode.Created, perfilCriado)
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
@@ -613,15 +849,7 @@ fun Route.globalRoutes() {
                     return@put
                 }
 
-                val callerEmail = call.request.headers["X-User-Email"]?.trim()
-                val isCallerSuperuser = transaction {
-                    if (callerEmail.isNullOrBlank()) true
-                    else {
-                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
-                        u?.get(UsuariosTable.isSuperuser) == true
-                    }
-                }
-
+                val (isCallerSuperuser, callerEmail) = call.checkSuperuser()
                 if (!isCallerSuperuser) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito: Apenas o Superusuário DcSys pode editar perfis de acesso."))
                     return@put
@@ -649,6 +877,14 @@ fun Route.globalRoutes() {
                 if (perfilAtualizado == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Perfil não encontrado"))
                 } else {
+                    registrarAuditoriaGlobal(
+                        usuario = callerEmail,
+                        funcao = "SUPERUSER",
+                        atividadeRealizada = "Atualizado perfil de acesso ID $id (${perfilAtualizado.codigo})",
+                        tabela = "perfil",
+                        registroId = id,
+                        ipOrigem = call.getCallerIp()
+                    )
                     call.respond(perfilAtualizado)
                 }
             } catch (e: Exception) {
@@ -672,15 +908,7 @@ fun Route.globalRoutes() {
                     return@delete
                 }
 
-                val callerEmail = call.request.headers["X-User-Email"]?.trim()
-                val isCallerSuperuser = transaction {
-                    if (callerEmail.isNullOrBlank()) true
-                    else {
-                        val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
-                        u?.get(UsuariosTable.isSuperuser) == true
-                    }
-                }
-
+                val (isCallerSuperuser, callerEmail) = call.checkSuperuser()
                 if (!isCallerSuperuser) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito ao Superusuário DcSys"))
                     return@delete
@@ -695,6 +923,14 @@ fun Route.globalRoutes() {
                 }
 
                 if (deletado) {
+                    registrarAuditoriaGlobal(
+                        usuario = callerEmail,
+                        funcao = "SUPERUSER",
+                        atividadeRealizada = "Excluído perfil de acesso ID $id",
+                        tabela = "perfil",
+                        registroId = id,
+                        ipOrigem = call.getCallerIp()
+                    )
                     call.respond(HttpStatusCode.OK, mapOf("message" to "Perfil excluído com sucesso"))
                 } else {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Perfil não encontrado"))
@@ -704,6 +940,42 @@ fun Route.globalRoutes() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao excluir perfil")))
+            }
+        }
+
+        // 12. Consultar Log de Auditoria Central da Plataforma (Exclusivo Superusuário DcSys)
+        get("/auditoria") {
+            try {
+                val (isSuper, _) = call.checkSuperuser()
+                if (!isSuper) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Acesso negado: Os dados de auditoria são confidenciais e estão disponíveis exclusivamente para o Superusuário.")
+                    )
+                    return@get
+                }
+
+                val logs = transaction {
+                    GlobalAuditoriaTable.selectAll()
+                        .orderBy(GlobalAuditoriaTable.dataHora to SortOrder.DESC)
+                        .limit(300)
+                        .map { row ->
+                            LogAuditoriaGlobalDTO(
+                                id = row[GlobalAuditoriaTable.id],
+                                usuario = row[GlobalAuditoriaTable.usuario],
+                                funcao = row[GlobalAuditoriaTable.funcao],
+                                atividadeRealizada = row[GlobalAuditoriaTable.atividadeRealizada],
+                                tabela = row[GlobalAuditoriaTable.tabela],
+                                registroId = row[GlobalAuditoriaTable.registroId],
+                                ipOrigem = row[GlobalAuditoriaTable.ipOrigem],
+                                dataHora = row[GlobalAuditoriaTable.dataHora].toString()
+                            )
+                        }
+                }
+                call.respond(logs)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao buscar logs de auditoria")))
             }
         }
     }

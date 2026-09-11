@@ -32,29 +32,7 @@ else
     DOCKER_COMPOSE="docker compose"
 fi
 
-# Migration check: executa apenas no primeiro deploy e desabilita para os próximos
-MIGRATION_LOCK_FILE=".migration_completed"
-if [ ! -f "$MIGRATION_LOCK_FILE" ] || [ "$FORCE_MIGRATION" = "true" ]; then
-    echo "🚀 [PRIMEIRO DEPLOY DETECTADO] Inicializando banco e executando migration no schema 'controle'..."
-    $DOCKER_COMPOSE up -d postgres
-    
-    echo "⏳ Aguardando PostgreSQL ficar pronto..."
-    for i in {1..30}; do
-        if $DOCKER_COMPOSE exec -T postgres pg_isready -U "${DB_USER:-precifiq_user}" -d "${DB_NAME:-precifiq_db}" > /dev/null 2>&1; then
-            echo "✅ PostgreSQL pronto!"
-            break
-        fi
-        sleep 2
-    done
-    
-    echo "⚙️ Aplicando migration (schema 'controle', tabelas e dados iniciais)..."
-    $DOCKER_COMPOSE exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
-    
-    touch "$MIGRATION_LOCK_FILE"
-    echo "🔒 Trava $MIGRATION_LOCK_FILE criada com sucesso! Migration desabilitada para os próximos deploys."
-else
-    echo "ℹ️ Migration inicial já executada anteriormente ($MIGRATION_LOCK_FILE presente). Pulando para preservar os dados."
-fi
+
 
 echo "📦 Building application images (backend & frontend)..."
 $DOCKER_COMPOSE build backend frontend
