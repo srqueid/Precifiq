@@ -109,6 +109,19 @@ object DatabaseConfig {
                     );
                 """.trimIndent())
 
+                exec("""
+                    CREATE TABLE IF NOT EXISTS global.log_auditoria (
+                        id SERIAL PRIMARY KEY,
+                        usuario VARCHAR(150) NOT NULL,
+                        funcao VARCHAR(100) NOT NULL DEFAULT 'GERAL',
+                        atividade_realizada TEXT NOT NULL,
+                        tabela VARCHAR(100),
+                        registro_id INTEGER,
+                        ip_origem VARCHAR(45),
+                        data_hora TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                """.trimIndent())
+
                 // Seeds de Perfis RBAC Oficiais
                 exec("""
                     INSERT INTO global.perfil (id, codigo, nome, descricao, permissoes)

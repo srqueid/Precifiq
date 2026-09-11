@@ -52,6 +52,43 @@ class TenantProvisioningService {
     }
 
     /**
+     * Função para deploy de migration automatizada: aplica atualizações DDL e DML em todos os schemas cadastrados.
+     * Retorna a lista com o status da execução em cada schema.
+     */
+    fun executarMigrationTodosTenants(): List<Map<String, Any>> {
+        val resultados = mutableListOf<Map<String, Any>>()
+
+        val schemas = transaction {
+            org.example.EmpresasTable.selectAll().map { row ->
+                row[org.example.EmpresasTable.schemaName]
+            }.distinct()
+        }
+
+        for (schema in schemas) {
+            try {
+                provisionarTenant(schema)
+                resultados.add(
+                    mapOf(
+                        "schema" to schema,
+                        "status" to "SUCESSO",
+                        "mensagem" to "Migration e DDL aplicadas com sucesso no schema '$schema'."
+                    )
+                )
+            } catch (e: Exception) {
+                resultados.add(
+                    mapOf(
+                        "schema" to schema,
+                        "status" to "ERRO",
+                        "mensagem" to (e.message ?: "Erro ao executar migration no schema '$schema'")
+                    )
+                )
+            }
+        }
+
+        return resultados
+    }
+
+    /**
      * Carrega o arquivo de template DDL do disco ou usa o fallback embutido.
      */
     private fun carregarTemplateDdl(schemaName: String): String {
