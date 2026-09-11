@@ -13,10 +13,10 @@ if ((Test-Path $lockFile) -and (-not $Force)) {
 }
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "🚀 EXECUTANDO MIGRATION NO CONTAINER 'controle-silvia-postgres-1'" -ForegroundColor Cyan
+Write-Host "🚀 EXECUTANDO MIGRATION NO CONTAINER 'precifiq-postgres-1'" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
-$containerName = "controle-silvia-postgres-1"
+$containerName = "precifiq-postgres-1"
 
 # Verifica se o container está rodando
 $running = docker ps --filter "name=$containerName" --format "{{.Names}}"

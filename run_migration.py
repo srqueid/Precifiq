@@ -39,9 +39,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Executar migration de recriação do banco no PostgreSQL / NeonDB no schema 'controle'")
     parser.add_argument("--host", default=os.getenv('DB_HOST', env.get('DB_HOST', 'localhost')), help="Host do banco de dados")
-    parser.add_argument("--port", default=os.getenv('DB_PORT', env.get('DB_PORT', '5432')), help="Porta do banco de dados")
-    parser.add_argument("--dbname", default=os.getenv('DB_NAME', env.get('DB_NAME', 'controle_silvia')), help="Nome do banco de dados")
-    parser.add_argument("--user", default=os.getenv('DB_USER', env.get('DB_USER', 'controle_user')), help="Usuário do banco de dados")
+    parser.add_argument("--port", default=os.getenv('DB_PORT', env.get('DB_PORT', '5444')), help="Porta do banco de dados")
+    parser.add_argument("--dbname", default=os.getenv('DB_NAME', env.get('DB_NAME', 'precifiq_db')), help="Nome do banco de dados")
+    parser.add_argument("--user", default=os.getenv('DB_USER', env.get('DB_USER', 'precifiq_user')), help="Usuário do banco de dados")
     parser.add_argument("--password", default=os.getenv('DB_PASSWORD', env.get('DB_PASSWORD', '')), help="Senha do banco de dados")
     parser.add_argument("--sslmode", default=os.getenv('DB_SSLMODE', env.get('DB_SSLMODE', 'disable')), help="Modo SSL (require, disable, etc.)")
     parser.add_argument("--schema", default=os.getenv('DB_SCHEMA', env.get('DB_SCHEMA', 'controle')), help="Schema alvo do PostgreSQL")

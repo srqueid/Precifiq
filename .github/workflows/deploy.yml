@@ -20,7 +20,7 @@ jobs:
           timeout: 60s
           script: |
             set -e
-            cd /opt/precifiq 2>/dev/null || cd /opt/controle-silvia
+            cd /opt/precifiq 2>/dev/null || cd /opt/precifiq
             
             # 2. Grava o commit ATUAL em uma variável para ser usado caso necessite de Rollback
             # Se ainda não houver nenhum commit validado (primeiro deploy), usa HEAD

@@ -51,7 +51,7 @@ Configure pelo menos:
 ## Passo 4: Deploy da Aplicação (Backend e Frontend)
 
 O processo de deploy (`./deploy.sh` ou GitHub Actions) possui proteção automática:
-- **No 1º Deploy:** Detecta a ausência da trava `.migration_completed`, sobe o banco de dados PostgreSQL (`controle-silvia-postgres-1`), aplica a migration inicial no schema `controle` (com fornecedores, insumos e unidades) e cria a trava `.migration_completed`.
+- **No 1º Deploy:** Detecta a ausência da trava `.migration_completed`, sobe o banco de dados PostgreSQL (`precifiq-postgres-1`), aplica a migration inicial no schema `controle` (com fornecedores, insumos e unidades) e cria a trava `.migration_completed`.
 - **Nos próximos Deploys:** Detecta a trava `.migration_completed` e **pula automaticamente a migration**, atualizando apenas os containers da aplicação (`backend` e `frontend`) sem tocar no banco de dados e sem apagar nenhum dado.
 
 ```bash
@@ -101,7 +101,7 @@ Para gerenciar o container PostgreSQL local:
 ./deploy-db.sh logs
 
 # Acessar o console do banco
-docker compose --profile db exec postgres psql -U controle_user -d controle_silvia
+docker compose exec postgres psql -U precifiq_user -d precifiq_db
 ```
 
 ## Passo 6: Verificar Integridade
@@ -162,10 +162,10 @@ docker-compose ps
 docker-compose exec backend sh
 
 # Backup do banco de dados
-docker-compose exec postgres pg_dump -U controle_user controle_silvia > backup.sql
+docker-compose exec postgres pg_dump -U precifiq_user precifiq_db > backup.sql
 
 # Restaurar backup
-docker-compose exec -T postgres psql -U controle_user -d controle_silvia < backup.sql
+docker-compose exec -T postgres psql -U precifiq_user -d precifiq_db < backup.sql
 ```
 
 ## Atualizações
@@ -193,7 +193,7 @@ docker-compose logs frontend
 ### Problemas com banco de dados
 ```bash
 docker-compose logs postgres
-docker-compose exec postgres pg_isready -U controle_user
+docker-compose exec postgres pg_isready -U precifiq_user
 ```
 
 ### Porta já em uso
