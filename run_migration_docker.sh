@@ -10,7 +10,7 @@ if [ -f "$LOCK_FILE" ] && [ "$1" != "--force" ]; then
     exit 0
 fi
 
-CONTAINER_NAME="controle-silvia-postgres-1"
+CONTAINER_NAME="precifiq-postgres-1"
 
 # Verifica se o container está rodando
 if ! docker ps --format '{{.Names}}' | grep -q "$CONTAINER_NAME"; then
