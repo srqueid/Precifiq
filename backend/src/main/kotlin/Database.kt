@@ -8,12 +8,22 @@ import java.sql.Connection
 object DatabaseConfig {
 
     private val dotenv = dotenv {
-        directory = System.getProperty("user.dir")
+        val curDir = System.getProperty("user.dir")
+        val envInCur = java.io.File(curDir, ".env")
+        val envInParent = java.io.File(curDir, "../.env")
+        val envInBackend = java.io.File(curDir, "backend/.env")
+
+        directory = when {
+            envInCur.exists() -> curDir
+            envInParent.exists() -> java.io.File(curDir, "..").canonicalPath
+            envInBackend.exists() -> java.io.File(curDir, "backend").canonicalPath
+            else -> curDir
+        }
         filename = ".env"
         ignoreIfMissing = true
     }
 
-    private fun env(key: String): String? {
+    fun env(key: String): String? {
         val sysVal = System.getenv(key)
         if (!sysVal.isNullOrBlank()) return sysVal
         val dotVal = dotenv[key]
@@ -22,20 +32,33 @@ object DatabaseConfig {
     }
 
     fun connect() {
-        val host = env("DB_HOST") ?: "postgres"
-        val port = env("DB_PORT") ?: "5444"
-        val dbName = env("DB_NAME") ?: "precifiq_db"
-        val user = env("DB_USER") ?: "precifiq_user"
-        val password = env("DB_PASSWORD") ?: "p2QL+2Svy&3cQUaM"
+        val jdbcUrl = env("JDBC_DATABASE_URL")
+        val host = env("DB_HOST") ?: "localhost"
+        val port = env("DB_PORT") ?: "5432"
+        val dbName = env("DB_NAME") ?: "postgres"
+        val user = env("DB_USER") ?: env("JDBC_DATABASE_USERNAME") ?: "postgres"
+        val password = env("DB_PASSWORD") ?: env("JDBC_DATABASE_PASSWORD") ?: "localhost"
         val sslMode = env("DB_SSLMODE") ?: if (host == "postgres" || host == "localhost" || host == "127.0.0.1") "disable" else "require"
         val schema = env("DB_SCHEMA") ?: "controle"
 
-        // Monta a URL base
-        var url = "jdbc:postgresql://$host:$port/$dbName?sslmode=$sslMode&currentSchema=$schema"
+        var url = if (!jdbcUrl.isNullOrBlank()) {
+            var u = jdbcUrl.trim()
+            if (!u.contains("currentSchema=") && schema.isNotBlank()) {
+                val sep = if (u.contains("?")) "&" else "?"
+                u += "${sep}currentSchema=$schema"
+            }
+            if (!u.contains("sslmode=") && sslMode.isNotBlank()) {
+                val sep = if (u.contains("?")) "&" else "?"
+                u += "${sep}sslmode=$sslMode"
+            }
+            u
+        } else {
+            "jdbc:postgresql://$host:$port/$dbName?sslmode=$sslMode&currentSchema=$schema"
+        }
 
         // Adiciona parâmetros específicos para o NeonDB apenas se o host for do NeonDB
-        if (host.contains("neon.tech")) {
-            url += "&channel_binding=require"
+        if (url.contains("neon.tech")) {
+            url += if (url.contains("?")) "&channel_binding=require" else "?channel_binding=require"
         }
 
         println("INFO: Connecting to database with URL: $url")
@@ -51,7 +74,18 @@ object DatabaseConfig {
         Database.connect(multiTenantDataSource)
 
         initGlobalCatalog()
+        initDefaultTenantSchema(schema)
         testConnection()
+    }
+
+    private fun initDefaultTenantSchema(schemaName: String) {
+        try {
+            val provisioningService = org.example.services.TenantProvisioningService()
+            provisioningService.provisionarTenant(schemaName)
+            println("INFO: Schema padrão '$schemaName' verificado/provisionado com sucesso.")
+        } catch (e: Exception) {
+            println("WARN: Auto-provisionamento do schema '$schemaName': ${e.message}")
+        }
     }
 
     private fun initGlobalCatalog() {
@@ -74,6 +108,22 @@ object DatabaseConfig {
                         atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
                     ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS banco_dados VARCHAR(100) DEFAULT 'bd_controle';
+
+                    CREATE OR REPLACE FUNCTION global.trg_clean_empresa_numeric_fields()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.cnpj IS NOT NULL THEN
+                            NEW.cnpj := NULLIF(regexp_replace(NEW.cnpj, '\D', '', 'g'), '');
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS trg_clean_empresa_fields ON global.empresa;
+                    CREATE TRIGGER trg_clean_empresa_fields
+                    BEFORE INSERT OR UPDATE ON global.empresa
+                    FOR EACH ROW
+                    EXECUTE FUNCTION global.trg_clean_empresa_numeric_fields();
                 """.trimIndent())
 
                 exec("""
@@ -96,6 +146,8 @@ object DatabaseConfig {
                         ativo BOOLEAN NOT NULL DEFAULT TRUE,
                         criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
+                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS foto_url VARCHAR(500);
+                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);
                 """.trimIndent())
 
                 exec("""
@@ -135,9 +187,9 @@ object DatabaseConfig {
                         nome = EXCLUDED.nome,
                         descricao = EXCLUDED.descricao,
                         permissoes = EXCLUDED.permissoes;
-                    DO ${'$'}${'$'} BEGIN
+                    DO $$ BEGIN
                         PERFORM setval('global.perfil_id_seq', (SELECT GREATEST(MAX(id), 4) FROM global.perfil));
-                    END ${'$'}${'$'};
+                    END $$;
                 """.trimIndent())
 
                 // Seed da Matriz Inicial (schema controle)
@@ -147,9 +199,9 @@ object DatabaseConfig {
                     ON CONFLICT (id) DO UPDATE SET 
                         tipo = EXCLUDED.tipo,
                         schema_name = EXCLUDED.schema_name;
-                    DO ${'$'}${'$'} BEGIN
+                    DO $$ BEGIN
                         PERFORM setval('global.empresa_id_seq', (SELECT GREATEST(MAX(id), 1) FROM global.empresa));
-                    END ${'$'}${'$'};
+                    END $$;
                 """.trimIndent())
 
                 // Seed do Superusuário DcSys inicial (admin@dcsys.com / admin123)
@@ -161,7 +213,7 @@ object DatabaseConfig {
 
                 // Vínculo inicial do Superusuário DcSys com Matriz padrão
                 exec("""
-                    DO ${'$'}${'$'}
+                    DO $$
                     DECLARE
                         v_user_id INTEGER;
                         v_perfil_id INTEGER;
@@ -176,7 +228,7 @@ object DatabaseConfig {
                             VALUES (v_user_id, v_empresa_id, v_perfil_id)
                             ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
                         END IF;
-                    END ${'$'}${'$'};
+                    END $$;
                 """.trimIndent())
 
                 println("INFO: Catálogo global e governança inicializados com sucesso.")
@@ -187,9 +239,11 @@ object DatabaseConfig {
     }
 
     private fun testConnection() {
+        val schema = env("DB_SCHEMA") ?: "controle"
         try {
             transaction {
                 connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
+                exec("SET search_path TO \"$schema\", public;")
 
                 exec("""
                     CREATE TABLE IF NOT EXISTS estoque_variacao_aux (
@@ -248,7 +302,251 @@ object DatabaseConfig {
                     ALTER TABLE movimento_estoque_insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
                     ALTER TABLE movimento_estoque_insumo ADD COLUMN IF NOT EXISTS lote VARCHAR(50);
 
+                    -- Produto Final: Rendimento e Rótulo
+                    ALTER TABLE produto_final ADD COLUMN IF NOT EXISTS rendimento_receita_base DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE produto_final ADD COLUMN IF NOT EXISTS rendimento DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE produto_final ADD COLUMN IF NOT EXISTS rotulo TEXT;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_final' AND column_name = 'rendimento') THEN
+                            ALTER TABLE produto_final ALTER COLUMN rendimento DROP NOT NULL;
+                            ALTER TABLE produto_final ALTER COLUMN rendimento SET DEFAULT 1.0;
+                            UPDATE produto_final SET rendimento_receita_base = COALESCE(rendimento, 1.0) WHERE rendimento_receita_base IS NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_final' AND column_name = 'rendimento_receita_base') THEN
+                            UPDATE produto_final SET rendimento = COALESCE(rendimento_receita_base, 1.0) WHERE rendimento IS NULL;
+                        END IF;
+                    END $$;
+
+                    CREATE OR REPLACE FUNCTION trg_sync_rendimento_func()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.rendimento_receita_base IS NOT NULL AND NEW.rendimento IS NULL THEN
+                            NEW.rendimento := NEW.rendimento_receita_base;
+                        ELSIF NEW.rendimento IS NOT NULL AND NEW.rendimento_receita_base IS NULL THEN
+                            NEW.rendimento_receita_base := NEW.rendimento;
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS trg_sync_rendimento ON produto_final;
+                    CREATE TRIGGER trg_sync_rendimento
+                    BEFORE INSERT OR UPDATE ON produto_final
+                    FOR EACH ROW
+                    EXECUTE FUNCTION trg_sync_rendimento_func();
+
+
                     ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(50);
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS tamanho_medida DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS unidade_medida_tamanho_id INTEGER REFERENCES unidade_medida(id);
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS embalagem_insumo_id INTEGER REFERENCES insumo(id);
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS tempo_producao_minutos DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS preco_venda DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS custo_unitario_calculado DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS estoque DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS multiplicador_receita DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS tempo_producao_segundos DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS custo_fixo_rateado DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS peso_g DOUBLE PRECISION;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS preco_venda_manual DOUBLE PRECISION;
+                    ALTER TABLE produto_variacao ADD COLUMN IF NOT EXISTS descricao_visual TEXT;
+
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_variacao' AND column_name = 'multiplicador_receita') THEN
+                            ALTER TABLE produto_variacao ALTER COLUMN multiplicador_receita DROP NOT NULL;
+                            ALTER TABLE produto_variacao ALTER COLUMN multiplicador_receita SET DEFAULT 1.0;
+                            UPDATE produto_variacao SET multiplicador_receita = 1.0 WHERE multiplicador_receita IS NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_variacao' AND column_name = 'tempo_producao_segundos') THEN
+                            ALTER TABLE produto_variacao ALTER COLUMN tempo_producao_segundos DROP NOT NULL;
+                            ALTER TABLE produto_variacao ALTER COLUMN tempo_producao_segundos SET DEFAULT 0.0;
+                            UPDATE produto_variacao SET tempo_producao_segundos = 0.0 WHERE tempo_producao_segundos IS NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_variacao' AND column_name = 'custo_fixo_rateado') THEN
+                            ALTER TABLE produto_variacao ALTER COLUMN custo_fixo_rateado DROP NOT NULL;
+                            ALTER TABLE produto_variacao ALTER COLUMN custo_fixo_rateado SET DEFAULT 0.0;
+                            UPDATE produto_variacao SET custo_fixo_rateado = 0.0 WHERE custo_fixo_rateado IS NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'produto_variacao' AND column_name = 'margem_lucro') THEN
+                            ALTER TABLE produto_variacao ALTER COLUMN margem_lucro DROP NOT NULL;
+                            ALTER TABLE produto_variacao ALTER COLUMN margem_lucro SET DEFAULT 0.0;
+                            UPDATE produto_variacao SET margem_lucro = 0.0 WHERE margem_lucro IS NULL;
+                        END IF;
+                    END $$;
+
+                    -- Funcionario e Configuração Global
+                    ALTER TABLE funcionario ADD COLUMN IF NOT EXISTS salario_bruto DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE configuracao_global ADD COLUMN IF NOT EXISTS horas_trabalhadas_por_semana DOUBLE PRECISION DEFAULT 44.0;
+                    ALTER TABLE configuracao_global ADD COLUMN IF NOT EXISTS total_salarios DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE configuracao_global ADD COLUMN IF NOT EXISTS total_despesas_fixas DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE configuracao_global ADD COLUMN IF NOT EXISTS custo_minuto_trabalho DOUBLE PRECISION DEFAULT 0.0;
+
+
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(50) DEFAULT 'OUTROS';
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(20);
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS entregue BOOLEAN DEFAULT FALSE;
+
+                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'PRODUTO';
+                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS nome_produto VARCHAR(255);
+
+                    ALTER TABLE orcamento_compra ADD COLUMN IF NOT EXISTS titulo VARCHAR(200) DEFAULT '';
+                    ALTER TABLE orcamento_compra ADD COLUMN IF NOT EXISTS observacoes TEXT;
+                    ALTER TABLE orcamento_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                    ALTER TABLE orcamento_compra ADD COLUMN IF NOT EXISTS frete DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE orcamento_compra ADD COLUMN IF NOT EXISTS desconto DOUBLE PRECISION DEFAULT 0.0;
+
+                    ALTER TABLE item_orcamento ADD COLUMN IF NOT EXISTS quantidade DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE item_orcamento ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                    ALTER TABLE item_orcamento ADD COLUMN IF NOT EXISTS quantidade_recebida DOUBLE PRECISION;
+                    ALTER TABLE item_orcamento ADD COLUMN IF NOT EXISTS preco_unitario_recebido DOUBLE PRECISION;
+                    ALTER TABLE item_orcamento ADD COLUMN IF NOT EXISTS valor_final_item DOUBLE PRECISION;
+
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'item_orcamento' AND column_name = 'quantidade_solicitada') THEN
+                            ALTER TABLE item_orcamento ALTER COLUMN quantidade_solicitada DROP NOT NULL;
+                            ALTER TABLE item_orcamento ALTER COLUMN quantidade_solicitada SET DEFAULT 1.0;
+                            UPDATE item_orcamento SET quantidade_solicitada = COALESCE(quantidade, 1.0) WHERE quantidade_solicitada IS NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'item_orcamento' AND column_name = 'quantidade') THEN
+                            UPDATE item_orcamento SET quantidade = COALESCE(quantidade_solicitada, 1.0) WHERE quantidade IS NULL;
+                        END IF;
+                    END $$;
+
+                    CREATE OR REPLACE FUNCTION trg_sync_item_orcamento_qtd_func()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.quantidade IS NOT NULL AND NEW.quantidade_solicitada IS NULL THEN
+                            NEW.quantidade_solicitada := NEW.quantidade;
+                        ELSIF NEW.quantidade_solicitada IS NOT NULL AND NEW.quantidade IS NULL THEN
+                            NEW.quantidade := NEW.quantidade_solicitada;
+                        ELSIF NEW.quantidade IS NOT NULL AND NEW.quantidade_solicitada IS NOT NULL THEN
+                            NEW.quantidade_solicitada := NEW.quantidade;
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS trg_sync_item_orcamento_qtd ON item_orcamento;
+                    CREATE TRIGGER trg_sync_item_orcamento_qtd
+                    BEFORE INSERT OR UPDATE ON item_orcamento
+                    FOR EACH ROW
+                    EXECUTE FUNCTION trg_sync_item_orcamento_qtd_func();
+
+                    ALTER TABLE cotacao_fornecedor ADD COLUMN IF NOT EXISTS preco_unitario DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE cotacao_fornecedor ADD COLUMN IF NOT EXISTS preco_cotado DOUBLE PRECISION DEFAULT 0.0;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'cotacao_fornecedor' AND column_name = 'preco_cotado') THEN
+                            ALTER TABLE cotacao_fornecedor ALTER COLUMN preco_cotado DROP NOT NULL;
+                            ALTER TABLE cotacao_fornecedor ALTER COLUMN preco_cotado SET DEFAULT 0.0;
+                            UPDATE cotacao_fornecedor SET preco_cotado = COALESCE(preco_unitario, 0.0) WHERE preco_cotado IS NULL;
+                            UPDATE cotacao_fornecedor SET preco_unitario = COALESCE(preco_cotado, 0.0) WHERE preco_unitario IS NULL;
+                        END IF;
+                    END $$;
+
+                    CREATE OR REPLACE FUNCTION trg_sync_cotacao_preco_func()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.preco_cotado IS NULL AND NEW.preco_unitario IS NOT NULL THEN
+                            NEW.preco_cotado := NEW.preco_unitario;
+                        ELSIF NEW.preco_unitario IS NULL AND NEW.preco_cotado IS NOT NULL THEN
+                            NEW.preco_unitario := NEW.preco_cotado;
+                        ELSIF NEW.preco_cotado IS NULL AND NEW.preco_unitario IS NULL THEN
+                            NEW.preco_cotado := 0.0;
+                            NEW.preco_unitario := 0.0;
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS trg_sync_cotacao_preco ON cotacao_fornecedor;
+                    CREATE TRIGGER trg_sync_cotacao_preco
+                    BEFORE INSERT OR UPDATE ON cotacao_fornecedor
+                    FOR EACH ROW
+                    EXECUTE FUNCTION trg_sync_cotacao_preco_func();
+
+                    ALTER TABLE pedido_compra ADD COLUMN IF NOT EXISTS data_confirmacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                    ALTER TABLE pedido_compra ADD COLUMN IF NOT EXISTS valor_total_itens DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE pedido_compra ADD COLUMN IF NOT EXISTS valor_frete DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE pedido_compra ADD COLUMN IF NOT EXISTS valor_final_confirmado DOUBLE PRECISION DEFAULT 0.0;
+
+                    ALTER TABLE pedido_compra_item ADD COLUMN IF NOT EXISTS item_orcamento_id INTEGER;
+
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS orcamento_id INTEGER;
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS justificativa VARCHAR(500);
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP WITHOUT TIME ZONE;
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'PENDENTE';
+                    ALTER TABLE compra ADD COLUMN IF NOT EXISTS valor_total DOUBLE PRECISION DEFAULT 0.0;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'compra' AND column_name = 'fornecedor_id') THEN
+                            ALTER TABLE compra ALTER COLUMN fornecedor_id DROP NOT NULL;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'fornecedor' AND column_name = 'cnpj_cpf') THEN
+                            ALTER TABLE fornecedor ALTER COLUMN cnpj_cpf DROP NOT NULL;
+                        END IF;
+                    END $$;
+
+                    CREATE OR REPLACE FUNCTION trg_clean_fornecedor_numeric_fields()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.cnpj_cpf IS NOT NULL THEN
+                            NEW.cnpj_cpf := NULLIF(regexp_replace(NEW.cnpj_cpf, '\D', '', 'g'), '');
+                        END IF;
+                        IF NEW.telefones IS NOT NULL THEN
+                            NEW.telefones := NULLIF(regexp_replace(NEW.telefones, '\D', '', 'g'), '');
+                        END IF;
+                        IF NEW.cep IS NOT NULL THEN
+                            NEW.cep := NULLIF(regexp_replace(NEW.cep, '\D', '', 'g'), '');
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DROP TRIGGER IF EXISTS trg_clean_fornecedor_fields ON fornecedor;
+                    CREATE TRIGGER trg_clean_fornecedor_fields
+                    BEFORE INSERT OR UPDATE ON fornecedor
+                    FOR EACH ROW
+                    EXECUTE FUNCTION trg_clean_fornecedor_numeric_fields();
+
+                    CREATE OR REPLACE FUNCTION trg_clean_cliente_numeric_fields()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.telefone IS NOT NULL THEN
+                            NEW.telefone := NULLIF(regexp_replace(NEW.telefone, '\D', '', 'g'), '');
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'cliente') THEN
+                            DROP TRIGGER IF EXISTS trg_clean_cliente_fields ON cliente;
+                            CREATE TRIGGER trg_clean_cliente_fields
+                            BEFORE INSERT OR UPDATE ON cliente
+                            FOR EACH ROW
+                            EXECUTE FUNCTION trg_clean_cliente_numeric_fields();
+                        END IF;
+                    END $$;
+
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS item_orcamento_id INTEGER;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS quantidade_solicitada DOUBLE PRECISION DEFAULT 1.0;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS quantidade_comprada DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS quantidade_recebida DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS preco_unitario DOUBLE PRECISION DEFAULT 0.0;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS fornecedor_sugerido_id INTEGER;
+                    ALTER TABLE item_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'item_compra' AND column_name = 'quantidade') THEN
+                            ALTER TABLE item_compra ALTER COLUMN quantidade DROP NOT NULL;
+                            ALTER TABLE item_compra ALTER COLUMN quantidade SET DEFAULT 1.0;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'item_compra' AND column_name = 'valor_total') THEN
+                            ALTER TABLE item_compra ALTER COLUMN valor_total DROP NOT NULL;
+                            ALTER TABLE item_compra ALTER COLUMN valor_total SET DEFAULT 0.0;
+                        END IF;
+                    END $$;
+
 
                     CREATE TABLE IF NOT EXISTS kits (
                         id SERIAL PRIMARY KEY,
@@ -289,11 +587,17 @@ object DatabaseConfig {
                         END IF;
                     END $$;
 
-                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
-                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
-
-                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS kit_id INTEGER;
-                    ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS custo_unitario DOUBLE PRECISION DEFAULT 0.0;
+                    DO $$ 
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'pedido') THEN
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'pedido_item') THEN
+                            ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS kit_id INTEGER;
+                            ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS custo_unitario DOUBLE PRECISION DEFAULT 0.0;
+                        END IF;
+                    END $$;
 
                     CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
                         id SERIAL PRIMARY KEY,
@@ -355,7 +659,156 @@ object DatabaseConfig {
                     END $$;
                 """.trimIndent())
 
+                // Migração universal para todos os schemas de empresas cadastrados em global.empresa
+                try {
+                    val tenantSchemas = mutableListOf<String>()
+                    exec("SELECT schema_name FROM global.empresa WHERE schema_name IS NOT NULL") { rs ->
+                        while (rs.next()) {
+                            tenantSchemas.add(rs.getString("schema_name"))
+                        }
+                    }
+                    for (tSchema in tenantSchemas.distinct()) {
+                        exec("""
+                            DO $$ 
+                            BEGIN
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'produto_final') THEN
+                                    ALTER TABLE "$tSchema".produto_final ADD COLUMN IF NOT EXISTS rendimento_receita_base DOUBLE PRECISION DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".produto_final ADD COLUMN IF NOT EXISTS rendimento DOUBLE PRECISION DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".produto_final ADD COLUMN IF NOT EXISTS rotulo TEXT;
+
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'produto_final' AND column_name = 'rendimento') THEN
+                                        ALTER TABLE "$tSchema".produto_final ALTER COLUMN rendimento DROP NOT NULL;
+                                        ALTER TABLE "$tSchema".produto_final ALTER COLUMN rendimento SET DEFAULT 1.0;
+                                        UPDATE "$tSchema".produto_final SET rendimento_receita_base = COALESCE(rendimento, 1.0) WHERE rendimento_receita_base IS NULL;
+                                    END IF;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'produto_final' AND column_name = 'rendimento_receita_base') THEN
+                                        UPDATE "$tSchema".produto_final SET rendimento = COALESCE(rendimento_receita_base, 1.0) WHERE rendimento IS NULL;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'compra') THEN
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS orcamento_id INTEGER;
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS justificativa VARCHAR(500);
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP WITHOUT TIME ZONE;
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'PENDENTE';
+                                    ALTER TABLE "$tSchema".compra ADD COLUMN IF NOT EXISTS valor_total DOUBLE PRECISION DEFAULT 0.0;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'compra' AND column_name = 'fornecedor_id') THEN
+                                        ALTER TABLE "$tSchema".compra ALTER COLUMN fornecedor_id DROP NOT NULL;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'item_compra') THEN
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS item_orcamento_id INTEGER;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS quantidade_solicitada DOUBLE PRECISION DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS quantidade_comprada DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS quantidade_recebida DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS preco_unitario DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS fornecedor_sugerido_id INTEGER;
+                                    ALTER TABLE "$tSchema".item_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'item_compra' AND column_name = 'quantidade') THEN
+                                        ALTER TABLE "$tSchema".item_compra ALTER COLUMN quantidade DROP NOT NULL;
+                                        ALTER TABLE "$tSchema".item_compra ALTER COLUMN quantidade SET DEFAULT 1.0;
+                                    END IF;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'item_compra' AND column_name = 'valor_total') THEN
+                                        ALTER TABLE "$tSchema".item_compra ALTER COLUMN valor_total DROP NOT NULL;
+                                        ALTER TABLE "$tSchema".item_compra ALTER COLUMN valor_total SET DEFAULT 0.0;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'cotacao_fornecedor') THEN
+                                    ALTER TABLE "$tSchema".cotacao_fornecedor ADD COLUMN IF NOT EXISTS preco_unitario DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".cotacao_fornecedor ADD COLUMN IF NOT EXISTS preco_cotado DOUBLE PRECISION DEFAULT 0.0;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'cotacao_fornecedor' AND column_name = 'preco_cotado') THEN
+                                        ALTER TABLE "$tSchema".cotacao_fornecedor ALTER COLUMN preco_cotado DROP NOT NULL;
+                                        ALTER TABLE "$tSchema".cotacao_fornecedor ALTER COLUMN preco_cotado SET DEFAULT 0.0;
+                                        UPDATE "$tSchema".cotacao_fornecedor SET preco_cotado = COALESCE(preco_unitario, 0.0) WHERE preco_cotado IS NULL;
+                                        UPDATE "$tSchema".cotacao_fornecedor SET preco_unitario = COALESCE(preco_cotado, 0.0) WHERE preco_unitario IS NULL;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'item_orcamento') THEN
+                                    ALTER TABLE "$tSchema".item_orcamento ADD COLUMN IF NOT EXISTS quantidade DOUBLE PRECISION DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".item_orcamento ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                                    ALTER TABLE "$tSchema".item_orcamento ADD COLUMN IF NOT EXISTS quantidade_recebida DOUBLE PRECISION;
+                                    ALTER TABLE "$tSchema".item_orcamento ADD COLUMN IF NOT EXISTS preco_unitario_recebido DOUBLE PRECISION;
+                                    ALTER TABLE "$tSchema".item_orcamento ADD COLUMN IF NOT EXISTS valor_final_item DOUBLE PRECISION;
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'item_orcamento' AND column_name = 'quantidade_solicitada') THEN
+                                        ALTER TABLE "$tSchema".item_orcamento ALTER COLUMN quantidade_solicitada DROP NOT NULL;
+                                        ALTER TABLE "$tSchema".item_orcamento ALTER COLUMN quantidade_solicitada SET DEFAULT 1.0;
+                                        UPDATE "$tSchema".item_orcamento SET quantidade_solicitada = COALESCE(quantidade, 1.0) WHERE quantidade_solicitada IS NULL;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'produto_variacao') THEN
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS multiplicador_receita DOUBLE PRECISION DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS tempo_producao_segundos DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS custo_fixo_rateado DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS peso_g DOUBLE PRECISION;
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS preco_venda_manual DOUBLE PRECISION;
+                                    ALTER TABLE "$tSchema".produto_variacao ADD COLUMN IF NOT EXISTS descricao_visual TEXT;
+
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN multiplicador_receita DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN multiplicador_receita SET DEFAULT 1.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN tempo_producao_segundos DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN tempo_producao_segundos SET DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN custo_fixo_rateado DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN custo_fixo_rateado SET DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN margem_lucro DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN margem_lucro SET DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'fornecedor') THEN
+                                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = '$tSchema' AND table_name = 'fornecedor' AND column_name = 'cnpj_cpf') THEN
+                                        ALTER TABLE "$tSchema".fornecedor ALTER COLUMN cnpj_cpf DROP NOT NULL;
+                                    END IF;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'funcionario') THEN
+                                    ALTER TABLE "$tSchema".funcionario ADD COLUMN IF NOT EXISTS salario_bruto DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'configuracao_global') THEN
+                                    ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS horas_trabalhadas_por_semana DOUBLE PRECISION DEFAULT 44.0;
+                                    ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS total_salarios DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS total_despesas_fixas DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS custo_minuto_trabalho DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+                            END $$;
+                        """.trimIndent())
+
+                        try {
+                            exec("""
+                                CREATE OR REPLACE FUNCTION "$tSchema".trg_clean_fornecedor_numeric_fields()
+                                RETURNS TRIGGER AS $$
+                                BEGIN
+                                    IF NEW.cnpj_cpf IS NOT NULL THEN
+                                        NEW.cnpj_cpf := NULLIF(regexp_replace(NEW.cnpj_cpf, '\D', '', 'g'), '');
+                                    END IF;
+                                    IF NEW.telefones IS NOT NULL THEN
+                                        NEW.telefones := NULLIF(regexp_replace(NEW.telefones, '\D', '', 'g'), '');
+                                    END IF;
+                                    IF NEW.cep IS NOT NULL THEN
+                                        NEW.cep := NULLIF(regexp_replace(NEW.cep, '\D', '', 'g'), '');
+                                    END IF;
+                                    RETURN NEW;
+                                END;
+                                $$ LANGUAGE plpgsql;
+
+                                DROP TRIGGER IF EXISTS trg_clean_fornecedor_fields ON "$tSchema".fornecedor;
+                                CREATE TRIGGER trg_clean_fornecedor_fields
+                                BEFORE INSERT OR UPDATE ON "$tSchema".fornecedor
+                                FOR EACH ROW
+                                EXECUTE FUNCTION "$tSchema".trg_clean_fornecedor_numeric_fields();
+                            """.trimIndent())
+                        } catch (_: Exception) {}
+                    }
+                } catch (e: Exception) {
+                    System.err.println("WARN: Não foi possível aplicar migrações nos schemas de tenants adicionais: ${e.message}")
+                }
+
                 println("Database connection and base unit unification successful.")
+
             }
         } catch (e: Exception) {
             println("ERROR: Database connection failed. ${e.message}")

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingCart, Users, Search, Truck, CheckCircle, X, Package, Trash2, FileText, Edit2, Barcode, DollarSign, TrendingUp } from 'lucide-react';
+import { maskPhone, onlyNumbers } from '../utils/masks';
 
 // Toast utility
 const toast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -505,7 +506,7 @@ const PedidoPage: React.FC = () => {
     if (cliente) {
       setEditingClienteId(cliente.id);
       setClienteNome(cliente.nome);
-      setClienteTelefone(cliente.telefone || '');
+      setClienteTelefone(maskPhone(cliente.telefone || ''));
       setClienteEmail(cliente.email || '');
       setClienteEndereco(cliente.endereco || '');
     } else {
@@ -536,7 +537,7 @@ const PedidoPage: React.FC = () => {
     const clienteData: Cliente = {
       id: editingClienteId || 0,
       nome: clienteNome.trim(),
-      telefone: clienteTelefone.trim() || undefined,
+      telefone: onlyNumbers(clienteTelefone) || undefined,
       email: clienteEmail.trim() || undefined,
       endereco: clienteEndereco.trim() || undefined,
     };
@@ -914,7 +915,7 @@ const PedidoPage: React.FC = () => {
 
       {/* Modal Cliente */}
       {modalClienteOpen && (
-        <div className="modal-overlay active" onClick={(e) => {
+        <div className="modal-overlay active" style={{ zIndex: 1100 }} onClick={(e) => {
           if (e.target === e.currentTarget) fecharModalCliente();
         }}>
           <div className="modal-content">
@@ -923,46 +924,50 @@ const PedidoPage: React.FC = () => {
               <button className="modal-close" onClick={fecharModalCliente}>&times;</button>
             </div>
             <form id="form-cliente" onSubmit={salvarCliente}>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label htmlFor="c-nome">Nome Completo *</label>
-                <input
-                  type="text"
-                  id="c-nome"
-                  required
-                  placeholder="Ex: Maria Silva"
-                  value={clienteNome}
-                  onChange={(e) => setClienteNome(e.target.value)}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label htmlFor="c-telefone">Telefone / WhatsApp</label>
-                <input
-                  type="text"
-                  id="c-telefone"
-                  placeholder="Ex: (61) 99999-9999"
-                  value={clienteTelefone}
-                  onChange={(e) => setClienteTelefone(e.target.value)}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label htmlFor="c-email">E-mail</label>
-                <input
-                  type="email"
-                  id="c-email"
-                  placeholder="Ex: cliente@email.com"
-                  value={clienteEmail}
-                  onChange={(e) => setClienteEmail(e.target.value)}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label htmlFor="c-endereco">Endereço de Entrega</label>
-                <input
-                  type="text"
-                  id="c-endereco"
-                  placeholder="Rua, Número, Bairro, Cidade"
-                  value={clienteEndereco}
-                  onChange={(e) => setClienteEndereco(e.target.value)}
-                />
+              <div className="modal-body">
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label htmlFor="c-nome">Nome Completo *</label>
+                  <input
+                    type="text"
+                    id="c-nome"
+                    required
+                    placeholder="Ex: Maria Silva"
+                    value={clienteNome}
+                    onChange={(e) => setClienteNome(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label htmlFor="c-telefone">Telefone / WhatsApp</label>
+                  <input
+                    type="text"
+                    id="c-telefone"
+                    placeholder="Ex: (61) 99999-9999"
+                    value={clienteTelefone}
+                    onChange={(e) => setClienteTelefone((e.target.value = maskPhone(e.target.value)))}
+                    maxLength={15}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label htmlFor="c-email">E-mail</label>
+                  <input
+                    type="email"
+                    id="c-email"
+                    placeholder="Ex: cliente@email.com"
+                    value={clienteEmail}
+                    onChange={(e) => setClienteEmail(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="c-endereco">Endereço de Entrega</label>
+                  <input
+                    type="text"
+                    id="c-endereco"
+                    placeholder="Rua, Número, Bairro, Cidade"
+                    value={clienteEndereco}
+                    onChange={(e) => setClienteEndereco(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="modal-footer">
@@ -987,8 +992,9 @@ const PedidoPage: React.FC = () => {
               <button className="modal-close" onClick={fecharModalPedido}>&times;</button>
             </div>
 
-            <form id="form-pedido" onSubmit={salvarPedido} className="modal-body-scroll">
-              <div className="form-group" style={{ marginBottom: '16px' }}>
+            <form id="form-pedido" onSubmit={salvarPedido}>
+              <div className="modal-body">
+                <div className="form-group" style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <label htmlFor="p-cliente-busca" style={{ margin: 0 }}>Cliente *</label>
                   {pedidoClienteId === '' && buscaCliente.trim() && !clientes.some(c => c.nome.toLowerCase() === buscaCliente.trim().toLowerCase()) && (
@@ -1265,8 +1271,8 @@ const PedidoPage: React.FC = () => {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr auto', gap: '8px', alignItems: 'end' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'end' }}>
+                  <div className="form-group" style={{ flex: '0 0 80px', marginBottom: 0 }}>
                     <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Qtd</label>
                     <input
                       type="number"
@@ -1278,7 +1284,7 @@ const PedidoPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div className="form-group" style={{ flex: '1', minWidth: '100px', marginBottom: 0 }}>
                     <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Preço Base (R$)</label>
                     <input
                       type="number"
@@ -1297,7 +1303,7 @@ const PedidoPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div className="form-group" style={{ flex: '1', minWidth: '100px', marginBottom: 0 }}>
                     <label style={{ fontSize: '11px', color: tipoItem === 'KIT' ? 'var(--muted)' : 'var(--accent)' }}>
                       {tipoItem === 'KIT' ? 'Desconto (Bloqueado)' : 'Desconto (máx 15%)'}
                     </label>
@@ -1331,7 +1337,7 @@ const PedidoPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div className="form-group" style={{ flex: '1', minWidth: '100px', marginBottom: 0 }}>
                     <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Preço Final Un.</label>
                     <input
                       type="number"
@@ -1346,14 +1352,16 @@ const PedidoPage: React.FC = () => {
                     />
                   </div>
 
-                  <button
-                    type="button"
+                  <div style={{ flex: '0 0 auto', marginBottom: 0 }}>
+                    <button
+                      type="button"
                     className="btn btn-primary btn-sm"
                     style={{ height: '38px', whiteSpace: 'nowrap' }}
                     onClick={adicionarItemNaLista}
                   >
                     <Plus size={16} /> Adicionar
-                  </button>
+                    </button>
+                  </div>
                 </div>
 
                 {tipoItem === 'KIT' && (
@@ -1555,11 +1563,12 @@ const PedidoPage: React.FC = () => {
                   {' '}Já foi entregue?
                 </label>
               </div>
+              </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={fecharModalPedido}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">
-                  <CheckCircle size={18} /> {editingPedidoId ? 'Atualizar Pedido' : 'Confirmar Pedido'}
+                <button type="submit" className="btn btn-primary" disabled={salvarPedidoMutation.isPending || itensDoPedidoAtual.length === 0}>
+                  {salvarPedidoMutation.isPending ? 'Salvando...' : (editingPedidoId ? 'Atualizar Pedido' : 'Confirmar Pedido')}
                 </button>
               </div>
             </form>

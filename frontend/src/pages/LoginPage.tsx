@@ -12,9 +12,10 @@ import {
 } from 'lucide-react';
 import { toast } from '../js/app';
 import precifiqLogo from '../assets/precifiq.png';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 export const LoginPage: React.FC = () => {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -45,6 +46,28 @@ export const LoginPage: React.FC = () => {
       setErroMsg(msg);
       toast(msg, 'error');
     }
+  };
+
+  const handleGoogleSuccess = async (credential: string) => {
+    setIsLoading(true);
+    setErroMsg(null);
+
+    const result = await loginWithGoogle(credential);
+    setIsLoading(false);
+
+    if (result.success) {
+      toast('Login com o Google realizado com sucesso!', 'success');
+      navigate('/');
+    } else {
+      const msg = result.error || 'Falha ao autenticar com o Google.';
+      setErroMsg(msg);
+      toast(msg, 'error');
+    }
+  };
+
+  const handleGoogleError = (err: string) => {
+    setErroMsg(err);
+    toast(err, 'error');
   };
 
   const handleQuickLogin = (quickEmail: string, quickSenha: string) => {
@@ -79,6 +102,19 @@ export const LoginPage: React.FC = () => {
             <span>{erroMsg}</span>
           </div>
         )}
+
+        {/* Autenticação com Google (Ocultada a pedido) */}
+        {/* <div className="flex flex-col gap-3">
+          <GoogleSignInButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            isLoading={isLoading}
+          />
+
+          <div className="login-divider">
+            <span>ou acesse com e-mail</span>
+          </div>
+        </div> */}
 
         {/* Formulário de Login */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

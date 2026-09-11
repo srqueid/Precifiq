@@ -43,7 +43,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
 
   const isActivePath = (path: string) => {
     if (location.pathname === path) return true;
-    if (path === '/pedido') return location.pathname.startsWith('/pedido');
+    if (path === '/pedido') {
+      return location.pathname === '/pedido' || location.pathname.startsWith('/pedido/');
+    }
     return false;
   };
 
@@ -347,21 +349,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpenCopi
           background: 'var(--surface, rgba(0,0,0,0.02))'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '8px',
-              backgroundColor: isSuperuser ? '#7c3aed' : '#2563eb',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              fontWeight: 700,
-              flexShrink: 0
-            }}>
-              {user?.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
-            </div>
+            {user?.fotoUrl ? (
+              <img
+                src={user.fotoUrl}
+                alt={user?.nome || 'Usuário'}
+                referrerPolicy="no-referrer"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '8px',
+                  objectFit: 'cover',
+                  flexShrink: 0
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '8px',
+                backgroundColor: isSuperuser ? '#7c3aed' : '#2563eb',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: 700,
+                flexShrink: 0
+              }}>
+                {user?.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
             <div style={{ overflow: 'hidden', minWidth: 0 }}>
               <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                 {user?.nome || 'Usuário'}

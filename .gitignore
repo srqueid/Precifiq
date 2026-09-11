@@ -160,3 +160,4 @@ $RECYCLE.BIN/
 .kilo/
 .gemini/
 scratch/
+client_secret_*.json

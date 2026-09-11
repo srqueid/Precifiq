@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Search, Phone, Mail, X, Users } from 'lucide-react';
+import { onlyNumbers, maskCnpjCpf, maskPhone, maskCep } from '../utils/masks';
 
 interface Fornecedor {
   id: number;
@@ -113,12 +114,12 @@ const FornecedoresPage: React.FC = () => {
         nome: f.nome || '',
         nomeEmpresa: f.nomeEmpresa || '',
         nomeFantasia: f.nomeFantasia || '',
-        cnpjCpf: f.cnpjCpf || '',
+        cnpjCpf: maskCnpjCpf(f.cnpjCpf || ''),
         mnemonico: f.mnemonico || '',
         email: f.email || '',
-        telefones: f.telefones || '',
+        telefones: maskPhone(f.telefones || ''),
         enderecoCompleto: f.enderecoCompleto || '',
-        cep: f.cep || '',
+        cep: maskCep(f.cep || ''),
         uf: f.uf || '',
         banco: f.banco || '',
         agencia: f.agencia || '',
@@ -136,7 +137,21 @@ const FornecedoresPage: React.FC = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    let formattedValue = value;
+    if (name === 'cnpjCpf') {
+      formattedValue = maskCnpjCpf(value);
+    } else if (name === 'telefones') {
+      formattedValue = maskPhone(value);
+    } else if (name === 'cep') {
+      formattedValue = maskCep(value);
+    }
+    
+    if (e.target.value !== formattedValue) {
+      e.target.value = formattedValue;
+    }
+    
+    setFormData(prev => ({ ...prev, [name]: formattedValue }));
   };
 
   const saveMutation = useMutation({
@@ -145,7 +160,12 @@ const FornecedoresPage: React.FC = () => {
         ? `/fornecedores/atualizar/${editingId}`
         : `/fornecedores`;
 
-      const data = new URLSearchParams(formData as any);
+      const payload: Record<string, string> = { ...formData };
+      payload.cnpjCpf = onlyNumbers(formData.cnpjCpf);
+      payload.telefones = onlyNumbers(formData.telefones);
+      payload.cep = onlyNumbers(formData.cep);
+
+      const data = new URLSearchParams(payload);
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -395,13 +415,14 @@ const FornecedoresPage: React.FC = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="cnpjCpf" className="required">CNPJ/CPF</label>
+                    <label htmlFor="cnpjCpf">CNPJ/CPF</label>
                     <input
-                      required
                       id="cnpjCpf"
                       name="cnpjCpf"
                       value={formData.cnpjCpf}
                       onChange={handleChange}
+                      maxLength={18}
+                      inputMode="numeric"
                       className="w-full"
                       placeholder="00.000.000/0000-00"
                     />
@@ -436,6 +457,8 @@ const FornecedoresPage: React.FC = () => {
                       name="telefones"
                       value={formData.telefones}
                       onChange={handleChange}
+                      maxLength={15}
+                      inputMode="numeric"
                       className="w-full"
                       placeholder="(11) 99999-9999"
                     />
@@ -458,6 +481,8 @@ const FornecedoresPage: React.FC = () => {
                       name="cep"
                       value={formData.cep}
                       onChange={handleChange}
+                      maxLength={9}
+                      inputMode="numeric"
                       className="w-full"
                       placeholder="00000-000"
                     />

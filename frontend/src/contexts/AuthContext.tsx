@@ -18,6 +18,7 @@ export interface UsuarioGlobal {
   isSuperuser: boolean;
   ativo: boolean;
   criadoEm?: string;
+  fotoUrl?: string;
   empresas?: UsuarioEmpresaVinculo[];
 }
 
@@ -27,6 +28,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isSuperuser: boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (credential: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -85,6 +87,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (credential: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/global/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Falha na autenticação via Google' }));
+        return { success: false, error: err.error || 'Credencial do Google inválida ou expirada' };
+      }
+
+      const data = await res.json();
+      setUser(data.usuario);
+      setToken(data.token);
+
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.usuario));
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: (e as Error).message || 'Erro ao conectar ao servidor' };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -100,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isSuperuser: !!user?.isSuperuser,
         login,
+        loginWithGoogle,
         logout
       }}
     >

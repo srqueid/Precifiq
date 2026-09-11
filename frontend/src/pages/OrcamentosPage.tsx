@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, Search, ChevronLeft, ShoppingCart, CheckCircle, ClipboardList, Printer, X, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, ChevronLeft, ShoppingCart, CheckCircle, ClipboardList, Printer, X, Eye, UserPlus, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { onlyNumbers, maskCnpjCpf, maskPhone } from '../utils/masks';
 
 interface Orcamento {
   id: number;
@@ -13,6 +14,11 @@ interface Orcamento {
 interface Fornecedor {
   id: number;
   nome: string;
+  nomeEmpresa?: string;
+  nomeFantasia?: string;
+  cnpjCpf?: string;
+  telefones?: string;
+  email?: string;
 }
 
 const statusConfig: { [key: string]: { text: string; className: string } } = {
@@ -620,6 +626,28 @@ const CotacoesModal: React.FC<{ orcamentoId: number, item: any, insumoNome: stri
   const queryClient = useQueryClient();
   const [fornId, setFornId] = useState('');
   const [preco, setPreco] = useState('');
+  const [showPreCadastro, setShowPreCadastro] = useState(false);
+  const [novoForn, setNovoForn] = useState({
+    nome: '',
+    nomeFantasia: '',
+    cnpjCpf: '',
+    telefones: '',
+    email: '',
+  });
+
+  const { data: fornecedoresData } = useQuery<Fornecedor[] | { fornecedores?: Fornecedor[] }>({
+    queryKey: ['fornecedores'],
+    queryFn: async () => {
+      const res = await fetch('/fornecedores/json');
+      if (!res.ok) throw new Error('Erro ao buscar fornecedores');
+      const json = await res.json() as Fornecedor[] | { fornecedores?: Fornecedor[] };
+      return Array.isArray(json) ? json : (Array.isArray(json.fornecedores) ? json.fornecedores : []);
+    },
+    initialData: fornecedores
+  });
+  const listFornecedores = Array.isArray(fornecedoresData) 
+    ? fornecedoresData 
+    : (Array.isArray(fornecedoresData?.fornecedores) ? fornecedoresData.fornecedores : fornecedores);
 
   const { data: cotacoesData, isLoading } = useQuery({
     queryKey: ['cotacoes', item.id],
@@ -627,6 +655,39 @@ const CotacoesModal: React.FC<{ orcamentoId: number, item: any, insumoNome: stri
       const res = await fetch(`/orcamentos/${orcamentoId}/itens/${item.id}/cotacoes`);
       if (!res.ok) throw new Error('Erro ao buscar cotações');
       return res.json();
+    }
+  });
+
+  const cadastrarFornMutation = useMutation({
+    mutationFn: async () => {
+      if (!novoForn.nome.trim()) throw new Error('O nome do fornecedor é obrigatório');
+      const res = await fetch('/fornecedores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: novoForn.nome.trim(),
+          nomeFantasia: novoForn.nomeFantasia.trim() || null,
+          cnpjCpf: onlyNumbers(novoForn.cnpjCpf) || null,
+          telefones: onlyNumbers(novoForn.telefones) || null,
+          email: novoForn.email.trim() || null,
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Falha ao cadastrar fornecedor');
+      }
+      return res.json();
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ['fornecedores'] });
+      if (data?.id) {
+        setFornId(String(data.id));
+      }
+      setShowPreCadastro(false);
+      setNovoForn({ nome: '', nomeFantasia: '', cnpjCpf: '', telefones: '', email: '' });
+    },
+    onError: (err: any) => {
+      alert(`Erro ao cadastrar fornecedor: ${err.message}`);
     }
   });
 
@@ -657,7 +718,7 @@ const CotacoesModal: React.FC<{ orcamentoId: number, item: any, insumoNome: stri
     },
   });
 
-  const getFornNome = (id: number) => fornecedores.find(f => f.id === id)?.nome || 'Desconhecido';
+  const getFornNome = (id: number) => listFornecedores.find(f => f.id === id)?.nome || 'Desconhecido';
   const cotacoes = cotacoesData?.cotacoes || [];
 
   return (
@@ -677,35 +738,175 @@ const CotacoesModal: React.FC<{ orcamentoId: number, item: any, insumoNome: stri
           </button>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); addCotacaoMutation.mutate(); }} className="p-4 bg-gray-50 rounded-xl border border-gray-100 mb-4">
-          <div className="flex flex-wrap gap-3">
-            <select 
-              required 
-              value={fornId} 
-              onChange={e => setFornId(e.target.value)} 
-              className="flex-1 min-w-[200px]"
-            >
-              <option value="">Selecione o Fornecedor...</option>
-              {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-            </select>
-            <input 
-              required 
-              type="number" 
-              step="0.01" 
-              placeholder="Preço Unit. (R$)" 
-              value={preco} 
-              onChange={e => setPreco(e.target.value)} 
-              className="w-36" 
-            />
-            <button 
-              type="submit" 
-              disabled={addCotacaoMutation.isPending} 
-              className="btn btn-primary"
-            >
-              <Plus size={16}/> Adicionar
-            </button>
-          </div>
-        </form>
+        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 mb-4">
+          <form onSubmit={(e) => { e.preventDefault(); addCotacaoMutation.mutate(); }}>
+            <div className="flex flex-wrap gap-2.5 items-center">
+              <div className="flex-1 min-w-[200px] flex items-center gap-1.5">
+                <select 
+                  required 
+                  value={fornId} 
+                  onChange={e => {
+                    if (e.target.value === '__NOVO__') {
+                      setShowPreCadastro(true);
+                    } else {
+                      setFornId(e.target.value);
+                    }
+                  }} 
+                  className="flex-1"
+                >
+                  <option value="">Selecione o Fornecedor...</option>
+                  {listFornecedores.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.nomeEmpresa || f.nome} {f.cnpjCpf ? `(${f.cnpjCpf})` : ''}
+                    </option>
+                  ))}
+                  <option value="__NOVO__">➕ + Pré-cadastrar Novo Fornecedor...</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowPreCadastro(prev => !prev)}
+                  className={`btn btn-sm ${showPreCadastro ? 'btn-primary' : 'btn-secondary'} whitespace-nowrap flex items-center gap-1 px-2.5`}
+                  title="Pré-cadastrar novo fornecedor"
+                >
+                  <UserPlus size={15} />
+                  <span className="text-xs">{showPreCadastro ? 'Fechar' : 'Novo'}</span>
+                </button>
+              </div>
+
+              <input 
+                required 
+                type="number" 
+                step="0.01" 
+                placeholder="Preço Unit. (R$)" 
+                value={preco} 
+                onChange={e => setPreco(e.target.value)} 
+                className="w-32" 
+              />
+              <button 
+                type="submit" 
+                disabled={addCotacaoMutation.isPending || !fornId} 
+                className="btn btn-primary whitespace-nowrap"
+              >
+                <Plus size={16}/> Adicionar
+              </button>
+            </div>
+          </form>
+
+          {showPreCadastro && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="p-3.5 bg-white rounded-lg border border-blue-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2 text-blue-700 font-medium text-xs">
+                    <UserPlus size={16} />
+                    <span>Pré-Cadastro Rápido de Fornecedor</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreCadastro(false)}
+                    className="text-gray-400 hover:text-gray-600 p-0.5 rounded"
+                    title="Fechar formulário"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                      Nome / Razão Social <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Distribuidora Alvorada Ltda"
+                      value={novoForn.nome}
+                      onChange={e => setNovoForn({ ...novoForn, nome: e.target.value })}
+                      className="w-full text-xs py-1.5 px-2.5 rounded border border-gray-300"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                      Nome Fantasia / Apelido
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Alvorada"
+                      value={novoForn.nomeFantasia}
+                      onChange={e => setNovoForn({ ...novoForn, nomeFantasia: e.target.value })}
+                      className="w-full text-xs py-1.5 px-2.5 rounded border border-gray-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                      CNPJ / CPF (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="00.000.000/0000-00"
+                      value={novoForn.cnpjCpf}
+                      onChange={e => setNovoForn({ ...novoForn, cnpjCpf: (e.target.value = maskCnpjCpf(e.target.value)) })}
+                      maxLength={18}
+                      inputMode="numeric"
+                      className="w-full text-xs py-1.5 px-2.5 rounded border border-gray-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                      Telefone / WhatsApp
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="(00) 00000-0000"
+                      value={novoForn.telefones}
+                      onChange={e => setNovoForn({ ...novoForn, telefones: (e.target.value = maskPhone(e.target.value)) })}
+                      maxLength={15}
+                      inputMode="numeric"
+                      className="w-full text-xs py-1.5 px-2.5 rounded border border-gray-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-700 mb-0.5">
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="vendas@fornecedor.com"
+                      value={novoForn.email}
+                      onChange={e => setNovoForn({ ...novoForn, email: e.target.value })}
+                      className="w-full text-xs py-1.5 px-2.5 rounded border border-gray-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreCadastro(false)}
+                    className="btn btn-secondary btn-sm text-xs py-1 px-3"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cadastrarFornMutation.isPending || !novoForn.nome.trim()}
+                    onClick={() => cadastrarFornMutation.mutate()}
+                    className="btn btn-primary btn-sm text-xs py-1 px-3 flex items-center gap-1.5"
+                  >
+                    {cadastrarFornMutation.isPending ? 'Salvando...' : (
+                      <>
+                        <Check size={14} /> Salvar Fornecedor
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="table-wrapper">
           <div className="overflow-x-auto">

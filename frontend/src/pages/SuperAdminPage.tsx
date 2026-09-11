@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { maskCnpj, onlyNumbers } from '../utils/masks';
 import { 
   Building2, 
   Users, 
@@ -361,7 +362,7 @@ export const SuperAdminPage: React.FC = () => {
           tipo: 'MATRIZ',
           nomeFantasia: formMatriz.nomeFantasia.trim(),
           razaoSocial: formMatriz.razaoSocial.trim() || formMatriz.nomeFantasia.trim(),
-          cnpj: formMatriz.cnpj.trim() || null,
+          cnpj: onlyNumbers(formMatriz.cnpj) || null,
           bancoDados: dbAuto,
           schemaName: schemaAuto,
           adminNome: formMatriz.adminNome.trim() || null,
@@ -406,7 +407,7 @@ export const SuperAdminPage: React.FC = () => {
           matrizId: Number(formFilial.matrizId),
           nomeFantasia: formFilial.nomeFilial.trim(),
           razaoSocial: formFilial.nomeFilial.trim(),
-          cnpj: formFilial.cnpj.trim() || null,
+          cnpj: onlyNumbers(formFilial.cnpj) || null,
           bancoDados: matrizPai?.bancoDados || 'bd_controle',
           schemaName: schemaAuto,
           adminNome: formFilial.adminNome.trim() || null,
@@ -1444,9 +1445,11 @@ export const SuperAdminPage: React.FC = () => {
                 <label className="text-[11px] font-bold text-slate-600 block mb-1">CNPJ</label>
                 <input
                   type="text"
-                  placeholder="CNPJ da Filial"
+                  placeholder="00.000.000/0000-00"
                   value={formFilial.cnpj}
-                  onChange={(e) => setFormFilial(prev => ({ ...prev, cnpj: e.target.value }))}
+                  onChange={(e) => setFormFilial(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
+                  maxLength={18}
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-slate-500 focus:outline-none"
                 />
               </div>
@@ -1536,7 +1539,9 @@ export const SuperAdminPage: React.FC = () => {
                   type="text"
                   placeholder="00.000.000/0001-00"
                   value={formMatriz.cnpj}
-                  onChange={(e) => setFormMatriz(prev => ({ ...prev, cnpj: e.target.value }))}
+                  onChange={(e) => setFormMatriz(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
+                  maxLength={18}
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-slate-300 rounded text-xs"
                 />
               </div>
@@ -1967,7 +1972,9 @@ export const SuperAdminPage: React.FC = () => {
                       type="text"
                       placeholder="00.000.000/0001-00"
                       value={formMatriz.cnpj}
-                      onChange={(e) => setFormMatriz(prev => ({ ...prev, cnpj: e.target.value }))}
+                      onChange={(e) => setFormMatriz(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
+                      maxLength={18}
+                      inputMode="numeric"
                       className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono"
                     />
                   </div>
@@ -2173,7 +2180,9 @@ export const SuperAdminPage: React.FC = () => {
                       type="text"
                       placeholder="00.000.000/0002-00"
                       value={formFilial.cnpj}
-                      onChange={(e) => setFormFilial(prev => ({ ...prev, cnpj: e.target.value }))}
+                      onChange={(e) => setFormFilial(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
+                      maxLength={18}
+                      inputMode="numeric"
                       className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono"
                     />
                   </div>

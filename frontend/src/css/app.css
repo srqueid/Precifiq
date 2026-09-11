@@ -229,9 +229,7 @@ body {
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
 }
 
 .sidebar-body {
@@ -259,7 +257,7 @@ body {
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal;
   transition: background var(--transition), color var(--transition);
 }
 
@@ -565,9 +563,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
   width: 100%;
 }
 
@@ -593,9 +589,7 @@ body {
   color: var(--muted);
   margin-top: 2px;
   line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
   width: 100%;
 }
 
@@ -623,6 +617,7 @@ thead th {
   padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border);
+  white-space: normal;
 }
 
 .th-sort-button {
@@ -677,6 +672,8 @@ tbody td {
   border-bottom: 1px solid var(--border);
   font-size: 14px;
   color: var(--text);
+  white-space: normal;
+  word-break: break-word;
 }
 
 tbody tr:last-child td {
@@ -834,6 +831,13 @@ input:focus, select:focus, textarea:focus {
   position: relative;
   z-index: 1001;
   box-sizing: border-box;
+}
+
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1119,7 +1123,7 @@ input:focus, select:focus, textarea:focus {
   thead th {
     padding: 10px 12px;
     font-size: 11px;
-    white-space: nowrap;
+    white-space: normal;
   }
 
   tbody td {

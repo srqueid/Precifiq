@@ -55,7 +55,7 @@ fun Application.fornecedorRouting(db: AppDatabase) {
                                 tr {
                                     td { text(f.id.toString()) }
                                     td { text(f.nomeEmpresa ?: f.nome) }
-                                    td { text(f.cnpjCpf) }
+                                    td { text(f.cnpjCpf ?: "") }
                                     td { text(f.uf ?: "") }
                                     td {
                                         a(href = "/fornecedores/editar/${f.id}") { text("[Editar]") }
@@ -74,31 +74,41 @@ fun Application.fornecedorRouting(db: AppDatabase) {
             }
 
             post {
-                val p = call.receiveParameters()
-                val nome = p["nome"] ?: ""
-                val nomeEmpresa = p["nomeEmpresa"]
-                val novo = Fornecedor(
-                    id = 0,
-                    nome = nome,
-                    nomeEmpresa = nomeEmpresa,
-                    nomeFantasia = p["nomeFantasia"],
-                    cnpjCpf = p["cnpjCpf"] ?: "",
-                    mnemonico = p["mnemonico"],
-                    enderecoCompleto = p["enderecoCompleto"],
-                    cep = p["cep"],
-                    uf = p["uf"],
-                    email = p["email"],
-                    telefones = p["telefones"],
-                    banco = p["banco"],
-                    agencia = p["agencia"],
-                    contaCorrente = p["contaCorrente"],
-                    chavePix = p["chavePix"],
-                    categoria = p["categoria"],
-                    prazoPagamentoPadrao = p["prazoPagamentoPadrao"],
-                    historicoAtendimento = p["historicoAtendimento"]
-                )
-                database.fornecedores.criar(novo)
-                call.respond(mapOf("status" to "success"))
+                val contentType = call.request.headers[io.ktor.http.HttpHeaders.ContentType] ?: ""
+                val novo = if (contentType.contains("application/json")) {
+                    call.receive<Fornecedor>()
+                } else {
+                    val p = call.receiveParameters()
+                    val nome = p["nome"] ?: ""
+                    val nomeEmpresa = p["nomeEmpresa"]
+                    Fornecedor(
+                        id = 0,
+                        nome = nome,
+                        nomeEmpresa = nomeEmpresa,
+                        nomeFantasia = p["nomeFantasia"],
+                        cnpjCpf = p["cnpjCpf"]?.takeIf { it.isNotBlank() },
+                        mnemonico = p["mnemonico"],
+                        enderecoCompleto = p["enderecoCompleto"],
+                        cep = p["cep"],
+                        uf = p["uf"],
+                        email = p["email"],
+                        telefones = p["telefones"],
+                        banco = p["banco"],
+                        agencia = p["agencia"],
+                        contaCorrente = p["contaCorrente"],
+                        chavePix = p["chavePix"],
+                        categoria = p["categoria"],
+                        prazoPagamentoPadrao = p["prazoPagamentoPadrao"],
+                        historicoAtendimento = p["historicoAtendimento"]
+                    )
+                }
+                val novoId = database.fornecedores.criar(novo)
+                val fornecedorCriado = novo.copy(id = novoId)
+                call.respond(HttpStatusCode.Created, mapOf(
+                    "status" to "success",
+                    "id" to novoId,
+                    "fornecedor" to fornecedorCriado
+                ))
             }
 
             get("/editar/{id}") {
@@ -112,7 +122,7 @@ fun Application.fornecedorRouting(db: AppDatabase) {
                             div { label { text("Razão Social: ") }; textInput(name = "nome") { value = f.nome } }
                             div { label { text("Nome da Empresa: ") }; textInput(name = "nomeEmpresa") { value = f.nomeEmpresa ?: "" } }
                             div { label { text("Nome Fantasia: ") }; textInput(name = "nomeFantasia") { value = f.nomeFantasia ?: "" } }
-                            div { label { text("CNPJ/CPF: ") }; textInput(name = "cnpjCpf") { value = f.cnpjCpf } }
+                            div { label { text("CNPJ/CPF: ") }; textInput(name = "cnpjCpf") { value = f.cnpjCpf ?: "" } }
                             div { label { text("Mnemônico: ") }; textInput(name = "mnemonico") { value = f.mnemonico ?: "" } }
                             div { label { text("E-mail: ") }; textInput(name = "email") { value = f.email ?: "" } }
                             div { label { text("Telefones: ") }; textInput(name = "telefones") { value = f.telefones ?: "" } }

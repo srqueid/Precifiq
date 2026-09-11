@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Search, 
-  X, 
-  ChevronLeft, 
-  Save, 
-  PackageOpen, 
-  Boxes, 
-  CheckCircle2, 
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  X,
+  ChevronLeft,
+  Save,
+  PackageOpen,
+  Boxes,
+  CheckCircle2,
   AlertTriangle,
   ArrowRight,
   Sparkles,
@@ -97,8 +97,8 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
   });
 
   const produtos: ProdutoFinal[] = produtosData || [];
-  const filtered = produtos.filter((p: ProdutoFinal) => 
-    p.nome.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = produtos.filter((p: ProdutoFinal) =>
+    p.nome.toLowerCase().includes(search.toLowerCase()) ||
     (p.descricao && p.descricao.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -166,7 +166,7 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
                           {search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
                         </h3>
                         <p className="empty-state-description">
-                          {search 
+                          {search
                             ? 'Tente ajustar os termos da busca para encontrar o que procura.'
                             : 'Comece cadastrando seu primeiro produto clicando no botão acima.'
                           }
@@ -176,8 +176,8 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
                   </tr>
                 ) : (
                   filtered.map((p) => (
-                    <tr 
-                      key={p.id} 
+                    <tr
+                      key={p.id}
                       className="cursor-pointer"
                       onClick={() => onSelect(p.id)}
                     >
@@ -186,21 +186,21 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
                         <strong>{p.nome}</strong>
                       </td>
                       <td className="table-cell text-right td-mono">
-                        {p.rendimentoReceitaBase} ml / g
+                        {p.rendimentoReceitaBase}
                       </td>
                       <td className="table-cell td-muted">{p.descricao || 'Sem descrição'}</td>
                       <td className="table-cell table-cell-actions text-center" onClick={e => e.stopPropagation()}>
                         <div className="action-buttons justify-center">
-                          <button 
-                            onClick={() => onSelect(p.id)} 
+                          <button
+                            onClick={() => onSelect(p.id)}
                             className="btn btn-action btn-icon"
                             aria-label={`Editar ${p.nome}`}
                             title="Editar Ficha Técnica"
                           >
                             <Edit2 size={16} />
                           </button>
-                          <button 
-                            onClick={() => { if(window.confirm(`Deseja excluir "${p.nome}"?`)) deleteMutation.mutate(p.id); }} 
+                          <button
+                            onClick={() => { if (window.confirm(`Deseja excluir "${p.nome}"?`)) deleteMutation.mutate(p.id); }}
                             className="btn btn-danger btn-icon"
                             aria-label={`Excluir ${p.nome}`}
                             title="Excluir Produto"
@@ -243,7 +243,7 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
                 </div>
                 <div className="form-group">
                   <label htmlFor="prod-rendimento" className="required">
-                    Rendimento da Receita Base (em ml ou g)
+                    Rendimento da Receita Base (medida)
                   </label>
                   <input
                     id="prod-rendimento"
@@ -340,7 +340,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
   const [selectedVariacaoId, setSelectedVariacaoId] = useState<string>('');
   const [qtdProduzir, setQtdProduzir] = useState<string>('1');
   const [producaoSuccess, setProducaoSuccess] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (produto) {
       setProdForm({
@@ -793,8 +793,8 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
   const itensCalculados = receita.map((r: any) => {
     const insumo = insumos.find((i: any) => i.id === r.insumoId);
     const un = unidades.find((u: any) => u.id === insumo?.unidadeMedidaId);
-    const qtdEmbalagem = (insumo?.quantidadePorEmbalagem && insumo.quantidadePorEmbalagem > 0) 
-      ? insumo.quantidadePorEmbalagem 
+    const qtdEmbalagem = (insumo?.quantidadePorEmbalagem && insumo.quantidadePorEmbalagem > 0)
+      ? insumo.quantidadePorEmbalagem
       : 1;
     // Custo por mililitro ou grama: preco ÷ tamanho da embalagem
     const custoPorUnidade = (insumo?.preco || 0) / qtdEmbalagem;
@@ -804,7 +804,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
     return {
       ...r,
       insumoNome: insumo?.nome || 'Insumo não encontrado',
-      unidadeSigla: un?.sigla || 'ml',
+      unidadeSigla: un?.sigla || '',
       precoEmbalagem: insumo?.preco || 0,
       tamanhoEmbalagem: qtdEmbalagem,
       custoPorUnidade,
@@ -817,8 +817,8 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
   // Cálculos para o preview da Ordem de Produção
   const selectedVar = variacoes.find((v: any) => v.id.toString() === selectedVariacaoId);
   const qtdProdNum = parseFloat(qtdProduzir) || 1;
-  const fatorProducao = selectedVar 
-    ? (qtdProdNum * selectedVar.tamanhoMedida) / rendimentoBase 
+  const fatorProducao = selectedVar
+    ? (qtdProdNum * selectedVar.tamanhoMedida) / rendimentoBase
     : qtdProdNum;
 
   // Detectar insumos com déficit para a Ordem de Produção atual
@@ -874,7 +874,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
           </div>
 
           <div className="toolbar-actions">
-            <button 
+            <button
               onClick={() => {
                 setProducaoSuccess(null);
                 setIsProducaoModalOpen(true);
@@ -885,8 +885,8 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
               <Boxes size={18} />
               <span>Ordem de Produção (Converter)</span>
             </button>
-            <button 
-              onClick={() => updateProduto.mutate()} 
+            <button
+              onClick={() => updateProduto.mutate()}
               className="btn btn-primary btn-lg"
               disabled={updateProduto.isPending}
             >
@@ -902,23 +902,23 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
           <div className="form-row" style={{ marginBottom: '0' }}>
             <div className="form-group" style={{ flex: 2 }}>
               <label htmlFor="edit-nome" className="required">Nome do Produto</label>
-              <input 
+              <input
                 id="edit-nome"
-                value={prodForm.nome} 
-                onChange={e => setProdForm({...prodForm, nome: e.target.value})} 
+                value={prodForm.nome}
+                onChange={e => setProdForm({ ...prodForm, nome: e.target.value })}
               />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
               <label htmlFor="edit-rendimento" className="required">
-                Rendimento Base (ml ou g)
+                Rendimento Base (quantidade de produtos resultante)
               </label>
-              <input 
+              <input
                 id="edit-rendimento"
-                type="number" 
+                type="number"
                 step="1"
                 min="1"
-                value={prodForm.rendimentoReceitaBase} 
-                onChange={e => setProdForm({...prodForm, rendimentoReceitaBase: e.target.value})} 
+                value={prodForm.rendimentoReceitaBase}
+                onChange={e => setProdForm({ ...prodForm, rendimentoReceitaBase: e.target.value })}
               />
               <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
                 Ex: 1000 para 1 Litro / 1000ml de formulação base.
@@ -927,10 +927,10 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
           </div>
           <div className="form-group" style={{ marginTop: '16px', marginBottom: '0' }}>
             <label htmlFor="edit-descricao">Descrição da Formulação</label>
-            <textarea 
+            <textarea
               id="edit-descricao"
-              value={prodForm.descricao} 
-              onChange={e => setProdForm({...prodForm, descricao: e.target.value})} 
+              value={prodForm.descricao}
+              onChange={e => setProdForm({ ...prodForm, descricao: e.target.value })}
               rows={2}
             />
           </div>
@@ -942,7 +942,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
             <div>
               <div className="section-title" style={{ marginBottom: '2px' }}>Ficha Técnica Master (Ingredientes)</div>
               <p style={{ fontSize: '13px', color: 'var(--muted)', margin: 0 }}>
-                Cálculo do Custo de Produto Vendido (CPV) com baixa fracionada por ml e g.
+                Cálculo do Custo de Produto Vendido (CPV) com baixa fracionada.
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -951,23 +951,23 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 {fmtBrl(custoTotalReceitaBase)}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                (R$ {custoPorMlBase.toFixed(5)} por ml/g)
+                (R$ {custoPorMlBase.toFixed(5)} por unidade)
               </div>
             </div>
           </div>
-          
+
           <form onSubmit={(e) => { e.preventDefault(); addReceita.mutate(); }} className="form-row" style={{ background: 'var(--surface-2)', padding: '16px', borderRadius: 'var(--radius)', marginBottom: '16px' }}>
             <div className="form-group" style={{ flex: 3, marginBottom: 0 }}>
               <label htmlFor="rec-insumo">Selecionar Insumo / Matéria-Prima</label>
-              <select 
+              <select
                 id="rec-insumo"
-                required 
-                value={insumoId} 
-                onChange={e => setInsumoId(e.target.value)} 
+                required
+                value={insumoId}
+                onChange={e => setInsumoId(e.target.value)}
               >
                 <option value="">Selecione um Insumo...</option>
                 {insumos.map((i: any) => {
-                  const un = unidades.find((u: any) => u.id === i.unidadeMedidaId)?.sigla || 'ml';
+                  const un = unidades.find((u: any) => u.id === i.unidadeMedidaId)?.sigla || '';
                   return (
                     <option key={i.id} value={i.id}>
                       {i.nome} ({i.quantidadePorEmbalagem || 1} {un} - {fmtBrl(i.preco)})
@@ -977,24 +977,24 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
               </select>
             </div>
             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-              <label htmlFor="rec-qtd">Qtd. Usada (ml/g)</label>
-              <input 
+              <label htmlFor="rec-qtd">Qtd. Usada (unidade)</label>
+              <input
                 id="rec-qtd"
-                required 
-                type="number" 
-                step="0.01" 
-                placeholder="Ex: 700" 
-                value={quantidadeUsada} 
-                onChange={e => setQuantidadeUsada(e.target.value)} 
+                required
+                type="number"
+                step="0.01"
+                placeholder="Ex: 700"
+                value={quantidadeUsada}
+                onChange={e => setQuantidadeUsada(e.target.value)}
               />
             </div>
             <div className="form-group" style={{ marginBottom: 0, alignSelf: 'flex-end' }}>
-              <button 
-                type="submit" 
-                disabled={addReceita.isPending} 
+              <button
+                type="submit"
+                disabled={addReceita.isPending}
                 className="btn btn-primary"
               >
-                <Plus size={18}/> Adicionar Insumo
+                <Plus size={18} /> Adicionar Insumo
               </button>
             </div>
           </form>
@@ -1005,7 +1005,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <tr>
                   <th className="table-cell">Insumo</th>
                   <th className="table-cell text-right" style={{ width: '150px' }}>Qtd. Usada</th>
-                  <th className="table-cell text-right" style={{ width: '180px' }}>Custo Base (R$/ml ou g)</th>
+                  <th className="table-cell text-right" style={{ width: '180px' }}>Custo Base (R$/fração)</th>
                   <th className="table-cell text-right" style={{ width: '160px' }}>Custo na Receita</th>
                   <th className="table-cell text-center" style={{ width: '80px' }}>Ação</th>
                 </tr>
@@ -1037,11 +1037,11 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       </td>
                       <td className="table-cell table-cell-actions text-center">
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          <button 
+                          <button
                             type="button"
                             onClick={() => {
                               const promptVal = window.prompt(
-                                `Nova quantidade usada para "${r.insumoNome}" (${r.unidadeSigla}):`, 
+                                `Nova quantidade usada para "${r.insumoNome}" (${r.unidadeSigla}):`,
                                 String(r.quantidadeUsada)
                               );
                               if (promptVal !== null) {
@@ -1059,14 +1059,14 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                           >
                             <Edit2 size={15} />
                           </button>
-                          <button 
+                          <button
                             type="button"
-                            onClick={() => { if(window.confirm('Remover ingrediente da receita?')) delReceita.mutate(r.id); }} 
+                            onClick={() => { if (window.confirm('Remover ingrediente da receita?')) delReceita.mutate(r.id); }}
                             className="btn btn-danger btn-icon"
                             aria-label="Remover ingrediente"
                             title="Remover"
                           >
-                            <Trash2 size={15}/>
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
@@ -1089,7 +1089,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
             </div>
             <span className="badge badge-gray">{variacoes.length} variações</span>
           </div>
-          
+
           {(() => {
             const medidaNum = parseFloat(tamanhoMedida) || 0;
             const custoConteudoPrev = custoPorMlBase * medidaNum;
@@ -1103,7 +1103,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
               const insId = Number(novoMaterialInsumoId);
               const qtd = parseFloat(novoMaterialQtd) || 1;
               if (qtd <= 0) return;
-              
+
               const jaExisteIdx = novosMateriais.findIndex(m => m.insumoId === insId);
               if (jaExisteIdx >= 0) {
                 const updated = [...novosMateriais];
@@ -1125,33 +1125,33 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <div className="form-row" style={{ marginBottom: '12px' }}>
                   <div className="form-group" style={{ flex: 2, minWidth: '160px', marginBottom: 0 }}>
                     <label htmlFor="var-nome">Nome da Variação</label>
-                    <input 
+                    <input
                       id="var-nome"
-                      required 
-                      placeholder="Ex: 250ml Difusor Vidro Luxo..." 
-                      value={nomeTamanho} 
-                      onChange={e => setNomeTamanho(e.target.value)} 
+                      required
+                      placeholder="Ex: 250ml Difusor Vidro Luxo..."
+                      value={nomeTamanho}
+                      onChange={e => setNomeTamanho(e.target.value)}
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1, minWidth: '90px', marginBottom: 0 }}>
-                    <label htmlFor="var-medida">Medida Líquida</label>
-                    <input 
+                    <label htmlFor="var-medida">Medida</label>
+                    <input
                       id="var-medida"
-                      required 
-                      type="number" 
+                      required
+                      type="number"
                       step="1"
-                      placeholder="Ex: 250" 
-                      value={tamanhoMedida} 
-                      onChange={e => setTamanhoMedida(e.target.value)} 
+                      placeholder="Ex: 250"
+                      value={tamanhoMedida}
+                      onChange={e => setTamanhoMedida(e.target.value)}
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1, minWidth: '100px', marginBottom: 0 }}>
                     <label htmlFor="var-unidade">Unidade</label>
-                    <select 
+                    <select
                       id="var-unidade"
-                      required 
-                      value={unidadeMedidaTamanhoId} 
-                      onChange={e => setUnidadeMedidaTamanhoId(e.target.value)} 
+                      required
+                      value={unidadeMedidaTamanhoId}
+                      onChange={e => setUnidadeMedidaTamanhoId(e.target.value)}
                     >
                       <option value="">Unidade...</option>
                       {unidades.map((u: any) => <option key={u.id} value={u.id}>{u.sigla} ({u.nome})</option>)}
@@ -1160,15 +1160,15 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                   <div className="form-group" style={{ flex: 1, minWidth: '120px', marginBottom: 0 }}>
                     <label htmlFor="var-margem">Margem Lucro</label>
                     <div style={{ position: 'relative' }}>
-                      <input 
+                      <input
                         id="var-margem"
-                        required 
-                        type="number" 
+                        required
+                        type="number"
                         step="1"
                         min="0"
-                        placeholder="300" 
-                        value={margemLucro} 
-                        onChange={e => setMargemLucro(e.target.value)} 
+                        placeholder="300"
+                        value={margemLucro}
+                        onChange={e => setMargemLucro(e.target.value)}
                         style={{ paddingRight: '26px' }}
                       />
                       <span style={{ position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontWeight: 600, fontSize: '13px' }}>
@@ -1178,11 +1178,11 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                   </div>
                   <div className="form-group" style={{ flex: 1.5, minWidth: '130px', marginBottom: 0 }}>
                     <label htmlFor="var-barcode">Cód. Barras (EAN)</label>
-                    <input 
+                    <input
                       id="var-barcode"
-                      placeholder="Ex: 789123456789" 
-                      value={novoVarCodigoBarras} 
-                      onChange={e => setNovoVarCodigoBarras(e.target.value)} 
+                      placeholder="Ex: 789123456789"
+                      value={novoVarCodigoBarras}
+                      onChange={e => setNovoVarCodigoBarras(e.target.value)}
                     />
                   </div>
                 </div>
@@ -1191,7 +1191,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '12px' }}>
                   <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
-                      Materiais & Componentes da Variação (Frasco 250ml, 10 pérolas, 15cm de fita, etc.):
+                      Materiais & Componentes da Variação (insumos utilizados diferentes a composição do produto ex.: adornos):
                     </div>
                     <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
                       {novosMateriais.length} componente(s) adicionado(s)
@@ -1283,12 +1283,12 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       <span>= Custo Total (CPV): <strong className="td-mono td-blue">{fmtBrl(custoTotalPrev)}</strong></span>
                       <span>Preço Venda ({margemNum}%): <strong className="td-mono" style={{ color: '#059669', fontSize: '14px' }}>{fmtBrl(precoVendaPrev)}</strong></span>
                     </div>
-                    <button 
-                      type="submit" 
-                      disabled={addVariacao.isPending || !nomeTamanho || !tamanhoMedida || !unidadeMedidaTamanhoId} 
+                    <button
+                      type="submit"
+                      disabled={addVariacao.isPending || !nomeTamanho || !tamanhoMedida || !unidadeMedidaTamanhoId}
                       className="btn btn-primary"
                     >
-                      <Plus size={18}/> {addVariacao.isPending ? 'Cadastrando...' : 'Cadastrar Variação'}
+                      <Plus size={18} /> {addVariacao.isPending ? 'Cadastrando...' : 'Cadastrar Variação'}
                     </button>
                   </div>
                 </div>
@@ -1302,7 +1302,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <tr>
                   <th className="table-cell">Variação</th>
                   <th className="table-cell text-right" style={{ width: '100px' }}>Tamanho</th>
-                  <th className="table-cell">Materiais Usados (Frascos, Pérolas, Fitas...)</th>
+                  <th className="table-cell">Materiais Usados (Frascos, Embalagens, Fitas...)</th>
                   <th className="table-cell text-right" style={{ width: '110px' }}>Custo Líquido</th>
                   <th className="table-cell text-right" style={{ width: '110px' }}>Custo Materiais</th>
                   <th className="table-cell text-right" style={{ width: '120px' }}>Custo Total (CPV)</th>
@@ -1320,16 +1320,16 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                   </tr>
                 ) : (
                   variacoes.map((v: any) => {
-                    const un = unidades.find((u: any) => u.id === v.unidadeMedidaTamanhoId)?.sigla || 'ml';
+                    const un = unidades.find((u: any) => u.id === v.unidadeMedidaTamanhoId)?.sigla || '';
                     const custoConteudo = custoPorMlBase * (v.tamanhoMedida || 0);
-                    
+
                     const mats: any[] = v.materiais || [];
                     const custoMateriais = mats.length > 0
                       ? mats.reduce((acc: number, m: any) => acc + (m.custoUnitario || getCustoInsumoUnitario(m.insumoId, m.quantidade)), 0)
                       : (v.embalagemInsumoId ? (() => {
-                          const emb = insumos.find((i: any) => i.id === v.embalagemInsumoId);
-                          return emb ? (emb.preco / (emb.quantidadePorEmbalagem || 1)) : 0;
-                        })() : 0);
+                        const emb = insumos.find((i: any) => i.id === v.embalagemInsumoId);
+                        return emb ? (emb.preco / (emb.quantidadePorEmbalagem || 1)) : 0;
+                      })() : 0);
 
                     const custoTotal = custoConteudo + custoMateriais;
                     const margemEfetiva = v.margemLucro !== undefined && v.margemLucro !== null && v.margemLucro > 0 ? v.margemLucro : 300;
@@ -1416,7 +1416,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                               type="button"
                               onClick={() => {
                                 const novaMargemStr = window.prompt(
-                                  `Definir novo percentual de lucro (%) para "${v.nomeTamanho}":`, 
+                                  `Definir novo percentual de lucro (%) para "${v.nomeTamanho}":`,
                                   margemEfetiva.toString()
                                 );
                                 if (novaMargemStr === null) return;
@@ -1433,14 +1433,14 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                             >
                               <Percent size={15} />
                             </button>
-                            <button 
+                            <button
                               type="button"
-                              onClick={() => { if(window.confirm('Remover esta variação?')) delVariacao.mutate(v.id); }} 
+                              onClick={() => { if (window.confirm('Remover esta variação?')) delVariacao.mutate(v.id); }}
                               className="btn btn-danger btn-icon"
                               aria-label="Remover variação"
                               title="Remover"
                             >
-                              <Trash2 size={15}/>
+                              <Trash2 size={15} />
                             </button>
                           </div>
                         </td>
@@ -1582,7 +1582,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                         if (qtd <= 0) return;
                         const ins = insumos.find((i: any) => i.id === insId);
                         const custo = getCustoInsumoUnitario(insId, qtd);
-                        
+
                         const jaExisteIdx = editVarMateriais.findIndex(m => m.insumoId === insId);
                         if (jaExisteIdx >= 0) {
                           const updated = [...editVarMateriais];
@@ -1687,7 +1687,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <div>
                   <h3 style={{ margin: 0 }}>Materiais Usados na Variação</h3>
                   <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)' }}>
-                    {variacaoParaMateriais.nomeTamanho} ({variacaoParaMateriais.tamanhoMedida} ml/g)
+                    {variacaoParaMateriais.nomeTamanho} ({variacaoParaMateriais.tamanhoMedida} {unidades.find((u: any) => u.id === variacaoParaMateriais.unidadeMedidaTamanhoId)?.sigla || ''})
                   </p>
                 </div>
                 <button className="modal-close" onClick={() => setModalMateriaisOpen(false)}>&times;</button>
@@ -1732,7 +1732,7 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       if (qtd <= 0) return;
                       const ins = insumos.find((i: any) => i.id === insId);
                       const custo = getCustoInsumoUnitario(insId, qtd);
-                      
+
                       const jaExisteIdx = gerenciarMateriaisLista.findIndex(m => m.insumoId === insId);
                       if (jaExisteIdx >= 0) {
                         const updated = [...gerenciarMateriaisLista];
@@ -1920,9 +1920,9 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 <p style={{ color: 'var(--muted)', fontSize: '14px', marginBottom: '20px' }}>
                   Os insumos foram debitados proporcionalmente do Estoque Geral e o saldo do produto acabado foi atualizado.
                 </p>
-                <button 
-                  type="button" 
-                  onClick={() => setIsProducaoModalOpen(false)} 
+                <button
+                  type="button"
+                  onClick={() => setIsProducaoModalOpen(false)}
                   className="btn btn-primary"
                 >
                   Concluir e Fechar
@@ -1947,10 +1947,10 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                       >
                         {variacoes.map((v: any) => (
                           <option key={v.id} value={v.id.toString()}>
-                            {v.nomeTamanho} ({v.tamanhoMedida} ml/g)
+                            {v.nomeTamanho} ({v.tamanhoMedida} {unidades.find((u: any) => u.id === v.unidadeMedidaTamanhoId)?.sigla || ''})
                           </option>
                         ))}
-                        <option value="">Receita Base Completa ({rendimentoBase} ml/g)</option>
+                        <option value="">Receita Base Completa ({rendimentoBase} {unidades.find((u: any) => u.id === variacoes[0]?.unidadeMedidaTamanhoId)?.sigla || ''})</option>
                       </select>
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
@@ -2239,15 +2239,15 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
                 </div>
 
                 <div className="modal-footer">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsProducaoModalOpen(false)} 
+                  <button
+                    type="button"
+                    onClick={() => setIsProducaoModalOpen(false)}
                     className="btn btn-secondary"
                   >
                     Cancelar
                   </button>
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="btn btn-primary"
                     disabled={executarProducaoMutation.isPending || temInsumosFaltantes}
                     title={temInsumosFaltantes ? 'Utilize a sugestão de substitutos da IA ou reabasteça o estoque antes de converter' : 'Converter e debitar insumos'}

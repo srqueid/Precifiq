@@ -45,7 +45,7 @@ class ClienteRepository {
     fun criar(cliente: Cliente): Cliente = transaction {
         val id = ClientesTable.insert {
             it[nome] = cliente.nome
-            it[telefone] = cliente.telefone
+            it[telefone] = cliente.telefone?.replace(Regex("\\D"), "")?.takeIf { it.isNotBlank() }
             it[email] = cliente.email
             it[endereco] = cliente.endereco
         } get ClientesTable.id
@@ -62,7 +62,7 @@ class ClienteRepository {
     fun atualizar(id: Int, cliente: Cliente) = transaction {
         ClientesTable.update({ ClientesTable.id eq id }) {
             it[nome] = cliente.nome
-            it[telefone] = cliente.telefone
+            it[telefone] = cliente.telefone?.replace(Regex("\\D"), "")?.takeIf { it.isNotBlank() }
             it[email] = cliente.email
             it[endereco] = cliente.endereco
         }

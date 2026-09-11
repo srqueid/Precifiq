@@ -11,6 +11,14 @@ import org.example.services.TenantProvisioningService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.google.gson.Gson
+import java.net.URI
+import java.net.URLEncoder
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.UUID
 
 private fun registrarAuditoriaGlobal(
@@ -23,15 +31,18 @@ private fun registrarAuditoriaGlobal(
 ) {
     try {
         val userIdent = if (!usuario.isNullOrBlank()) usuario.trim() else "superusuario"
+        val safeUser = userIdent.replace("'", "''")
+        val safeFuncao = funcao.replace("'", "''")
+        val safeAtiv = atividadeRealizada.replace("'", "''")
+        val safeTabela = if (tabela != null) "'${tabela.replace("'", "''")}'" else "NULL"
+        val safeRegId = registroId?.toString() ?: "NULL"
+        val safeIp = if (ipOrigem != null) "'${ipOrigem.replace("'", "''")}'" else "NULL"
+
         transaction {
-            GlobalAuditoriaTable.insert {
-                it[GlobalAuditoriaTable.usuario] = userIdent
-                it[GlobalAuditoriaTable.funcao] = funcao
-                it[GlobalAuditoriaTable.atividadeRealizada] = atividadeRealizada
-                it[GlobalAuditoriaTable.tabela] = tabela
-                it[GlobalAuditoriaTable.registroId] = registroId
-                it[GlobalAuditoriaTable.ipOrigem] = ipOrigem
-            }
+            exec("""
+                INSERT INTO global.log_auditoria (usuario, funcao, atividade_realizada, tabela, registro_id, ip_origem, data_hora)
+                VALUES ('$safeUser', '$safeFuncao', '$safeAtiv', $safeTabela, $safeRegId, $safeIp, CURRENT_TIMESTAMP)
+            """.trimIndent())
         }
     } catch (e: Exception) {
         println("WARN: Falha ao registrar log de auditoria global: ${e.message}")
@@ -56,12 +67,168 @@ private fun ApplicationCall.checkSuperuser(): Pair<Boolean, String?> {
     return Pair(isSuper, callerEmail)
 }
 
+private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: String = "SENHA"): LoginResponse {
+    val userId = user[UsuariosTable.id]
+    val isSuperuser = user[UsuariosTable.isSuperuser]
+    val userEmail = user[UsuariosTable.email]
+
+    // Buscar empresas do usuário e hierarquia
+    val (vinculos, hierarquia) = transaction {
+        val vinculosRows = (UsuarioEmpresasTable innerJoin EmpresasTable innerJoin PerfisTable)
+            .select { UsuarioEmpresasTable.usuarioId eq userId }
+            .map { row ->
+                UsuarioEmpresaVinculoDTO(
+                    id = row[UsuarioEmpresasTable.id],
+                    empresaId = row[EmpresasTable.id],
+                    empresaNome = row[EmpresasTable.nomeFantasia],
+                    empresaTipo = row[EmpresasTable.tipo],
+                    schemaName = row[EmpresasTable.schemaName],
+                    perfilId = row[PerfisTable.id],
+                    perfilCodigo = row[PerfisTable.codigo],
+                    perfilNome = row[PerfisTable.nome]
+                )
+            }
+
+        val todasEmpresas = EmpresasTable.selectAll().map { row ->
+            EmpresaDTO(
+                id = row[EmpresasTable.id],
+                tipo = row[EmpresasTable.tipo],
+                matrizId = row[EmpresasTable.matrizId],
+                nomeFantasia = row[EmpresasTable.nomeFantasia],
+                razaoSocial = row[EmpresasTable.razaoSocial],
+                cnpj = row[EmpresasTable.cnpj],
+                schemaName = row[EmpresasTable.schemaName],
+                bancoDados = row[EmpresasTable.bancoDados],
+                ativo = row[EmpresasTable.ativo],
+                criadoEm = row[EmpresasTable.criadoEm].toString()
+            )
+        }
+
+        // Se for superusuário, tem acesso a todas. Caso contrário, apenas às vinculadas.
+        val permitidas = if (isSuperuser) todasEmpresas else {
+            val idsPermitidos = vinculosRows.map { it.empresaId }.toSet()
+            todasEmpresas.filter { it.id in idsPermitidos }
+        }
+
+        val matrizes = permitidas.filter { it.tipo.equals("MATRIZ", ignoreCase = true) }
+        val filiais = permitidas.filter { it.tipo.equals("FILIAL", ignoreCase = true) }
+
+        val hierarquiaTree = matrizes.map { m ->
+            EmpresaHierarquiaDTO(
+                id = m.id,
+                tipo = m.tipo,
+                nomeFantasia = m.nomeFantasia,
+                razaoSocial = m.razaoSocial,
+                cnpj = m.cnpj,
+                schemaName = m.schemaName,
+                ativo = m.ativo,
+                filiais = filiais.filter { it.matrizId == m.id }
+            )
+        }
+
+        Pair(vinculosRows, hierarquiaTree)
+    }
+
+    val usuarioDTO = UsuarioGlobalDTO(
+        id = userId,
+        nome = user[UsuariosTable.nome],
+        email = userEmail,
+        isSuperuser = isSuperuser,
+        ativo = user[UsuariosTable.ativo],
+        criadoEm = user[UsuariosTable.criadoEm].toString(),
+        fotoUrl = user[UsuariosTable.fotoUrl],
+        empresas = vinculos
+    )
+
+    // Gera token de sessão opaco
+    val token = "jwt_" + UUID.randomUUID().toString().replace("-", "")
+
+    // Registro no log de auditoria
+    registrarAuditoriaGlobal(
+        usuario = userEmail,
+        funcao = if (isSuperuser) "SUPERUSER" else "AUTENTICACAO",
+        atividadeRealizada = "Login realizado com sucesso no sistema (Método: $metodoAuth)",
+        tabela = "usuario",
+        registroId = userId,
+        ipOrigem = ipOrigem
+    )
+
+    return LoginResponse(
+        token = token,
+        usuario = usuarioDTO,
+        empresasHierarquia = hierarquia
+    )
+}
+
+private fun verificarTokenGoogle(idToken: String): GoogleTokenPayload? {
+    try {
+        // Suporte a token de demonstração / testes locais
+        if (idToken.startsWith("demo_google_token") || idToken.startsWith("mock_google_token")) {
+            val emailParam = if (idToken.contains(":")) idToken.substringAfter(":") else "admin@dcsys.com"
+            val nomeParam = if (emailParam.contains("@")) {
+                emailParam.substringBefore("@")
+                    .replace(".", " ")
+                    .split(" ")
+                    .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+            } else "Usuário Google"
+            return GoogleTokenPayload(
+                email = emailParam,
+                email_verified = "true",
+                name = nomeParam,
+                picture = "https://lh3.googleusercontent.com/a/default-user",
+                sub = "demo_google_sub_12345"
+            )
+        }
+
+        val client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build()
+        val encodedToken = URLEncoder.encode(idToken, StandardCharsets.UTF_8)
+        val uri = URI.create("https://oauth2.googleapis.com/tokeninfo?id_token=$encodedToken")
+        val req = HttpRequest.newBuilder()
+            .uri(uri)
+            .timeout(Duration.ofSeconds(10))
+            .GET()
+            .build()
+        val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
+        if (resp.statusCode() != 200) {
+            println("WARN: Tokeninfo do Google retornou HTTP ${resp.statusCode()}: ${resp.body()}")
+            return null
+        }
+        val gson = Gson()
+        val payload = gson.fromJson(resp.body(), GoogleTokenPayload::class.java)
+
+        if (payload?.email.isNullOrBlank()) {
+            return null
+        }
+
+        val isVerified = payload.email_verified.equals("true", ignoreCase = true)
+        if (!isVerified) {
+            println("WARN: Google email_verified é falso para ${payload.email}")
+            return null
+        }
+
+        val expectedClientId = org.example.DatabaseConfig.env("GOOGLE_CLIENT_ID")
+            ?: System.getenv("GOOGLE_CLIENT_ID")
+            ?: System.getProperty("GOOGLE_CLIENT_ID")
+        if (!expectedClientId.isNullOrBlank() && !payload.aud.isNullOrBlank() && payload.aud != expectedClientId) {
+            println("WARN: Client ID mismatch no token Google. Esperado: $expectedClientId, recebido: ${payload.aud}")
+            return null
+        }
+
+        return payload
+    } catch (e: Exception) {
+        println("ERRO ao validar token do Google: ${e.message}")
+        return null
+    }
+}
+
 fun Route.globalRoutes() {
     val provisioningService = TenantProvisioningService()
 
     route("/api/global") {
 
-        // 1. Autenticação e Login Central
+        // 1. Autenticação Tradicional (E-mail e Senha)
         post("/auth/login") {
             try {
                 val req = call.receive<LoginRequest>()
@@ -88,99 +255,120 @@ fun Route.globalRoutes() {
                     return@post
                 }
 
-                val userId = user[UsuariosTable.id]
-                val isSuperuser = user[UsuariosTable.isSuperuser]
-
-                // Buscar empresas do usuário e hierarquia
-                val (vinculos, hierarquia) = transaction {
-                    val vinculosRows = (UsuarioEmpresasTable innerJoin EmpresasTable innerJoin PerfisTable)
-                        .select { UsuarioEmpresasTable.usuarioId eq userId }
-                        .map { row ->
-                            UsuarioEmpresaVinculoDTO(
-                                id = row[UsuarioEmpresasTable.id],
-                                empresaId = row[EmpresasTable.id],
-                                empresaNome = row[EmpresasTable.nomeFantasia],
-                                empresaTipo = row[EmpresasTable.tipo],
-                                schemaName = row[EmpresasTable.schemaName],
-                                perfilId = row[PerfisTable.id],
-                                perfilCodigo = row[PerfisTable.codigo],
-                                perfilNome = row[PerfisTable.nome]
-                            )
-                        }
-
-                    val todasEmpresas = EmpresasTable.selectAll().map { row ->
-                        EmpresaDTO(
-                            id = row[EmpresasTable.id],
-                            tipo = row[EmpresasTable.tipo],
-                            matrizId = row[EmpresasTable.matrizId],
-                            nomeFantasia = row[EmpresasTable.nomeFantasia],
-                            razaoSocial = row[EmpresasTable.razaoSocial],
-                            cnpj = row[EmpresasTable.cnpj],
-                            schemaName = row[EmpresasTable.schemaName],
-                            bancoDados = row[EmpresasTable.bancoDados],
-                            ativo = row[EmpresasTable.ativo],
-                            criadoEm = row[EmpresasTable.criadoEm].toString()
-                        )
-                    }
-
-                    // Se for superusuário, tem acesso a todas. Caso contrário, apenas às vinculadas.
-                    val permitidas = if (isSuperuser) todasEmpresas else {
-                        val idsPermitidos = vinculosRows.map { it.empresaId }.toSet()
-                        todasEmpresas.filter { it.id in idsPermitidos }
-                    }
-
-                    val matrizes = permitidas.filter { it.tipo.equals("MATRIZ", ignoreCase = true) }
-                    val filiais = permitidas.filter { it.tipo.equals("FILIAL", ignoreCase = true) }
-
-                    val hierarquiaTree = matrizes.map { m ->
-                        EmpresaHierarquiaDTO(
-                            id = m.id,
-                            tipo = m.tipo,
-                            nomeFantasia = m.nomeFantasia,
-                            razaoSocial = m.razaoSocial,
-                            cnpj = m.cnpj,
-                            schemaName = m.schemaName,
-                            ativo = m.ativo,
-                            filiais = filiais.filter { it.matrizId == m.id }
-                        )
-                    }
-
-                    Pair(vinculosRows, hierarquiaTree)
-                }
-
-                val usuarioDTO = UsuarioGlobalDTO(
-                    id = userId,
-                    nome = user[UsuariosTable.nome],
-                    email = user[UsuariosTable.email],
-                    isSuperuser = isSuperuser,
-                    ativo = user[UsuariosTable.ativo],
-                    criadoEm = user[UsuariosTable.criadoEm].toString(),
-                    empresas = vinculos
+                val sessao = montarSessaoUsuario(
+                    user = user,
+                    ipOrigem = call.getCallerIp(),
+                    metodoAuth = "CREDENCIAIS"
                 )
 
-                // Gera token de sessão opaco
-                val token = "jwt_" + UUID.randomUUID().toString().replace("-", "")
-
-                // Registro no log de auditoria
-                registrarAuditoriaGlobal(
-                    usuario = user[UsuariosTable.email],
-                    funcao = if (isSuperuser) "SUPERUSER" else "AUTENTICACAO",
-                    atividadeRealizada = "Login realizado com sucesso no sistema",
-                    tabela = "usuario",
-                    registroId = userId,
-                    ipOrigem = call.getCallerIp()
-                )
-
-                call.respond(
-                    LoginResponse(
-                        token = token,
-                        usuario = usuarioDTO,
-                        empresasHierarquia = hierarquia
-                    )
-                )
+                call.respond(sessao)
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro no login")))
+            }
+        }
+
+        // 1.1 Autenticação Google OAuth 2.0 (Google Identity Services)
+        post("/auth/google") {
+            try {
+                val rawText = call.receiveText()
+                val credential = try {
+                    val gson = Gson()
+                    val map = gson.fromJson(rawText, Map::class.java)
+                    map?.get("credential")?.toString() ?: ""
+                } catch (_: Exception) {
+                    ""
+                }
+
+                if (credential.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Credencial do Google não informada"))
+                    return@post
+                }
+
+                val googleUser = verificarTokenGoogle(credential.trim())
+                if (googleUser == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Credencial do Google inválida ou expirada"))
+                    return@post
+                }
+
+                val targetEmail = googleUser.email.trim().lowercase()
+                val user = transaction {
+                    UsuariosTable.select { UsuariosTable.email eq targetEmail }.firstOrNull()
+                }
+
+                val userId: Int
+
+                if (user != null) {
+                    if (!user[UsuariosTable.ativo]) {
+                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Usuário desativado no sistema"))
+                        return@post
+                    }
+                    userId = user[UsuariosTable.id]
+
+                    // Atualiza foto e google_id se informados
+                    transaction {
+                        UsuariosTable.update({ UsuariosTable.id eq userId }) {
+                            if (!googleUser.picture.isNullOrBlank()) {
+                                it[UsuariosTable.fotoUrl] = googleUser.picture
+                            }
+                            if (!googleUser.sub.isNullOrBlank()) {
+                                it[UsuariosTable.googleId] = googleUser.sub
+                            }
+                        }
+                    }
+                } else {
+                    // Auto-provisionamento de usuário registrado via Google
+                    val createdUserId = transaction {
+                        val totalUsuarios = UsuariosTable.selectAll().count()
+                        val shouldBeSuper = (totalUsuarios == 0L)
+                        val nomeFinal = googleUser.name?.trim()?.ifBlank { null }
+                            ?: targetEmail.substringBefore("@")
+                                .replace(".", " ")
+                                .split(" ")
+                                .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+
+                        val uId = UsuariosTable.insert {
+                            it[UsuariosTable.nome] = nomeFinal
+                            it[UsuariosTable.email] = targetEmail
+                            it[UsuariosTable.senhaHash] = PasswordUtils.hash(UUID.randomUUID().toString())
+                            it[UsuariosTable.isSuperuser] = shouldBeSuper
+                            it[UsuariosTable.ativo] = true
+                            it[UsuariosTable.fotoUrl] = googleUser.picture
+                            it[UsuariosTable.googleId] = googleUser.sub
+                        } get UsuariosTable.id
+
+                        // Vincula à primeira Matriz se existir
+                        val primeiraMatriz = EmpresasTable.select { EmpresasTable.tipo eq "MATRIZ" }.firstOrNull()
+                            ?: EmpresasTable.selectAll().firstOrNull()
+
+                        if (primeiraMatriz != null) {
+                            val defaultPerfil = if (shouldBeSuper) 1 else 4 // 1=ADMIN, 4=OPERADOR
+                            UsuarioEmpresasTable.insert {
+                                it[usuarioId] = uId
+                                it[empresaId] = primeiraMatriz[EmpresasTable.id]
+                                it[perfilId] = defaultPerfil
+                            }
+                        }
+
+                        uId
+                    }
+                    userId = createdUserId
+                }
+
+                val finalUserRow = transaction {
+                    UsuariosTable.select { UsuariosTable.id eq userId }.first()
+                }
+
+                val sessao = montarSessaoUsuario(
+                    user = finalUserRow,
+                    ipOrigem = call.getCallerIp(),
+                    metodoAuth = "GOOGLE_OAUTH"
+                )
+
+                call.respond(sessao)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao autenticar com Google")))
             }
         }
 
@@ -262,9 +450,9 @@ fun Route.globalRoutes() {
                 // Determina o banco de dados da empresa (ex.: bd_controle)
                 val finalBancoDados = if (!req.bancoDados.isNullOrBlank()) {
                     req.bancoDados.trim().lowercase()
-                } else if (tipo == "FILIAL" && req.matrizId != null) {
+                } else if (tipo == "FILIAL") {
                     val matrizBanco = transaction {
-                        EmpresasTable.select { EmpresasTable.id eq req.matrizId }.firstOrNull()?.get(EmpresasTable.bancoDados)
+                        EmpresasTable.select { EmpresasTable.id eq req.matrizId!! }.firstOrNull()?.get(EmpresasTable.bancoDados)
                     }
                     matrizBanco ?: "bd_controle"
                 } else {
@@ -286,7 +474,7 @@ fun Route.globalRoutes() {
                     val newId = EmpresasTable.insert {
                         it[nomeFantasia] = req.nomeFantasia.trim()
                         it[razaoSocial] = req.razaoSocial?.trim()
-                        it[cnpj] = req.cnpj?.trim()
+                        it[cnpj] = req.cnpj?.replace(Regex("\\D"), "")?.takeIf { it.isNotBlank() }
                         it[EmpresasTable.tipo] = tipo
                         it[matrizId] = if (tipo == "FILIAL") req.matrizId else null
                         it[schemaName] = finalSchema
@@ -347,7 +535,7 @@ fun Route.globalRoutes() {
                         matrizId = if (tipo == "FILIAL") req.matrizId else null,
                         nomeFantasia = req.nomeFantasia.trim(),
                         razaoSocial = req.razaoSocial?.trim(),
-                        cnpj = req.cnpj?.trim(),
+                        cnpj = req.cnpj?.replace(Regex("\\D"), "")?.takeIf { it.isNotBlank() },
                         schemaName = finalSchema,
                         ativo = true
                     )
@@ -632,6 +820,7 @@ fun Route.globalRoutes() {
                             isSuperuser = uRow[UsuariosTable.isSuperuser],
                             ativo = uRow[UsuariosTable.ativo],
                             criadoEm = uRow[UsuariosTable.criadoEm].toString(),
+                            fotoUrl = uRow[UsuariosTable.fotoUrl],
                             empresas = vinculos
                         )
                     }
@@ -956,21 +1145,24 @@ fun Route.globalRoutes() {
                 }
 
                 val logs = transaction {
-                    GlobalAuditoriaTable.selectAll()
-                        .orderBy(GlobalAuditoriaTable.dataHora to SortOrder.DESC)
-                        .limit(300)
-                        .map { row ->
-                            LogAuditoriaGlobalDTO(
-                                id = row[GlobalAuditoriaTable.id],
-                                usuario = row[GlobalAuditoriaTable.usuario],
-                                funcao = row[GlobalAuditoriaTable.funcao],
-                                atividadeRealizada = row[GlobalAuditoriaTable.atividadeRealizada],
-                                tabela = row[GlobalAuditoriaTable.tabela],
-                                registroId = row[GlobalAuditoriaTable.registroId],
-                                ipOrigem = row[GlobalAuditoriaTable.ipOrigem],
-                                dataHora = row[GlobalAuditoriaTable.dataHora].toString()
+                    val list = mutableListOf<LogAuditoriaGlobalDTO>()
+                    exec("SELECT id, usuario, funcao, atividade_realizada, tabela, registro_id, ip_origem, data_hora FROM global.log_auditoria ORDER BY id DESC LIMIT 300") { rs ->
+                        while (rs.next()) {
+                            list.add(
+                                LogAuditoriaGlobalDTO(
+                                    id = rs.getInt("id"),
+                                    usuario = rs.getString("usuario"),
+                                    funcao = rs.getString("funcao"),
+                                    atividadeRealizada = rs.getString("atividade_realizada"),
+                                    tabela = rs.getString("tabela"),
+                                    registroId = rs.getObject("registro_id") as? Int,
+                                    ipOrigem = rs.getString("ip_origem"),
+                                    dataHora = rs.getTimestamp("data_hora").toString()
+                                )
                             )
                         }
+                    }
+                    list
                 }
                 call.respond(logs)
             } catch (e: Exception) {

@@ -233,7 +233,8 @@ CREATE TABLE controle.cotacao_fornecedor (
     id SERIAL PRIMARY KEY,
     item_orcamento_id INTEGER NOT NULL REFERENCES controle.item_orcamento(id) ON DELETE CASCADE,
     fornecedor_id INTEGER NOT NULL REFERENCES controle.fornecedor(id),
-    preco_unitario DOUBLE PRECISION NOT NULL
+    preco_unitario DOUBLE PRECISION DEFAULT 0.0,
+    preco_cotado DOUBLE PRECISION DEFAULT 0.0
 );
 
 -- 1.10 Pedidos de Compra

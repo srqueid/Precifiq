@@ -69,7 +69,7 @@ class NfeService(private val geminiService: GeminiService) {
             if (!cnpjDigitos.isNullOrBlank()) {
                 val fornecedorRow = FornecedoresTable.selectAll()
                     .firstOrNull { row ->
-                        val dbCnpj = row[FornecedoresTable.cnpjCpf].replace(Regex("[^0-9]"), "")
+                        val dbCnpj = row[FornecedoresTable.cnpjCpf]?.replace(Regex("[^0-9]"), "") ?: ""
                         dbCnpj == cnpjDigitos
                     }
 
@@ -125,7 +125,7 @@ class NfeService(private val geminiService: GeminiService) {
             if (cnpjLimpo.isNotBlank()) {
                 val fornExistente = FornecedoresTable.selectAll()
                     .firstOrNull { row ->
-                        row[FornecedoresTable.cnpjCpf].replace(Regex("[^0-9]"), "") == cnpjLimpo
+                        row[FornecedoresTable.cnpjCpf]?.replace(Regex("[^0-9]"), "") == cnpjLimpo
                     }
 
                 if (fornExistente != null) {

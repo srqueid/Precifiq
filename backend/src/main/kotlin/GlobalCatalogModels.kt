@@ -44,6 +44,8 @@ object UsuariosTable : Table("usuario") {
     val isSuperuser = bool("is_superuser").default(false)
     val ativo = bool("ativo").default(true)
     val criadoEm = datetime("criado_em").defaultExpression(CurrentDateTime)
+    val fotoUrl = varchar("foto_url", 500).nullable()
+    val googleId = varchar("google_id", 100).nullable()
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -158,7 +160,21 @@ data class UsuarioGlobalDTO(
     val isSuperuser: Boolean,
     val ativo: Boolean,
     val criadoEm: String? = null,
+    val fotoUrl: String? = null,
     val empresas: List<UsuarioEmpresaVinculoDTO> = emptyList()
+)
+
+data class GoogleAuthRequest(
+    val credential: String = ""
+)
+
+data class GoogleTokenPayload(
+    val email: String,
+    val email_verified: String? = null,
+    val name: String? = null,
+    val picture: String? = null,
+    val sub: String? = null,
+    val aud: String? = null
 )
 
 data class CriarUsuarioRequest(

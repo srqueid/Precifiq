@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { maskCnpj, onlyNumbers } from '../utils/masks';
 import { 
   Building2, 
   Users, 
@@ -247,7 +248,7 @@ export const GestaoGlobalPage: React.FC = () => {
           matrizId: null,
           nomeFantasia: formMatriz.nomeFantasia.trim(),
           razaoSocial: formMatriz.razaoSocial.trim() || formMatriz.nomeFantasia.trim(),
-          cnpj: formMatriz.cnpj.trim() || null,
+          cnpj: onlyNumbers(formMatriz.cnpj) || null,
           bancoDados: dbAuto,
           schemaName: schemaAuto,
           adminNome: formMatriz.adminNome.trim() || null,
@@ -294,7 +295,7 @@ export const GestaoGlobalPage: React.FC = () => {
           matrizId: Number(formFilial.matrizId),
           nomeFantasia: formFilial.nomeFantasia.trim(),
           razaoSocial: formFilial.razaoSocial.trim() || formFilial.nomeFantasia.trim(),
-          cnpj: formFilial.cnpj.trim() || null,
+          cnpj: onlyNumbers(formFilial.cnpj) || null,
           bancoDados: matrizPai?.bancoDados || 'bd_controle',
           schemaName: schemaAuto,
           adminNome: formFilial.adminNome.trim() || null,
@@ -1172,7 +1173,9 @@ export const GestaoGlobalPage: React.FC = () => {
                     type="text"
                     placeholder="00.000.000/0001-00"
                     value={formMatriz.cnpj}
-                    onChange={e => setFormMatriz({ ...formMatriz, cnpj: e.target.value })}
+                    onChange={e => setFormMatriz({ ...formMatriz, cnpj: (e.target.value = maskCnpj(e.target.value)) })}
+                    maxLength={18}
+                    inputMode="numeric"
                     className="w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
@@ -1358,7 +1361,9 @@ export const GestaoGlobalPage: React.FC = () => {
                     type="text"
                     placeholder="00.000.000/0002-00"
                     value={formFilial.cnpj}
-                    onChange={e => setFormFilial({ ...formFilial, cnpj: e.target.value })}
+                    onChange={e => setFormFilial({ ...formFilial, cnpj: (e.target.value = maskCnpj(e.target.value)) })}
+                    maxLength={18}
+                    inputMode="numeric"
                     className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 font-mono"
                   />
                 </div>

@@ -180,35 +180,35 @@ fun Application.configureRouting(db: AppDatabase) {
                     valorEstoqueInsumos += (est * (pr / qtdEmb))
                 }
 
-                // Compras Aguardando: compras com status PENDENTE
-                val comprasPendentes = ComprasTable
-                    .select { ComprasTable.status eq StatusCompra.PENDENTE.name }
+                // Compras Aguardando: pedidos de compra com status PENDENTE
+                val comprasPendentes = PedidosCompraTable
+                    .select { PedidosCompraTable.status eq "PENDENTE" }
                     .map { row ->
                         mapOf<String, Any?>(
-                            "id" to row[ComprasTable.id],
-                            "dataCriacao" to LocalDateTime.ofInstant(row[ComprasTable.dataCriacao], ZoneId.systemDefault()).toString(),
-                            "fornecedorId" to row[ComprasTable.fornecedorId],
-                            "valorTotal" to row[ComprasTable.valorTotal],
-                            "status" to row[ComprasTable.status]
+                            "id" to row[PedidosCompraTable.id],
+                            "dataCriacao" to LocalDateTime.ofInstant(row[PedidosCompraTable.dataCriacao], ZoneId.systemDefault()).toString(),
+                            "fornecedorId" to row[PedidosCompraTable.fornecedorId],
+                            "valorTotal" to row[PedidosCompraTable.valorTotal],
+                            "status" to row[PedidosCompraTable.status]
                         )
                     }
 
-                // Orçamentos em Elaboração: status EM_DIGITACAO ou EM_ORCAMENTO
+                // Orçamentos em Elaboração: status EM_DIGITACAO, EM_ORCAMENTO, ABERTO ou PEDIDO_PARCIAL
                 val orcamentosEmElaboracao = OrcamentosCompraTable
-                    .select { OrcamentosCompraTable.status inList listOf(StatusOrcamento.EM_DIGITACAO.name, StatusOrcamento.EM_ORCAMENTO.name) }
+                    .select { OrcamentosCompraTable.status inList listOf(StatusOrcamento.EM_DIGITACAO.name, StatusOrcamento.EM_ORCAMENTO.name, StatusOrcamento.ABERTO.name, StatusOrcamento.PEDIDO_PARCIAL.name) }
                     .count()
 
-                // Orçamentos Aprovados: status ORCAMENTO_APROVADO
+                // Orçamentos Aprovados: status ORCAMENTO_APROVADO, COMPRA_APROVADA
                 val orcamentosAprovados = OrcamentosCompraTable
-                    .select { OrcamentosCompraTable.status eq StatusOrcamento.ORCAMENTO_APROVADO.name }
+                    .select { OrcamentosCompraTable.status inList listOf(StatusOrcamento.ORCAMENTO_APROVADO.name, StatusOrcamento.COMPRA_APROVADA.name) }
                     .count()
 
-                // Compras do Mês: soma das compras criadas no mês atual
+                // Compras do Mês: soma dos pedidos confirmados/concluídos ou compras criadas no mês atual
                 val now = LocalDateTime.now()
                 val inicioMes = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
-                val comprasDoMes = ComprasTable
-                    .select { ComprasTable.dataCriacao greaterEq inicioMes.atZone(ZoneId.systemDefault()).toInstant() }
-                    .sumOf { row: org.jetbrains.exposed.sql.ResultRow -> row[ComprasTable.valorTotal] }
+                val comprasDoMes = PedidosCompraTable
+                    .select { PedidosCompraTable.dataCriacao greaterEq inicioMes.atZone(ZoneId.systemDefault()).toInstant() }
+                    .sumOf { row: org.jetbrains.exposed.sql.ResultRow -> row[PedidosCompraTable.valorFinalConfirmado] ?: 0.0 }
 
                 // Métricas de Produtos Finais e Estoque de Acabados
                 val totalProdutos = ProdutosFinaisTable.selectAll().count()

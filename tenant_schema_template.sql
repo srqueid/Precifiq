@@ -103,26 +103,41 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.movimento_estoque_insumo (
     criado_por INTEGER
 );
 
--- 6. Produtos Finais e Variações
 CREATE TABLE IF NOT EXISTS %SCHEMA%.produto_final (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
     descricao TEXT,
-    rendimento DOUBLE PRECISION NOT NULL,
+    rendimento_receita_base DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    rendimento DOUBLE PRECISION DEFAULT 1.0,
     rotulo VARCHAR(255)
 );
+
+ALTER TABLE %SCHEMA%.produto_final ADD COLUMN IF NOT EXISTS rendimento_receita_base DOUBLE PRECISION DEFAULT 1.0;
+ALTER TABLE %SCHEMA%.produto_final ADD COLUMN IF NOT EXISTS rendimento DOUBLE PRECISION DEFAULT 1.0;
+ALTER TABLE %SCHEMA%.produto_final ADD COLUMN IF NOT EXISTS rotulo VARCHAR(255);
+ALTER TABLE %SCHEMA%.produto_final ALTER COLUMN rendimento DROP NOT NULL;
+ALTER TABLE %SCHEMA%.produto_final ALTER COLUMN rendimento SET DEFAULT 1.0;
+
+
 
 CREATE TABLE IF NOT EXISTS %SCHEMA%.produto_variacao (
     id SERIAL PRIMARY KEY,
     produto_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_final(id) ON DELETE CASCADE,
     nome_tamanho VARCHAR(255) NOT NULL,
-    multiplicador_receita DOUBLE PRECISION NOT NULL,
-    margem_lucro DOUBLE PRECISION NOT NULL,
-    tempo_producao_segundos DOUBLE PRECISION NOT NULL,
-    custo_fixo_rateado DOUBLE PRECISION NOT NULL,
+    tamanho_medida DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    unidade_medida_tamanho_id INTEGER REFERENCES %SCHEMA%.unidade_medida(id),
+    embalagem_insumo_id INTEGER REFERENCES %SCHEMA%.insumo(id),
+    tempo_producao_minutos DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    margem_lucro DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    custo_unitario_calculado DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    estoque DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    codigo_barras VARCHAR(50),
+    multiplicador_receita DOUBLE PRECISION DEFAULT 1.0,
+    tempo_producao_segundos DOUBLE PRECISION DEFAULT 0.0,
+    custo_fixo_rateado DOUBLE PRECISION DEFAULT 0.0,
     peso_g DOUBLE PRECISION,
     preco_venda_manual DOUBLE PRECISION,
-    codigo_barras VARCHAR(50),
     descricao_visual TEXT
 );
 
@@ -190,14 +205,20 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.item_orcamento (
     id SERIAL PRIMARY KEY,
     orcamento_id INTEGER NOT NULL REFERENCES %SCHEMA%.orcamento_compra(id) ON DELETE CASCADE,
     insumo_id INTEGER NOT NULL REFERENCES %SCHEMA%.insumo(id),
-    quantidade_solicitada DOUBLE PRECISION NOT NULL
+    quantidade_solicitada DOUBLE PRECISION DEFAULT 1.0,
+    quantidade DOUBLE PRECISION DEFAULT 1.0,
+    ativo BOOLEAN DEFAULT TRUE,
+    quantidade_recebida DOUBLE PRECISION,
+    preco_unitario_recebido DOUBLE PRECISION,
+    valor_final_item DOUBLE PRECISION
 );
 
 CREATE TABLE IF NOT EXISTS %SCHEMA%.cotacao_fornecedor (
     id SERIAL PRIMARY KEY,
     item_orcamento_id INTEGER NOT NULL REFERENCES %SCHEMA%.item_orcamento(id) ON DELETE CASCADE,
     fornecedor_id INTEGER NOT NULL REFERENCES %SCHEMA%.fornecedor(id),
-    preco_cotado DOUBLE PRECISION NOT NULL,
+    preco_cotado DOUBLE PRECISION DEFAULT 0.0,
+    preco_unitario DOUBLE PRECISION DEFAULT 0.0,
     prazo_entrega_dias INTEGER,
     condicoes_pagamento VARCHAR(100),
     selecionada BOOLEAN DEFAULT FALSE,
@@ -228,23 +249,47 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido_compra_item (
 
 CREATE TABLE IF NOT EXISTS %SCHEMA%.compra (
     id SERIAL PRIMARY KEY,
+    orcamento_id INTEGER,
+    fornecedor_id INTEGER REFERENCES %SCHEMA%.fornecedor(id),
+    justificativa VARCHAR(500),
+    data_prevista TIMESTAMP WITHOUT TIME ZONE,
     data_criacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    fornecedor_id INTEGER NOT NULL REFERENCES %SCHEMA%.fornecedor(id),
-    valor_total DOUBLE PRECISION NOT NULL,
-    status VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDENTE',
+    valor_total DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     data_entrega TIMESTAMP WITHOUT TIME ZONE,
     nota_fiscal VARCHAR(100),
     observacao TEXT
 );
 
+ALTER TABLE %SCHEMA%.compra ADD COLUMN IF NOT EXISTS orcamento_id INTEGER;
+ALTER TABLE %SCHEMA%.compra ADD COLUMN IF NOT EXISTS justificativa VARCHAR(500);
+ALTER TABLE %SCHEMA%.compra ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE %SCHEMA%.compra ADD COLUMN IF NOT EXISTS valor_total DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE %SCHEMA%.compra ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'PENDENTE';
+
 CREATE TABLE IF NOT EXISTS %SCHEMA%.item_compra (
     id SERIAL PRIMARY KEY,
     compra_id INTEGER NOT NULL REFERENCES %SCHEMA%.compra(id) ON DELETE CASCADE,
+    item_orcamento_id INTEGER,
     insumo_id INTEGER NOT NULL REFERENCES %SCHEMA%.insumo(id),
-    quantidade DOUBLE PRECISION NOT NULL,
-    preco_unitario DOUBLE PRECISION NOT NULL,
-    valor_total DOUBLE PRECISION NOT NULL
+    quantidade_solicitada DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    quantidade_comprada DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    quantidade_recebida DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    preco_unitario DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    fornecedor_sugerido_id INTEGER,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    quantidade DOUBLE PRECISION DEFAULT 1.0,
+    valor_total DOUBLE PRECISION DEFAULT 0.0
 );
+
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS item_orcamento_id INTEGER;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS quantidade_solicitada DOUBLE PRECISION DEFAULT 1.0;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS quantidade_comprada DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS quantidade_recebida DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS preco_unitario DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS fornecedor_sugerido_id INTEGER;
+ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+
 
 -- 10. Pedidos de Venda
 CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido (

@@ -56,18 +56,18 @@ class FornecedorRepository {
         }
     }
 
-    fun criar(f: Fornecedor) = transaction {
+    fun criar(f: Fornecedor): Int = transaction {
         FornecedoresTable.insert {
             it[nome] = f.nome
             it[nomeEmpresa] = f.nomeEmpresa
             it[nomeFantasia] = f.nomeFantasia
-            it[cnpjCpf] = f.cnpjCpf
+            it[cnpjCpf] = f.cnpjCpf?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[mnemonico] = f.mnemonico
             it[enderecoCompleto] = f.enderecoCompleto
-            it[cep] = f.cep
+            it[cep] = f.cep?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[uf] = f.uf
             it[email] = f.email
-            it[telefones] = f.telefones
+            it[telefones] = f.telefones?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[banco] = f.banco
             it[agencia] = f.agencia
             it[contaCorrente] = f.contaCorrente
@@ -75,7 +75,7 @@ class FornecedorRepository {
             it[categoria] = f.categoria
             it[prazoPagamentoPadrao] = f.prazoPagamentoPadrao
             it[historicoAtendimento] = f.historicoAtendimento
-        }
+        }[FornecedoresTable.id]
     }
 
     fun atualizar(id: Int, f: Fornecedor) = transaction {
@@ -83,13 +83,13 @@ class FornecedorRepository {
             it[nome] = f.nome
             it[nomeEmpresa] = f.nomeEmpresa
             it[nomeFantasia] = f.nomeFantasia
-            it[cnpjCpf] = f.cnpjCpf
+            it[cnpjCpf] = f.cnpjCpf?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[mnemonico] = f.mnemonico
             it[enderecoCompleto] = f.enderecoCompleto
-            it[cep] = f.cep
+            it[cep] = f.cep?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[uf] = f.uf
             it[email] = f.email
-            it[telefones] = f.telefones
+            it[telefones] = f.telefones?.replace(Regex("\\D"), "")?.takeIf { c -> c.isNotBlank() }
             it[banco] = f.banco
             it[agencia] = f.agencia
             it[contaCorrente] = f.contaCorrente

@@ -49,6 +49,10 @@ class ProdutoFinalRepository {
             it[tamanhoMedida] = 1.0
             it[unidadeMedidaTamanhoId] = unidadeId
             it[precoVenda] = 0.0
+            it[margemLucro] = 0.0
+            it[multiplicadorReceita] = 1.0
+            it[tempoProducaoSegundos] = 0.0
+            it[custoFixoRateado] = 0.0
         }
     }
 
@@ -280,6 +284,9 @@ class ProdutoFinalRepository {
             it[precoVenda] = v.precoVenda
             it[custoUnitarioCalculado] = v.custoUnitarioCalculado
             it[codigoBarras] = v.codigoBarras?.takeIf { c -> c.isNotBlank() }
+            it[multiplicadorReceita] = 1.0
+            it[tempoProducaoSegundos] = v.tempoProducaoMinutos * 60.0
+            it[custoFixoRateado] = 0.0
         } get ProdutoVariacoesTable.id
 
         if (v.materiais.isNotEmpty()) {

@@ -77,6 +77,7 @@ class OrcamentoRepository {
             it[ItensOrcamentoTable.orcamentoId] = orcamentoId
             it[ItensOrcamentoTable.insumoId] = insumoId
             it[ItensOrcamentoTable.quantidade] = quantidade
+            it[ItensOrcamentoTable.quantidadeSolicitada] = quantidade
             it[ItensOrcamentoTable.ativo] = true
         }
     }
@@ -87,11 +88,12 @@ class OrcamentoRepository {
 
     fun lerCotacoesDoItem(itemId: Int): List<CotacaoFornecedor> = transaction {
         CotacoesFornecedorTable.select { CotacoesFornecedorTable.itemOrcamentoId eq itemId }.map {
+            val preco = if (it[CotacoesFornecedorTable.precoUnitario] > 0.0) it[CotacoesFornecedorTable.precoUnitario] else it[CotacoesFornecedorTable.precoCotado]
             CotacaoFornecedor(
                 id = it[CotacoesFornecedorTable.id],
                 itemOrcamentoId = it[CotacoesFornecedorTable.itemOrcamentoId],
                 fornecedorId = it[CotacoesFornecedorTable.fornecedorId],
-                precoUnitario = it[CotacoesFornecedorTable.precoUnitario]
+                precoUnitario = preco
             )
         }
     }
@@ -101,6 +103,7 @@ class OrcamentoRepository {
             it[CotacoesFornecedorTable.itemOrcamentoId] = itemId
             it[CotacoesFornecedorTable.fornecedorId] = fornecedorId
             it[CotacoesFornecedorTable.precoUnitario] = precoUnitario
+            it[CotacoesFornecedorTable.precoCotado] = precoUnitario
         }
     }
 
@@ -143,11 +146,16 @@ class OrcamentoRepository {
         for (item in itens) {
             val cotacaoMaisBarata = CotacoesFornecedorTable
                 .select { CotacoesFornecedorTable.itemOrcamentoId eq item.id }
-                .minByOrNull { it[CotacoesFornecedorTable.precoUnitario] }
+                .toList()
+                .minByOrNull {
+                    val p = it[CotacoesFornecedorTable.precoUnitario]
+                    if (p > 0.0) p else it[CotacoesFornecedorTable.precoCotado]
+                }
 
             if (cotacaoMaisBarata != null) {
                 val fornId = cotacaoMaisBarata[CotacoesFornecedorTable.fornecedorId]
-                val preco = cotacaoMaisBarata[CotacoesFornecedorTable.precoUnitario]
+                val precoRaw = cotacaoMaisBarata[CotacoesFornecedorTable.precoUnitario]
+                val preco = if (precoRaw > 0.0) precoRaw else cotacaoMaisBarata[CotacoesFornecedorTable.precoCotado]
                 sugestoes.add(Pair(fornId, SugestaoCompra(item.id, item.insumoId, item.quantidade, preco, preco * item.quantidade)))
             }
         }
@@ -165,7 +173,7 @@ class OrcamentoRepository {
                 .toList()
 
             val precos = cotacoes.map { row ->
-                val precoUnitario = row[CotacoesFornecedorTable.precoUnitario]
+                val precoUnitario = if (row[CotacoesFornecedorTable.precoUnitario] > 0.0) row[CotacoesFornecedorTable.precoUnitario] else row[CotacoesFornecedorTable.precoCotado]
                 mapOf(
                     "fornecedorId" to row[CotacoesFornecedorTable.fornecedorId],
                     "precoUnitario" to precoUnitario,
@@ -279,6 +287,7 @@ class OrcamentoRepository {
                 it[PedidoCompraItensTable.insumoId] = item.insumoId
                 it[PedidoCompraItensTable.quantidade] = item.quantidade
                 it[PedidoCompraItensTable.precoUnitario] = item.precoUnitario
+                it[PedidoCompraItensTable.valorTotal] = item.quantidade * item.precoUnitario
             }
         }
 
@@ -470,7 +479,7 @@ class OrcamentoRepository {
 
             val cotacoesRelatorio = cotacoesRows.map { cotRow ->
                 val fornId = cotRow[CotacoesFornecedorTable.fornecedorId]
-                val precoUnitario = cotRow[CotacoesFornecedorTable.precoUnitario]
+                val precoUnitario = if (cotRow[CotacoesFornecedorTable.precoUnitario] > 0.0) cotRow[CotacoesFornecedorTable.precoUnitario] else cotRow[CotacoesFornecedorTable.precoCotado]
                 CotacaoFornecedorRelatorio(
                     id = cotRow[CotacoesFornecedorTable.id],
                     fornecedorId = fornId,

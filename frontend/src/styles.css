@@ -472,6 +472,66 @@ th, td { border-collapse: collapse; }
   transform: none;
 }
 
+/* Google Sign-In Button */
+.google-btn {
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-strong, #cbd5e1);
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.google-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.google-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.google-icon {
+  flex-shrink: 0;
+}
+
+/* Divisor estético entre Google e Login padrão */
+.login-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 6px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.login-divider span {
+  padding: 0 12px;
+  color: var(--muted, #94a3b8);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .login-demo-section {
   border-top: 1px solid var(--border);
   padding-top: 18px;
