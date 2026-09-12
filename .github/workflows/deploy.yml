@@ -62,11 +62,11 @@ jobs:
             docker compose build --pull backend frontend
             
             # 7. DEPLOY COM HEALTHCHECK + ROLLBACK CONDICIONAL
-            # O '--wait' faz o Docker Compose segurar a execução por até 120s 
+            # O '--wait' faz o Docker Compose segurar a execução por até 180s 
             # esperando os healthchecks do backend e frontend darem 'OK'.
             # O banco de dados NÃO é afetado por este comando.
             echo "🚀 Subindo novos containers da aplicação e aguardando testes de saúde..."
-            docker compose up -d --remove-orphans --wait --wait-timeout 120 backend frontend || rollback
+            docker compose up -d --remove-orphans --wait --wait-timeout 180 backend frontend || rollback
             
             # 8. Limpeza de cache e imagens antigas sem uso para economizar disco
             echo "🧹 Limpando imagens antigas sem uso..."

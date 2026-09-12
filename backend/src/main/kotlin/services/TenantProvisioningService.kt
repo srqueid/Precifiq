@@ -36,15 +36,18 @@ class TenantProvisioningService {
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
-        // 2. Executa cada instrução DDL em sua própria transação para não abortar todo o bloco
-        for (stmt in statements) {
-            try {
-                transaction {
-                    exec(stmt)
-                }
-            } catch (e: Exception) {
-                if (e.message?.contains("already exists", ignoreCase = true) == false) {
-                    System.err.println("Aviso ao executar instrução DDL no schema $schemaName: ${e.message}")
+        // 2. Executa as instruções DDL reutilizando a mesma conexão
+        transaction {
+            val conn = connection.connection as Connection
+            conn.createStatement().use { sqlStmt ->
+                for (stmt in statements) {
+                    try {
+                        sqlStmt.execute(stmt)
+                    } catch (e: Exception) {
+                        if (e.message?.contains("already exists", ignoreCase = true) == false) {
+                            System.err.println("Aviso ao executar instrução DDL no schema $schemaName: ${e.message}")
+                        }
+                    }
                 }
             }
         }
