@@ -84,11 +84,20 @@ object DatabaseConfig {
             attempt++
             try {
                 println("INFO: Tentativa $attempt de $maxAttempts de conexão com o banco de dados...")
+                testConnection()
                 initGlobalCatalog()
                 initDefaultTenantSchema(schema)
-                testConnection()
                 connected = true
                 println("INFO: Conexão com o banco de dados estabelecida com sucesso!")
+
+                // Executa migrações estruturais legadas em background para não bloquear a inicialização do Netty
+                Thread {
+                    try {
+                        executarMigrationsLegadas()
+                    } catch (e: Exception) {
+                        System.err.println("WARN: Migrações legadas em background: ${e.message}")
+                    }
+                }.start()
             } catch (e: Exception) {
                 if (attempt >= maxAttempts) {
                     println("ERROR: Falha definitiva ao conectar ao banco após $maxAttempts tentativas: ${e.message}")
@@ -107,6 +116,19 @@ object DatabaseConfig {
 
     private fun initDefaultTenantSchema(schemaName: String) {
         try {
+            var tablesCount = 0
+            transaction {
+                exec("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$schemaName'") { rs ->
+                    if (rs.next()) {
+                        tablesCount = rs.getInt(1)
+                    }
+                }
+            }
+            if (tablesCount >= 10) {
+                println("INFO: Schema padrão '$schemaName' já existe e possui $tablesCount tabelas operacionais. Pulando DDL inicial.")
+                return
+            }
+            println("INFO: Schema padrão '$schemaName' não encontrado ou incompleto ($tablesCount tabelas). Executando provisionamento inicial...")
             val provisioningService = org.example.services.TenantProvisioningService()
             provisioningService.provisionarTenant(schemaName)
             println("INFO: Schema padrão '$schemaName' verificado/provisionado com sucesso.")
@@ -266,6 +288,18 @@ object DatabaseConfig {
     }
 
     private fun testConnection() {
+        try {
+            transaction {
+                exec("SELECT 1;")
+            }
+            println("INFO: Conexão com o banco de dados testada com sucesso (SELECT 1).")
+        } catch (e: Exception) {
+            System.err.println("WARN: Falha no teste de conexão: ${e.message}")
+            throw e
+        }
+    }
+
+    private fun executarMigrationsLegadas() {
         val schema = env("DB_SCHEMA") ?: "controle"
         try {
             transaction {

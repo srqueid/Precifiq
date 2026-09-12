@@ -52,10 +52,10 @@ services:
       - "traefik.http.routers.precifiq-backend.middlewares=precifiq-https"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8081/api/health" ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 6
-      start_period: 40s
+      retries: 15
+      start_period: 20s
     networks:
       - precifiq-app-network
 
