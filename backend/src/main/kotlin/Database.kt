@@ -33,11 +33,11 @@ object DatabaseConfig {
 
     fun connect() {
         val jdbcUrl = env("JDBC_DATABASE_URL")
-        val host = env("DB_HOST") ?: "localhost"
-        val port = env("DB_PORT") ?: "5432"
-        val dbName = env("DB_NAME") ?: "postgres"
-        val user = env("DB_USER") ?: env("JDBC_DATABASE_USERNAME") ?: "postgres"
-        val password = env("DB_PASSWORD") ?: env("JDBC_DATABASE_PASSWORD") ?: "localhost"
+        val host = env("DB_HOST") ?: "postgres"
+        val port = env("DB_PORT") ?: "5444"
+        val dbName = env("DB_NAME") ?: "precifiq_db"
+        val user = env("DB_USER") ?: env("JDBC_DATABASE_USERNAME") ?: "precifiq_user"
+        val password = env("DB_PASSWORD") ?: env("JDBC_DATABASE_PASSWORD") ?: "p2QL+2Svy&3cQUaM"
         val sslMode = env("DB_SSLMODE") ?: if (host == "postgres" || host == "localhost" || host == "127.0.0.1") "disable" else "require"
         val schema = env("DB_SCHEMA") ?: "controle"
 
@@ -73,9 +73,33 @@ object DatabaseConfig {
 
         Database.connect(multiTenantDataSource)
 
-        initGlobalCatalog()
-        initDefaultTenantSchema(schema)
-        testConnection()
+        val maxAttempts = 15
+        var attempt = 0
+        var connected = false
+
+        while (!connected && attempt < maxAttempts) {
+            attempt++
+            try {
+                println("INFO: Tentativa $attempt de $maxAttempts de conexão com o banco de dados...")
+                initGlobalCatalog()
+                initDefaultTenantSchema(schema)
+                testConnection()
+                connected = true
+                println("INFO: Conexão com o banco de dados estabelecida com sucesso!")
+            } catch (e: Exception) {
+                if (attempt >= maxAttempts) {
+                    println("ERROR: Falha definitiva ao conectar ao banco após $maxAttempts tentativas: ${e.message}")
+                    throw e
+                }
+                println("WARN: Banco ainda não disponível (${e.message}). Aguardando 3s antes da próxima tentativa...")
+                try {
+                    Thread.sleep(3000)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+            }
+        }
     }
 
     private fun initDefaultTenantSchema(schemaName: String) {
