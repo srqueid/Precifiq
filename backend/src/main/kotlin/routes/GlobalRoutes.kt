@@ -440,21 +440,25 @@ fun Route.globalRoutes() {
                     return@post
                 }
 
-                // Determina o schema da empresa (matriz ou filial_<slug>)
-                val finalSchema = if (!req.schemaName.isNullOrBlank()) {
-                    req.schemaName.trim().lowercase()
+                // Determina o schema da empresa (ex.: db_galeriavagalume)
+                val rawSchema = req.schemaName?.trim()?.lowercase()
+                val finalSchema = if (!rawSchema.isNullOrBlank() && rawSchema !in listOf("matriz", "public", "filial_", "filial")) {
+                    val clean = rawSchema.replace(Regex("[^a-z0-9]"), "")
+                    if (clean.startsWith("db_")) clean else if (clean.startsWith("db")) "db_${clean.removePrefix("db")}" else "db_$clean"
                 } else {
                     TenantContext.generateTenantSchema(req.nomeFantasia, tipo)
                 }
 
-                // Determina o banco de dados da empresa (ex.: bd_controle)
-                val finalBancoDados = if (!req.bancoDados.isNullOrBlank()) {
-                    req.bancoDados.trim().lowercase()
-                } else if (tipo == "FILIAL") {
+                // Determina o banco de dados da empresa (ex.: bd_galeriavagalume)
+                val rawBanco = req.bancoDados?.trim()?.lowercase()
+                val finalBancoDados = if (!rawBanco.isNullOrBlank() && rawBanco !in listOf("bd_controle", "public", "matriz")) {
+                    val clean = rawBanco.replace(Regex("[^a-z0-9]"), "")
+                    if (clean.startsWith("bd_")) clean else if (clean.startsWith("bd")) "bd_${clean.removePrefix("bd")}" else "bd_$clean"
+                } else if (tipo == "FILIAL" && req.matrizId != null) {
                     val matrizBanco = transaction {
                         EmpresasTable.select { EmpresasTable.id eq req.matrizId!! }.firstOrNull()?.get(EmpresasTable.bancoDados)
                     }
-                    matrizBanco ?: "bd_controle"
+                    matrizBanco ?: TenantContext.generateDatabaseName(req.nomeFantasia)
                 } else {
                     TenantContext.generateDatabaseName(req.nomeFantasia)
                 }

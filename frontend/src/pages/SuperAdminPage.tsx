@@ -210,8 +210,8 @@ export const SuperAdminPage: React.FC = () => {
     nomeFantasia: '',
     razaoSocial: '',
     cnpj: '',
-    bancoDados: 'bd_controle',
-    schemaName: 'matriz',
+    bancoDados: '',
+    schemaName: '',
     adminNome: '',
     adminEmail: '',
     adminSenha: ''
@@ -221,7 +221,7 @@ export const SuperAdminPage: React.FC = () => {
     matrizId: 1,
     nomeFilial: '',
     cnpj: '',
-    schemaName: 'filial_',
+    schemaName: '',
     provisionarAuto: true,
     adminVinculadoId: 0,
     adminNome: '',
@@ -351,9 +351,13 @@ export const SuperAdminPage: React.FC = () => {
 
     setIsSavingEmpresa(true);
     try {
-      const slug = formMatriz.nomeFantasia.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      const dbAuto = formMatriz.bancoDados.trim() || ('bd_' + slug).substring(0, 50);
-      const schemaAuto = formMatriz.schemaName.trim() || 'matriz';
+      const clean = formMatriz.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const dbAuto = (formMatriz.bancoDados.trim() && formMatriz.bancoDados.trim() !== 'bd_controle')
+        ? formMatriz.bancoDados.trim()
+        : (`bd_${clean}` || 'bd_empresa');
+      const schemaAuto = (formMatriz.schemaName.trim() && formMatriz.schemaName.trim() !== 'matriz')
+        ? formMatriz.schemaName.trim()
+        : (`db_${clean}` || 'db_empresa');
 
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
@@ -378,7 +382,7 @@ export const SuperAdminPage: React.FC = () => {
 
       showFeedback('success', `Nova Matriz provisionada no banco '${dbAuto}' com schema '${schemaAuto}' e governança 'global'!`);
       setIsModalNovaMatrizOpen(false);
-      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: 'bd_controle', schemaName: 'matriz', adminNome: '', adminEmail: '', adminSenha: '' });
+      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: '', schemaName: '', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
       await carregarUsuarios();
     } catch (err: any) {
@@ -396,8 +400,10 @@ export const SuperAdminPage: React.FC = () => {
     setIsSavingEmpresa(true);
     try {
       const matrizPai = empresasHierarquia.find(m => m.id === Number(formFilial.matrizId));
-      const slug = formFilial.nomeFilial.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      const schemaAuto = formFilial.schemaName.trim() || ('filial_' + slug).substring(0, 50);
+      const clean = formFilial.nomeFilial.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const schemaAuto = formFilial.schemaName.trim() && !formFilial.schemaName.trim().startsWith('filial_')
+        ? formFilial.schemaName.trim()
+        : (`db_${clean}` || 'db_filial');
 
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
@@ -427,7 +433,7 @@ export const SuperAdminPage: React.FC = () => {
         matrizId: empresasHierarquia[0]?.id || 1,
         nomeFilial: '',
         cnpj: '',
-        schemaName: 'filial_',
+        schemaName: '',
         provisionarAuto: true,
         adminVinculadoId: 0,
         adminNome: '',
@@ -1434,7 +1440,8 @@ export const SuperAdminPage: React.FC = () => {
                   value={formFilial.nomeFilial}
                   onChange={(e) => {
                     const nome = e.target.value;
-                    const autoSchema = 'emp_filial_' + nome.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 40);
+                    const clean = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+                    const autoSchema = clean ? `db_${clean}` : '';
                     setFormFilial(prev => ({ ...prev, nomeFilial: nome, schemaName: autoSchema }));
                   }}
                   className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-slate-500 focus:outline-none"
@@ -1943,12 +1950,13 @@ export const SuperAdminPage: React.FC = () => {
                     value={formMatriz.nomeFantasia}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                      const clean = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
                       setFormMatriz(prev => ({
                         ...prev,
                         nomeFantasia: val,
                         razaoSocial: prev.razaoSocial || val,
-                        bancoDados: slug ? `bd_${slug}` : 'bd_controle'
+                        bancoDados: clean ? `bd_${clean}` : '',
+                        schemaName: clean ? `db_${clean}` : ''
                       }));
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
@@ -2009,7 +2017,7 @@ export const SuperAdminPage: React.FC = () => {
                       onChange={(e) => setFormMatriz(prev => ({ ...prev, schemaName: e.target.value }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono bg-slate-50 font-bold text-purple-700"
                     />
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">Padrão: matriz ou controle</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Padrão: db_&lt;empresa&gt; (ex.: db_galeriavagalume)</span>
                   </div>
                 </div>
 
@@ -2150,11 +2158,11 @@ export const SuperAdminPage: React.FC = () => {
                     value={formFilial.nomeFilial}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                      const clean = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
                       setFormFilial(prev => ({
                         ...prev,
                         nomeFilial: val,
-                        schemaName: slug ? `filial_${slug}` : 'filial_'
+                        schemaName: clean ? `db_${clean}` : ''
                       }));
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-teal-500"
@@ -2167,12 +2175,12 @@ export const SuperAdminPage: React.FC = () => {
                     <input
                       type="text"
                       required
-                      placeholder="filial_shopping"
+                      placeholder="db_filialshopping"
                       value={formFilial.schemaName}
                       onChange={(e) => setFormFilial(prev => ({ ...prev, schemaName: e.target.value }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono bg-slate-50 font-bold text-teal-700"
                     />
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">Convenção: filial_&lt;nome&gt;</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Convenção: db_&lt;nome&gt;</span>
                   </div>
                   <div>
                     <label className="text-[10px] text-slate-600 font-bold block mb-1">CNPJ da Filial</label>

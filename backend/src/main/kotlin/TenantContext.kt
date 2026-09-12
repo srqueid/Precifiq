@@ -37,15 +37,10 @@ object TenantContext {
         val normalized = Normalizer.normalize(nome, Normalizer.Form.NFD)
             .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
             .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]"), "_")
-            .replace(Regex("_+"), "_")
-            .trim('_')
+            .replace(Regex("[^a-z0-9]"), "")
 
-        val base = if (tipo.equals("MATRIZ", ignoreCase = true)) {
-            if (normalized == "matriz" || normalized.startsWith("matriz_")) normalized else "matriz"
-        } else {
-            if (normalized.startsWith("filial_")) normalized else "filial_$normalized"
-        }
+        val clean = if (normalized.isBlank()) "empresa" else normalized
+        val base = if (clean.startsWith("db_")) clean else "db_$clean"
         return if (base.length > 60) base.substring(0, 60) else base
     }
 
@@ -53,11 +48,10 @@ object TenantContext {
         val normalized = Normalizer.normalize(nomeEmpresa, Normalizer.Form.NFD)
             .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
             .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]"), "_")
-            .replace(Regex("_+"), "_")
-            .trim('_')
+            .replace(Regex("[^a-z0-9]"), "")
 
-        val base = if (normalized.startsWith("bd_")) normalized else "bd_$normalized"
+        val clean = if (normalized.isBlank()) "empresa" else normalized
+        val base = if (clean.startsWith("bd_")) clean else "bd_$clean"
         return if (base.length > 60) base.substring(0, 60) else base
     }
 
