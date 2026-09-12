@@ -650,7 +650,84 @@ fun Route.globalRoutes() {
             }
         }
 
-        // 3.3 Exclusão de Empresa ou Filial (Exclusivo Superusuário DcSys)
+        // 3.3 Atualização de Empresa ou Filial (Exclusivo Superusuário DcSys)
+        put("/empresas/{id}") {
+            try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                if (!isSuper) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Acesso restrito: Apenas o Superusuário (DcSys) pode atualizar empresas e filiais.")
+                    )
+                    return@put
+                }
+
+                val id = call.parameters["id"]?.toIntOrNull() ?: throw IllegalArgumentException("ID de empresa inválido")
+                val req = call.receive<AtualizarEmpresaRequest>()
+
+                val empresaAtualizada = transaction {
+                    val row = EmpresasTable.select { EmpresasTable.id eq id }.firstOrNull()
+                        ?: throw IllegalArgumentException("Empresa não encontrada")
+
+                    val tipo = row[EmpresasTable.tipo]
+
+                    EmpresasTable.update({ EmpresasTable.id eq id }) {
+                        if (!req.nomeFantasia.isNullOrBlank()) {
+                            it[nomeFantasia] = req.nomeFantasia.trim()
+                        }
+                        if (req.razaoSocial != null) {
+                            it[razaoSocial] = req.razaoSocial.trim()
+                        }
+                        if (req.cnpj != null) {
+                            it[cnpj] = req.cnpj.replace(Regex("\\D"), "").takeIf { c -> c.isNotBlank() }
+                        }
+                        if (req.ativo != null) {
+                            it[ativo] = req.ativo
+                            // Se for MATRIZ e estiver sendo inativada (exclusão lógica), inativa em cascata todas as filiais
+                            if (tipo.equals("MATRIZ", ignoreCase = true) && !req.ativo) {
+                                EmpresasTable.update({ EmpresasTable.matrizId eq id }) { f ->
+                                    f[ativo] = false
+                                    f[atualizadoEm] = java.time.LocalDateTime.now()
+                                }
+                            }
+                        }
+                        it[atualizadoEm] = java.time.LocalDateTime.now()
+                    }
+
+                    EmpresasTable.select { EmpresasTable.id eq id }.first().let { r ->
+                        EmpresaDTO(
+                            id = r[EmpresasTable.id],
+                            tipo = r[EmpresasTable.tipo],
+                            matrizId = r[EmpresasTable.matrizId],
+                            nomeFantasia = r[EmpresasTable.nomeFantasia],
+                            razaoSocial = r[EmpresasTable.razaoSocial],
+                            cnpj = r[EmpresasTable.cnpj],
+                            schemaName = r[EmpresasTable.schemaName],
+                            bancoDados = r[EmpresasTable.bancoDados],
+                            ativo = r[EmpresasTable.ativo],
+                            criadoEm = r[EmpresasTable.criadoEm].toString()
+                        )
+                    }
+                }
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Atualizada ${empresaAtualizada.tipo} '${empresaAtualizada.nomeFantasia}' (ativo: ${empresaAtualizada.ativo})",
+                    tabela = "empresa",
+                    registroId = id,
+                    ipOrigem = call.getCallerIp()
+                )
+
+                call.respond(HttpStatusCode.OK, empresaAtualizada)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao atualizar empresa")))
+            }
+        }
+
+        // 3.4 Exclusão LÓGICA de Empresa ou Filial (Exclusivo Superusuário DcSys)
+        // Ao excluir uma MATRIZ, todas as suas filiais são automaticamente excluídas logicamente em cascata
         delete("/empresas/{id}") {
             try {
                 val (isSuper, callerEmail) = call.checkSuperuser()
@@ -683,42 +760,38 @@ fun Route.globalRoutes() {
                 val ip = call.getCallerIp()
 
                 if (tipo.equals("MATRIZ", ignoreCase = true)) {
-                    val filiais = transaction {
+                    val filiaisAfetadas = transaction {
+                        // 1. Exclusão lógica em cascata de todas as filiais da matriz
+                        EmpresasTable.update({ EmpresasTable.matrizId eq id }) {
+                            it[ativo] = false
+                            it[atualizadoEm] = java.time.LocalDateTime.now()
+                        }
+                        // 2. Exclusão lógica da matriz
+                        EmpresasTable.update({ EmpresasTable.id eq id }) {
+                            it[ativo] = false
+                            it[atualizadoEm] = java.time.LocalDateTime.now()
+                        }
+
                         EmpresasTable.select { EmpresasTable.matrizId eq id }.map { row ->
-                            Triple(row[EmpresasTable.id], row[EmpresasTable.nomeFantasia], row[EmpresasTable.schemaName])
+                            Pair(row[EmpresasTable.id], row[EmpresasTable.nomeFantasia])
                         }
                     }
 
-                    for ((fId, fNome, fSchema) in filiais) {
-                        transaction {
-                            UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq fId }
-                            EmpresasTable.deleteWhere { EmpresasTable.id eq fId }
-                            try {
-                                exec("DROP SCHEMA IF EXISTS \"$fSchema\" CASCADE;")
-                            } catch (_: Exception) {}
-                        }
+                    for ((fId, fNome) in filiaisAfetadas) {
                         registrarAuditoriaGlobal(
                             usuario = callerEmail,
                             funcao = "SUPERUSER",
-                            atividadeRealizada = "Excluída Filial '$fNome' (schema: $fSchema) em cascata com a Matriz ID $id",
+                            atividadeRealizada = "Exclusão lógica da Filial '$fNome' (ID $fId) em cascata pela Matriz ID $id",
                             tabela = "empresa",
                             registroId = fId,
                             ipOrigem = ip
                         )
                     }
 
-                    transaction {
-                        UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq id }
-                        EmpresasTable.deleteWhere { EmpresasTable.id eq id }
-                        try {
-                            exec("DROP SCHEMA IF EXISTS \"$schema\" CASCADE;")
-                        } catch (_: Exception) {}
-                    }
-
                     registrarAuditoriaGlobal(
                         usuario = callerEmail,
                         funcao = "SUPERUSER",
-                        atividadeRealizada = "Excluída Matriz '$nome' (schema: $schema) e todas as suas filiais vinculadas",
+                        atividadeRealizada = "Exclusão lógica da Matriz '$nome' (schema: $schema) e suas ${filiaisAfetadas.size} filial(is) em cascata",
                         tabela = "empresa",
                         registroId = id,
                         ipOrigem = ip
@@ -726,21 +799,23 @@ fun Route.globalRoutes() {
 
                     call.respond(
                         HttpStatusCode.OK,
-                        mapOf("message" to "Matriz '$nome' e suas filiais vinculadas foram excluídas com sucesso.")
+                        mapOf(
+                            "message" to "Matriz '$nome' e suas filiais vinculadas foram excluídas logicamente com sucesso.",
+                            "filiaisAfetadas" to filiaisAfetadas.size
+                        )
                     )
                 } else {
                     transaction {
-                        UsuarioEmpresasTable.deleteWhere { UsuarioEmpresasTable.empresaId eq id }
-                        EmpresasTable.deleteWhere { EmpresasTable.id eq id }
-                        try {
-                            exec("DROP SCHEMA IF EXISTS \"$schema\" CASCADE;")
-                        } catch (_: Exception) {}
+                        EmpresasTable.update({ EmpresasTable.id eq id }) {
+                            it[ativo] = false
+                            it[atualizadoEm] = java.time.LocalDateTime.now()
+                        }
                     }
 
                     registrarAuditoriaGlobal(
                         usuario = callerEmail,
                         funcao = "SUPERUSER",
-                        atividadeRealizada = "Excluída Filial '$nome' (schema: $schema)",
+                        atividadeRealizada = "Exclusão lógica da Filial '$nome' (schema: $schema)",
                         tabela = "empresa",
                         registroId = id,
                         ipOrigem = ip
@@ -748,12 +823,60 @@ fun Route.globalRoutes() {
 
                     call.respond(
                         HttpStatusCode.OK,
-                        mapOf("message" to "Filial '$nome' foi excluída com sucesso.")
+                        mapOf("message" to "Filial '$nome' foi excluída logicamente com sucesso.")
                     )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao excluir empresa/filial")))
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao excluir logicamente empresa/filial")))
+            }
+        }
+
+        // 3.5 Reativação de Empresa ou Filial (Exclusivo Superusuário DcSys)
+        patch("/empresas/{id}/reativar") {
+            try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                if (!isSuper) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Acesso restrito."))
+                    return@patch
+                }
+                val id = call.parameters["id"]?.toIntOrNull() ?: throw IllegalArgumentException("ID inválido")
+
+                val empresa = transaction {
+                    val row = EmpresasTable.select { EmpresasTable.id eq id }.firstOrNull()
+                        ?: throw IllegalArgumentException("Empresa não encontrada")
+
+                    val tipo = row[EmpresasTable.tipo]
+                    val matrizId = row[EmpresasTable.matrizId]
+
+                    // Se for filial e a matriz estiver inativa, reativa a matriz também para manter consistência
+                    if (tipo.equals("FILIAL", ignoreCase = true) && matrizId != null) {
+                        EmpresasTable.update({ EmpresasTable.id eq matrizId }) {
+                            it[ativo] = true
+                            it[atualizadoEm] = java.time.LocalDateTime.now()
+                        }
+                    }
+
+                    EmpresasTable.update({ EmpresasTable.id eq id }) {
+                        it[ativo] = true
+                        it[atualizadoEm] = java.time.LocalDateTime.now()
+                    }
+
+                    Pair(row[EmpresasTable.nomeFantasia], tipo)
+                }
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SUPERUSER",
+                    atividadeRealizada = "Reativação lógica da ${empresa.second} '${empresa.first}'",
+                    tabela = "empresa",
+                    registroId = id,
+                    ipOrigem = call.getCallerIp()
+                )
+
+                call.respond(HttpStatusCode.OK, mapOf("message" to "${empresa.second} '${empresa.first}' reativada com sucesso!"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao reativar empresa")))
             }
         }
 

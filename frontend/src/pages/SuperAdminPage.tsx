@@ -35,7 +35,9 @@ import {
   HelpCircle,
   FolderTree,
   Shield,
-  Briefcase
+  Briefcase,
+  RotateCcw,
+  XCircle
 } from 'lucide-react';
 import { useTenant, EmpresaHierarquia, EmpresaItem } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -228,6 +230,19 @@ export const SuperAdminPage: React.FC = () => {
     adminEmail: '',
     adminSenha: ''
   });
+
+  // Estado para Edição de Empresa / Filial (CRUD Superusuário)
+  const [empresaParaEditar, setEmpresaParaEditar] = useState<{
+    id: number;
+    nomeFantasia: string;
+    razaoSocial: string;
+    cnpj: string;
+    tipo: string;
+    schemaName: string;
+    bancoDados: string;
+    ativo: boolean;
+  } | null>(null);
+  const [isSalvandoEdicaoEmpresa, setIsSalvandoEdicaoEmpresa] = useState(false);
 
   // Formulário Novo Administrador (Imagem 1)
   const [formNovoAdmin, setFormNovoAdmin] = useState({
@@ -446,6 +461,80 @@ export const SuperAdminPage: React.FC = () => {
       showFeedback('error', err.message || 'Falha ao provisionar Filial');
     } finally {
       setIsSavingEmpresa(false);
+    }
+  };
+
+  // Handlers CRUD Superusuário para Empresas (Editar, Exclusão Lógica e Reativar)
+  const handleSalvarEdicaoEmpresa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empresaParaEditar) return;
+    setIsSalvandoEdicaoEmpresa(true);
+    try {
+      const res = await fetch(`/api/global/empresas/${empresaParaEditar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nomeFantasia: empresaParaEditar.nomeFantasia.trim(),
+          razaoSocial: empresaParaEditar.razaoSocial.trim() || empresaParaEditar.nomeFantasia.trim(),
+          cnpj: onlyNumbers(empresaParaEditar.cnpj) || null,
+          ativo: empresaParaEditar.ativo
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erro ao atualizar' }));
+        throw new Error(err.error || 'Erro ao atualizar empresa');
+      }
+      showFeedback('success', `Empresa '${empresaParaEditar.nomeFantasia}' atualizada com sucesso!`);
+      setEmpresaParaEditar(null);
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Falha ao atualizar empresa');
+    } finally {
+      setIsSalvandoEdicaoEmpresa(false);
+    }
+  };
+
+  const handleExcluirLogicoEmpresa = async (id: number, nome: string, tipo: string) => {
+    const isMatriz = tipo.toUpperCase() === 'MATRIZ';
+    const msg = isMatriz
+      ? `ATENÇÃO: A exclusão lógica da Matriz "${nome}" inativará automaticamente TODAS as suas filiais vinculadas em cascata.\n\nOs bancos e dados das empresas serão PRESERVADOS.\n\nDeseja confirmar a exclusão lógica?`
+      : `Deseja realmente excluir logicamente a filial "${nome}"?\n\nOs dados operacionais serão preservados e poderão ser reativados a qualquer momento.`;
+
+    if (!window.confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/api/global/empresas/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erro ao excluir logicamente' }));
+        throw new Error(err.error || 'Erro ao excluir logicamente');
+      }
+      const data = await res.json();
+      showFeedback('success', data.message || 'Exclusão lógica realizada com sucesso!');
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Falha ao excluir logicamente empresa');
+    }
+  };
+
+  const handleReativarEmpresa = async (id: number, nome: string) => {
+    if (!window.confirm(`Deseja reativar a empresa "${nome}" no sistema?`)) return;
+    try {
+      const res = await fetch(`/api/global/empresas/${id}/reativar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erro ao reativar' }));
+        throw new Error(err.error || 'Erro ao reativar');
+      }
+      const data = await res.json();
+      showFeedback('success', data.message || 'Empresa reativada com sucesso!');
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Falha ao reativar empresa');
     }
   };
 
@@ -862,6 +951,7 @@ export const SuperAdminPage: React.FC = () => {
                     <th className="py-3 px-4">Governança</th>
                     <th className="py-3 px-4">CNPJ</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -899,7 +989,52 @@ export const SuperAdminPage: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">{matriz.cnpj || '—'}</td>
                           <td className="py-3 px-4 text-center">
-                            <CheckCircle2 size={16} className="text-emerald-600 inline" />
+                            {matriz.ativo ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <CheckCircle2 size={12} /> Ativa
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                <XCircle size={12} /> Inativa
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => setEmpresaParaEditar({
+                                  id: matriz.id,
+                                  nomeFantasia: matriz.nomeFantasia,
+                                  razaoSocial: matriz.razaoSocial || '',
+                                  cnpj: matriz.cnpj || '',
+                                  tipo: 'MATRIZ',
+                                  schemaName: matriz.schemaName,
+                                  bancoDados: matriz.bancoDados || 'bd_controle',
+                                  ativo: matriz.ativo
+                                })}
+                                className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Editar Matriz"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              {matriz.ativo ? (
+                                <button
+                                  onClick={() => handleExcluirLogicoEmpresa(matriz.id, matriz.nomeFantasia, 'MATRIZ')}
+                                  className="p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="Exclusão Lógica da Matriz (inativa também as filiais em cascata)"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleReativarEmpresa(matriz.id, matriz.nomeFantasia)}
+                                  className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                  title="Reativar Matriz"
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
 
@@ -935,7 +1070,52 @@ export const SuperAdminPage: React.FC = () => {
                               </td>
                               <td className="py-2.5 px-4 text-slate-600 font-mono text-[11px]">{filial.cnpj || matriz.cnpj || '—'}</td>
                               <td className="py-2.5 px-4 text-center">
-                                <CheckCircle2 size={16} className="text-emerald-600 inline" />
+                                {filial.ativo ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                    <CheckCircle2 size={11} /> Ativa
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                    <XCircle size={11} /> Inativa
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => setEmpresaParaEditar({
+                                      id: filial.id,
+                                      nomeFantasia: filial.nomeFantasia,
+                                      razaoSocial: filial.razaoSocial || '',
+                                      cnpj: filial.cnpj || '',
+                                      tipo: 'FILIAL',
+                                      schemaName: filial.schemaName,
+                                      bancoDados: filial.bancoDados || matriz.bancoDados || 'bd_controle',
+                                      ativo: filial.ativo
+                                    })}
+                                    className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                    title="Editar Filial"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  {filial.ativo ? (
+                                    <button
+                                      onClick={() => handleExcluirLogicoEmpresa(filial.id, filial.nomeFantasia, 'FILIAL')}
+                                      className="p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                      title="Exclusão Lógica da Filial"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleReativarEmpresa(filial.id, filial.nomeFantasia)}
+                                      className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                      title="Reativar Filial"
+                                    >
+                                      <RotateCcw size={13} />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2254,6 +2434,114 @@ export const SuperAdminPage: React.FC = () => {
                 >
                   {isSavingEmpresa ? <Loader2 size={13} className="animate-spin" /> : null}
                   <span>Provisionar Filial</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Empresa / Filial (CRUD Superusuário) */}
+      {empresaParaEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 bg-[#2b394e] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit2 size={18} className="text-blue-400" />
+                <h3 className="text-sm font-bold">
+                  Editar {empresaParaEditar.tipo === 'MATRIZ' ? 'Matriz' : 'Filial'}: {empresaParaEditar.nomeFantasia}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEmpresaParaEditar(null)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSalvarEdicaoEmpresa} className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nome Fantasia *</label>
+                <input
+                  type="text"
+                  required
+                  value={empresaParaEditar.nomeFantasia}
+                  onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, nomeFantasia: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Razão Social</label>
+                  <input
+                    type="text"
+                    value={empresaParaEditar.razaoSocial}
+                    onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, razaoSocial: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">CNPJ</label>
+                  <input
+                    type="text"
+                    value={empresaParaEditar.cnpj}
+                    onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, cnpj: maskCnpj(e.target.value) })}
+                    maxLength={18}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Schema PostgreSQL (Isolado)</label>
+                  <span className="font-mono text-xs text-purple-800 font-bold">{empresaParaEditar.schemaName}</span>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Banco de Dados</label>
+                  <span className="font-mono text-xs text-blue-800 font-bold">{empresaParaEditar.bancoDados}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border rounded-lg">
+                <input
+                  type="checkbox"
+                  id="chkAtivoEmpresa"
+                  checked={empresaParaEditar.ativo}
+                  onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, ativo: e.target.checked })}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                />
+                <label htmlFor="chkAtivoEmpresa" className="text-xs font-bold text-slate-800 cursor-pointer">
+                  Empresa Ativa no Sistema
+                </label>
+              </div>
+
+              {empresaParaEditar.tipo === 'MATRIZ' && !empresaParaEditar.ativo && (
+                <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                  <AlertCircle size={15} className="text-amber-700 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Atenção:</strong> Ao inativar uma Matriz, todas as suas filiais vinculadas serão inativadas automaticamente em cascata.
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEmpresaParaEditar(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSalvandoEdicaoEmpresa}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                >
+                  {isSalvandoEdicaoEmpresa ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  <span>Salvar Alterações</span>
                 </button>
               </div>
             </form>
