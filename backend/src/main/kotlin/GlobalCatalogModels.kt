@@ -121,6 +121,13 @@ data class CriarEmpresaRequest(
     val adminSenha: String? = null
 )
 
+data class AtualizarEmpresaRequest(
+    val nomeFantasia: String? = null,
+    val razaoSocial: String? = null,
+    val cnpj: String? = null,
+    val ativo: Boolean? = null
+)
+
 data class PerfilDTO(
     val id: Int,
     val codigo: String,

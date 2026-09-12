@@ -139,9 +139,10 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             m.filiais?.forEach(f => allCompanies.push(f));
           });
 
-          const currentStillExists = allCompanies.some(c => c.schemaName === activeCompanyRef.current?.schemaName);
-          if (!currentStillExists && allCompanies.length > 0) {
-            selectCompany(allCompanies[0]);
+          const currentStillActive = allCompanies.some(c => c.schemaName === activeCompanyRef.current?.schemaName && c.ativo);
+          if (!currentStillActive && allCompanies.length > 0) {
+            const firstActive = allCompanies.find(c => c.ativo) || allCompanies[0];
+            selectCompany(firstActive);
           }
         }
       }

@@ -24,7 +24,11 @@ import {
   Wrench,
   Lock,
   ShieldAlert,
-  AlertTriangle
+  AlertTriangle,
+  Edit2,
+  Trash2,
+  RotateCcw,
+  XCircle
 } from 'lucide-react';
 import { useTenant, EmpresaHierarquia, EmpresaItem } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -93,6 +97,8 @@ export const GestaoGlobalPage: React.FC = () => {
   const [isModalNovaMatrizOpen, setIsModalNovaMatrizOpen] = useState(false);
   const [isModalNovaFilialOpen, setIsModalNovaFilialOpen] = useState(false);
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
+  const [empresaParaEditar, setEmpresaParaEditar] = useState<EmpresaItem | null>(null);
+  const [isSalvandoEdicaoEmpresa, setIsSalvandoEdicaoEmpresa] = useState(false);
 
   // Modais de Usuário
   const [isModalNovoUsuarioOpen, setIsModalNovoUsuarioOpen] = useState(false);
@@ -323,6 +329,71 @@ export const GestaoGlobalPage: React.FC = () => {
       showFeedback('error', err.message || 'Erro inesperado ao criar filial');
     } finally {
       setIsSavingEmpresa(false);
+    }
+  };
+
+  // Handlers de CRUD de Empresas (Superusuário DcSys)
+  const handleSalvarEdicaoEmpresa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empresaParaEditar) return;
+    setIsSalvandoEdicaoEmpresa(true);
+    try {
+      const res = await fetch(`/api/global/empresas/${empresaParaEditar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nomeFantasia: empresaParaEditar.nomeFantasia,
+          razaoSocial: empresaParaEditar.razaoSocial,
+          cnpj: onlyNumbers(empresaParaEditar.cnpj || ''),
+          ativo: empresaParaEditar.ativo
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar empresa');
+      showFeedback('success', data.mensagem || 'Empresa atualizada com sucesso!');
+      setEmpresaParaEditar(null);
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Erro ao atualizar empresa');
+    } finally {
+      setIsSalvandoEdicaoEmpresa(false);
+    }
+  };
+
+  const handleExcluirLogicoEmpresa = async (empresa: { id: number; nomeFantasia: string; tipo: string }) => {
+    const isMatriz = empresa.tipo === 'MATRIZ';
+    const msg = isMatriz
+      ? `ATENÇÃO: Deseja realmente excluir/inativar a Matriz "${empresa.nomeFantasia}"?\n\nTodas as filiais vinculadas a esta matriz serão AUTOMATICAMENTE EXCLUÍDAS/INATIVADAS logicamente em cascata!`
+      : `Deseja realmente excluir/inativar a Filial "${empresa.nomeFantasia}" logicamente?`;
+
+    if (!window.confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/api/global/empresas/${empresa.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao inativar empresa');
+      showFeedback('success', data.message || 'Empresa excluída logicamente com sucesso!');
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Erro ao excluir logicamente');
+    }
+  };
+
+  const handleReativarEmpresa = async (empresa: { id: number; nomeFantasia: string; tipo: string }) => {
+    if (!window.confirm(`Deseja reativar a ${empresa.tipo === 'MATRIZ' ? 'Matriz' : 'Filial'} "${empresa.nomeFantasia}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/global/empresas/${empresa.id}/reativar`, {
+        method: 'PATCH'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao reativar empresa');
+      showFeedback('success', data.message || 'Empresa reativada com sucesso!');
+      await refreshEmpresas();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Erro ao reativar empresa');
     }
   };
 
@@ -695,6 +766,16 @@ export const GestaoGlobalPage: React.FC = () => {
                             <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 uppercase">
                               Matriz
                             </span>
+                            {matriz.ativo ? (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                                Ativa
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
+                                <XCircle size={12} />
+                                Inativa (Excluída)
+                              </span>
+                            )}
                             {isMatrizAtiva && (
                               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800 flex items-center gap-1">
                                 <CheckCircle2 size={12} />
@@ -744,8 +825,8 @@ export const GestaoGlobalPage: React.FC = () => {
                             {statusMatriz && (
                               <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full flex items-center gap-1 ${
                                 statusMatriz.status === 'PROVISIONADO' 
-                                  ? 'bg-emerald-100 text-emerald-800' 
-                                  : 'bg-amber-100 text-amber-800'
+                                   ? 'bg-emerald-100 text-emerald-800' 
+                                   : 'bg-amber-100 text-amber-800'
                               }`}>
                                 <Server size={11} />
                                 <span>{statusMatriz.tabelasTotal}/16 tabelas ({statusMatriz.status})</span>
@@ -756,7 +837,53 @@ export const GestaoGlobalPage: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {!isMatrizAtiva && (
+                        {/* Ações Administrativas de CRUD (Superusuário DcSys) */}
+                        {isSuperuser && (
+                          <div className="flex items-center gap-1.5 mr-2 border-r pr-2 border-gray-300">
+                            <button
+                              type="button"
+                              onClick={() => setEmpresaParaEditar({
+                                id: matriz.id,
+                                nomeFantasia: matriz.nomeFantasia,
+                                razaoSocial: matriz.razaoSocial || '',
+                                cnpj: matriz.cnpj || '',
+                                tipo: 'MATRIZ',
+                                schemaName: matriz.schemaName,
+                                bancoDados: matriz.bancoDados || 'bd_controle',
+                                ativo: matriz.ativo
+                              })}
+                              className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 flex items-center gap-1 transition-colors shadow-sm"
+                              title="Editar Informações da Matriz"
+                            >
+                              <Edit2 size={13} className="text-blue-600" />
+                              <span>Editar</span>
+                            </button>
+
+                            {matriz.ativo ? (
+                              <button
+                                type="button"
+                                onClick={() => handleExcluirLogicoEmpresa(matriz)}
+                                className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md hover:bg-rose-100 flex items-center gap-1 transition-colors shadow-sm"
+                                title="Excluir logicamente a Matriz e todas as suas filiais em cascata"
+                              >
+                                <Trash2 size={13} />
+                                <span>Inativar</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleReativarEmpresa(matriz)}
+                                className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 flex items-center gap-1 transition-colors shadow-sm"
+                                title="Reativar Matriz"
+                              >
+                                <RotateCcw size={13} />
+                                <span>Reativar</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {!isMatrizAtiva && matriz.ativo && (
                           <button
                             onClick={() => selectCompany({
                               id: matriz.id,
@@ -814,9 +941,11 @@ export const GestaoGlobalPage: React.FC = () => {
                               <div
                                 key={filial.id}
                                 className={`p-4 rounded-lg border transition-all ${
-                                  isFilialAtiva 
-                                    ? 'bg-green-50/50 border-green-300 ring-1 ring-green-300' 
-                                    : 'bg-white hover:border-gray-300'
+                                  !filial.ativo
+                                    ? 'bg-rose-50/30 border-rose-200 opacity-80'
+                                    : isFilialAtiva 
+                                      ? 'bg-green-50/50 border-green-300 ring-1 ring-green-300' 
+                                      : 'bg-white hover:border-gray-300'
                                 }`}
                               >
                                 <div className="flex justify-between items-start gap-2">
@@ -826,6 +955,16 @@ export const GestaoGlobalPage: React.FC = () => {
                                       <span className="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-800 font-medium">
                                         Filial
                                       </span>
+                                      {filial.ativo ? (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-100 text-emerald-800">
+                                          Ativa
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-rose-100 text-rose-800 flex items-center gap-0.5">
+                                          <XCircle size={10} />
+                                          Inativa
+                                        </span>
+                                      )}
                                       {isFilialAtiva && (
                                         <span className="text-xs text-green-700 font-semibold flex items-center gap-1">
                                           <CheckCircle2 size={12} />
@@ -878,16 +1017,60 @@ export const GestaoGlobalPage: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {!isFilialAtiva && (
-                                    <button
-                                      onClick={() => selectCompany(filial)}
-                                      className="px-2.5 py-1 text-xs font-semibold bg-white border border-green-600 text-green-700 rounded hover:bg-green-50 flex items-center gap-1 transition-colors"
-                                      title="Alternar todo o sistema para operar nesta filial"
-                                    >
-                                      <ExternalLink size={12} />
-                                      <span>Acessar</span>
-                                    </button>
-                                  )}
+                                  <div className="flex items-center gap-1.5">
+                                    {/* Ações CRUD para Filiais (Superusuário DcSys) */}
+                                    {isSuperuser && (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEmpresaParaEditar({
+                                            id: filial.id,
+                                            nomeFantasia: filial.nomeFantasia,
+                                            razaoSocial: filial.razaoSocial || '',
+                                            cnpj: filial.cnpj || '',
+                                            tipo: 'FILIAL',
+                                            schemaName: filial.schemaName,
+                                            bancoDados: filial.bancoDados || matriz.bancoDados || 'bd_controle',
+                                            ativo: filial.ativo
+                                          })}
+                                          className="p-1.5 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-200"
+                                          title="Editar Filial"
+                                        >
+                                          <Edit2 size={13} />
+                                        </button>
+                                        {filial.ativo ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleExcluirLogicoEmpresa(filial)}
+                                            className="p-1.5 rounded text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors border border-transparent hover:border-rose-200"
+                                            title="Excluir logicamente esta filial"
+                                          >
+                                            <Trash2 size={13} />
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleReativarEmpresa(filial)}
+                                            className="p-1.5 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors border border-transparent hover:border-emerald-200"
+                                            title="Reativar filial"
+                                          >
+                                            <RotateCcw size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {!isFilialAtiva && filial.ativo && (
+                                      <button
+                                        onClick={() => selectCompany(filial)}
+                                        className="px-2.5 py-1 text-xs font-semibold bg-white border border-green-600 text-green-700 rounded hover:bg-green-50 flex items-center gap-1 transition-colors"
+                                        title="Alternar todo o sistema para operar nesta filial"
+                                      >
+                                        <ExternalLink size={12} />
+                                        <span>Acessar</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1643,6 +1826,115 @@ export const GestaoGlobalPage: React.FC = () => {
                 >
                   {isSavingUsuario && <Loader2 size={16} className="animate-spin" />}
                   <span>Conceder Acesso</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR EMPRESA / FILIAL (CRUD SUPERUSUÁRIO DCSYS) */}
+      {empresaParaEditar && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 bg-gray-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit2 size={18} className="text-blue-400" />
+                <h3 className="text-sm font-bold m-0">
+                  Editar {empresaParaEditar.tipo === 'MATRIZ' ? 'Matriz' : 'Filial'}: {empresaParaEditar.nomeFantasia}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmpresaParaEditar(null)}
+                className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSalvarEdicaoEmpresa} className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Nome Fantasia *</label>
+                <input
+                  type="text"
+                  required
+                  value={empresaParaEditar.nomeFantasia}
+                  onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, nomeFantasia: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Razão Social</label>
+                  <input
+                    type="text"
+                    value={empresaParaEditar.razaoSocial || ''}
+                    onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, razaoSocial: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">CNPJ</label>
+                  <input
+                    type="text"
+                    value={empresaParaEditar.cnpj || ''}
+                    onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, cnpj: maskCnpj(e.target.value) })}
+                    maxLength={18}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 block mb-0.5">Schema PostgreSQL</label>
+                  <span className="font-mono text-xs text-purple-800 font-bold">{empresaParaEditar.schemaName}</span>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 block mb-0.5">Banco de Dados</label>
+                  <span className="font-mono text-xs text-blue-800 font-bold">{empresaParaEditar.bancoDados || 'bd_controle'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-gray-50 border rounded-lg">
+                <input
+                  type="checkbox"
+                  id="chkAtivoEmpresaGlobal"
+                  checked={empresaParaEditar.ativo}
+                  onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, ativo: e.target.checked })}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                />
+                <label htmlFor="chkAtivoEmpresaGlobal" className="text-xs font-bold text-gray-800 cursor-pointer">
+                  Empresa Ativa no Sistema
+                </label>
+              </div>
+
+              {empresaParaEditar.tipo === 'MATRIZ' && !empresaParaEditar.ativo && (
+                <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                  <AlertCircle size={15} className="text-amber-700 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Atenção:</strong> Ao inativar uma Matriz, todas as suas filiais vinculadas serão inativadas automaticamente em cascata.
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEmpresaParaEditar(null)}
+                  className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSalvandoEdicaoEmpresa}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                >
+                  {isSalvandoEdicaoEmpresa ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  <span>Salvar Alterações</span>
                 </button>
               </div>
             </form>
