@@ -1,4 +1,26 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    command: postgres -p 5444
+    environment:
+      POSTGRES_DB: ${DB_NAME:-precifiq_db}
+      POSTGRES_USER: ${DB_USER:-precifiq_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
+      PGPORT: "5444"
+    ports:
+      - "127.0.0.1:5444:5444"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - precifiq-app-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -p 5444 -U $${DB_USER:-precifiq_user} -d $${DB_NAME:-precifiq_db}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -15,6 +37,8 @@ services:
     restart: unless-stopped
     expose:
       - "8081"
+    depends_on:
+      - postgres
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.precifiq-backend.rule=Host(`precifiq.dcsys.info`) && PathPrefix(`/api`)"
@@ -61,3 +85,6 @@ services:
 networks:
   precifiq-app-network:
     external: true
+
+volumes:
+  postgres-data:
