@@ -28,11 +28,11 @@ DB_NAME_VAL="${DB_NAME:-precifiq_db}"
 
 case "$ACTION" in
     start)
-        echo "🐘 Starting PostgreSQL container..."
-        $DOCKER_COMPOSE up -d postgres
+        echo "🐘 Starting PostgreSQL container (profile: db)..."
+        $DOCKER_COMPOSE --profile db up -d postgres
         echo "⏳ Waiting for PostgreSQL to be ready..."
         for i in {1..30}; do
-            if $DOCKER_COMPOSE exec -T postgres pg_isready -p "$DB_PORT_VAL" -U "$DB_USER_VAL" -d "$DB_NAME_VAL" > /dev/null 2>&1; then
+            if $DOCKER_COMPOSE --profile db exec -T postgres pg_isready -p "$DB_PORT_VAL" -U "$DB_USER_VAL" -d "$DB_NAME_VAL" > /dev/null 2>&1; then
                 echo "✅ PostgreSQL is running and ready on port $DB_PORT_VAL!"
                 break
             fi
@@ -41,23 +41,23 @@ case "$ACTION" in
         ;;
     stop)
         echo "🛑 Stopping PostgreSQL container..."
-        $DOCKER_COMPOSE stop postgres
+        $DOCKER_COMPOSE --profile db stop postgres
         echo "✅ PostgreSQL stopped."
         ;;
     restart)
         echo "🔄 Restarting PostgreSQL container..."
-        $DOCKER_COMPOSE restart postgres
+        $DOCKER_COMPOSE --profile db restart postgres
         echo "✅ PostgreSQL restarted."
         ;;
     status)
-        $DOCKER_COMPOSE ps postgres
+        $DOCKER_COMPOSE --profile db ps postgres
         ;;
     logs)
-        $DOCKER_COMPOSE logs -f postgres
+        $DOCKER_COMPOSE --profile db logs -f postgres
         ;;
     migrate)
         echo "🚀 Executando migration no container PostgreSQL (schema: controle)..."
-        $DOCKER_COMPOSE exec -T postgres sh -c 'psql -p "$PGPORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
+        $DOCKER_COMPOSE --profile db exec -T postgres sh -c 'psql -p "$PGPORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
         touch .migration_completed
         echo "✅ Migration executada com sucesso no container e trava .migration_completed atualizada!"
         ;;

@@ -45,16 +45,16 @@ docker network inspect precifiq-app-network >/dev/null 2>&1 || docker network cr
 # BANCO DE DADOS: DEPLOY AUTOMÁTICO APENAS NA 1ª VEZ (PULAR SE JÁ EXISTIR)
 # ==============================================================================
 MIGRATION_LOCK_FILE=".migration_completed"
-DB_HOST_VAL="${DB_HOST:-postgres}"
-DB_PORT_VAL="${DB_PORT:-5444}"
-DB_USER_VAL="${DB_USER:-precifiq_user}"
-DB_NAME_VAL="${DB_NAME:-precifiq_db}"
+DB_HOST_VAL="${DB_HOST:-ep-winter-wildflower-ap91sljr-pooler.c-7.us-east-1.aws.neon.tech}"
+DB_PORT_VAL="${DB_PORT:-5432}"
+DB_USER_VAL="${DB_USER:-neondb_owner}"
+DB_NAME_VAL="${DB_NAME:-neondb}"
 
 if [ "$DB_HOST_VAL" = "postgres" ] || [ "$DB_HOST_VAL" = "localhost" ] || [ "$DB_HOST_VAL" = "127.0.0.1" ]; then
     echo "🐘 Gerenciando container PostgreSQL local..."
     
     # Inicia o container PostgreSQL (se já estiver rodando, docker compose apenas mantém ativo)
-    $DOCKER_COMPOSE up -d postgres
+    $DOCKER_COMPOSE --profile db up -d postgres
 
     echo "⏳ Aguardando PostgreSQL ficar pronto..."
     for i in {1..30}; do
@@ -132,7 +132,11 @@ echo ""
 echo "Services running:"
 echo "  - Frontend: http://localhost (or your domain)"
 echo "  - Backend API: http://localhost:8081"
-echo "  - PostgreSQL: localhost:$DB_PORT_VAL"
+if [ "$DB_HOST_VAL" = "postgres" ] || [ "$DB_HOST_VAL" = "localhost" ] || [ "$DB_HOST_VAL" = "127.0.0.1" ]; then
+    echo "  - PostgreSQL: localhost:$DB_PORT_VAL (local Docker)"
+else
+    echo "  - PostgreSQL: $DB_HOST_VAL (NeonDB Cloud)"
+fi
 echo ""
 echo "Database management commands:"
 echo "  - Status DB:  ./deploy-db.sh status"

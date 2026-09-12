@@ -33,16 +33,19 @@ object DatabaseConfig {
 
     fun connect() {
         val jdbcUrl = env("JDBC_DATABASE_URL")
-        val host = env("DB_HOST") ?: "postgres"
-        val port = env("DB_PORT") ?: "5444"
-        val dbName = env("DB_NAME") ?: "precifiq_db"
-        val user = env("DB_USER") ?: env("JDBC_DATABASE_USERNAME") ?: "precifiq_user"
-        val password = env("DB_PASSWORD") ?: env("JDBC_DATABASE_PASSWORD") ?: "p2QL+2Svy&3cQUaM"
+        val host = env("DB_HOST") ?: "ep-winter-wildflower-ap91sljr-pooler.c-7.us-east-1.aws.neon.tech"
+        val port = env("DB_PORT") ?: "5432"
+        val dbName = env("DB_NAME") ?: "neondb"
+        val user = env("DB_USER") ?: env("JDBC_DATABASE_USERNAME") ?: "neondb_owner"
+        val password = env("DB_PASSWORD") ?: env("JDBC_DATABASE_PASSWORD") ?: "npg_OnP97uVYqigX"
         val sslMode = env("DB_SSLMODE") ?: if (host == "postgres" || host == "localhost" || host == "127.0.0.1") "disable" else "require"
         val schema = env("DB_SCHEMA") ?: "controle"
 
         var url = if (!jdbcUrl.isNullOrBlank()) {
             var u = jdbcUrl.trim()
+            if (!u.startsWith("jdbc:")) {
+                u = "jdbc:$u"
+            }
             if (!u.contains("currentSchema=") && schema.isNotBlank()) {
                 val sep = if (u.contains("?")) "&" else "?"
                 u += "${sep}currentSchema=$schema"
