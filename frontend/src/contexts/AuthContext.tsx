@@ -9,6 +9,7 @@ export interface UsuarioEmpresaVinculo {
   perfilId: number;
   perfilCodigo: string;
   perfilNome: string;
+  permissoes?: string;
 }
 
 export interface UsuarioGlobal {

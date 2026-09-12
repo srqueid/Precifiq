@@ -159,7 +159,8 @@ data class UsuarioEmpresaVinculoDTO(
     val schemaName: String,
     val perfilId: Int,
     val perfilCodigo: String,
-    val perfilNome: String
+    val perfilNome: String,
+    val permissoes: String? = null
 )
 
 data class UsuarioGlobalDTO(

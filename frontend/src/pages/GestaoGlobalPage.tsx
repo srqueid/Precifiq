@@ -25,13 +25,16 @@ import {
   Lock,
   ShieldAlert,
   AlertTriangle,
-  Edit2,
-  Trash2,
-  RotateCcw,
-  XCircle
+  Edit2, 
+  Trash2, 
+  RotateCcw, 
+  XCircle,
+  Sliders
 } from 'lucide-react';
 import { useTenant, EmpresaHierarquia, EmpresaItem } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
+import ModalMontarPerfil from '../components/ModalMontarPerfil';
+import { contarFuncionalidadesAtivas } from '../types/permissoes';
 
 interface Perfil {
   id: number;
@@ -104,6 +107,36 @@ export const GestaoGlobalPage: React.FC = () => {
   const [isModalNovoUsuarioOpen, setIsModalNovoUsuarioOpen] = useState(false);
   const [isModalVincularOpen, setIsModalVincularOpen] = useState(false);
   const [isSavingUsuario, setIsSavingUsuario] = useState(false);
+
+  // Modais de Perfil RBAC
+  const [isModalPerfilOpen, setIsModalPerfilOpen] = useState(false);
+  const [perfilSelecionadoParaEditar, setPerfilSelecionadoParaEditar] = useState<Perfil | null>(null);
+
+  const handleOpenNovoPerfil = () => {
+    setPerfilSelecionadoParaEditar(null);
+    setIsModalPerfilOpen(true);
+  };
+
+  const handleOpenEditarPerfil = (p: Perfil) => {
+    setPerfilSelecionadoParaEditar(p);
+    setIsModalPerfilOpen(true);
+  };
+
+  const handleExcluirPerfil = async (id: number, nome: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o perfil "${nome}"?`)) return;
+    try {
+      const res = await fetch(`/api/global/perfis/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showFeedback('success', 'Perfil excluído com sucesso!');
+        await carregarPerfis();
+      } else {
+        const err = await res.json();
+        showFeedback('error', err.error || 'Erro ao excluir perfil.');
+      }
+    } catch {
+      showFeedback('error', 'Erro ao excluir perfil');
+    }
+  };
 
   // Forms
   const [formMatriz, setFormMatriz] = useState({
@@ -1225,9 +1258,21 @@ export const GestaoGlobalPage: React.FC = () => {
       {/* ABA 3: PERFIS DE ACESSO (RBAC) */}
       {activeTab === 'perfis' && (
         <div className="space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 m-0">Matriz de Perfis e Permissões (RBAC)</h2>
-            <p className="text-xs text-gray-500 m-0">Papéis e níveis de autorização definidos na governança do sistema Precific.</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 m-0">Matriz de Perfis e Permissões (RBAC)</h2>
+              <p className="text-xs text-gray-500 m-0">Papéis e níveis de autorização definidos na governança do sistema Precifiq.</p>
+            </div>
+            {isSuperuser && (
+              <button
+                type="button"
+                onClick={handleOpenNovoPerfil}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Plus size={14} />
+                <span>+ Criar Novo Perfil</span>
+              </button>
+            )}
           </div>
 
           {/* Banner de Governança de Acesso */}
@@ -1237,9 +1282,9 @@ export const GestaoGlobalPage: React.FC = () => {
             </div>
             <div className="text-xs text-blue-950 space-y-1">
               <div className="font-bold text-sm text-blue-900">Modelo de Governança e Hierarquia:</div>
-              <p className="leading-relaxed">
+              <p className="leading-relaxed m-0">
                 • <strong>Superusuário (DcSys)</strong>: Acesso técnico e de infraestrutura exclusivo da equipe DcSys (manutenção, provisionamento e suporte à plataforma).<br />
-                • <strong>Administrador (Global da Empresa)</strong>: Acesso irrestrito a todas as matrizes, filiais, usuários e configurações globais. Usuário responsável pelas configurações e parametrizações para a empresa começar a operar.<br />
+                • <strong>Administrador (Global da Empresa)</strong>: Acesso irrestrito a todas as matrizes, filiais, usuários e configurações globais.<br />
                 • <strong>Administrador da Matriz</strong>: Gestão completa da matriz e supervisão de todas as suas filiais vinculadas.<br />
                 • <strong>Gerente de Filial</strong>: Gestão operacional, financeira e de estoque restrita à sua filial.<br />
                 • <strong>Operador Padrão</strong>: Lançamento de pedidos, produtos, insumos e orçamentos na sua unidade.
@@ -1252,6 +1297,7 @@ export const GestaoGlobalPage: React.FC = () => {
               const isAdminGlobal = p.codigo === 'ADMIN' || p.codigo === 'SUPERUSER';
               const isAdminMatriz = p.codigo === 'ADMIN_MATRIZ';
               const isGerente = p.codigo === 'GERENTE_FILIAL';
+              const qtdFuncs = contarFuncionalidadesAtivas(p.permissoes);
 
               return (
                 <div key={p.id} className={`p-5 rounded-xl border bg-white shadow-sm space-y-3 ${isAdminGlobal ? 'border-indigo-300 ring-1 ring-indigo-200' : ''}`}>
@@ -1277,15 +1323,48 @@ export const GestaoGlobalPage: React.FC = () => {
                         <span className="font-mono text-xs text-gray-500">{p.codigo}</span>
                       </div>
                     </div>
+
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                      qtdFuncs === 13 ? 'bg-emerald-100 text-emerald-800' :
+                      qtdFuncs >= 7 ? 'bg-blue-100 text-blue-800' :
+                      qtdFuncs > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      <Sliders size={12} />
+                      <span>{qtdFuncs} de 13 ativas</span>
+                    </span>
                   </div>
 
                   <p className="text-sm text-gray-600 m-0 leading-relaxed">{p.descricao}</p>
 
-                  <div className="pt-2 border-t text-xs text-gray-500 flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-gray-700">Ações Permitidas: </span>
+                  <div className="pt-3 border-t text-xs text-gray-500 flex justify-between items-center">
+                    <div className="truncate max-w-[55%]">
+                      <span className="font-semibold text-gray-700">Permissões: </span>
                       <span className="font-mono text-blue-700 font-medium">{p.permissoes || 'PADRÃO'}</span>
                     </div>
+
+                    {isSuperuser && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditarPerfil(p)}
+                          className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                          title="Montar funcionalidades deste perfil"
+                        >
+                          <Sliders size={12} />
+                          <span>Montar / Editar</span>
+                        </button>
+                        {p.id > 4 && (
+                          <button
+                            type="button"
+                            onClick={() => handleExcluirPerfil(p.id, p.nome)}
+                            className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-xs font-semibold flex items-center gap-1"
+                            title="Excluir perfil"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -1941,6 +2020,14 @@ export const GestaoGlobalPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Montar Perfil RBAC */}
+      <ModalMontarPerfil
+        isOpen={isModalPerfilOpen}
+        onClose={() => setIsModalPerfilOpen(false)}
+        perfilParaEditar={perfilSelecionadoParaEditar}
+        onSalvarSucesso={carregarPerfis}
+      />
     </div>
   );
 };

@@ -42,6 +42,8 @@ import {
 import { useTenant, EmpresaHierarquia, EmpresaItem } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast, fmt } from '../js/app';
+import ModalMontarPerfil from '../components/ModalMontarPerfil';
+import { contarFuncionalidadesAtivas } from '../types/permissoes';
 
 interface Perfil {
   id: number;
@@ -182,17 +184,9 @@ export const SuperAdminPage: React.FC = () => {
   const [isModalNovaFilialOpen, setIsModalNovaFilialOpen] = useState(false);
   const [isSavingEmpresa, setIsSavingEmpresa] = useState(false);
 
-  // Modais de Perfil RBAC (Imagem 3)
+  // Modais de Perfil RBAC
   const [isModalPerfilOpen, setIsModalPerfilOpen] = useState(false);
-  const [modalPerfilTab, setModalPerfilTab] = useState<'geral' | 'permissoes'>('permissoes');
-  const [editingPerfilId, setEditingPerfilId] = useState<number | null>(null);
-  const [isSavingPerfil, setIsSavingPerfil] = useState(false);
-  const [formPerfil, setFormPerfil] = useState({
-    codigo: '',
-    nome: '',
-    descricao: '',
-    permissoesSelecionadas: new Set<string>()
-  });
+  const [perfilSelecionadoParaEditar, setPerfilSelecionadoParaEditar] = useState<Perfil | null>(null);
 
   // Modais de Administrador de Empresa (Imagem 1)
   const [isModalNovoAdminOpen, setIsModalNovoAdminOpen] = useState(false);
@@ -538,108 +532,15 @@ export const SuperAdminPage: React.FC = () => {
     }
   };
 
-  // Ações de Perfis RBAC (Modal Imagem 3)
+  // Ações de Perfis RBAC
   const handleOpenNovoPerfil = () => {
-    setEditingPerfilId(null);
-    setFormPerfil({
-      codigo: '',
-      nome: '',
-      descricao: '',
-      permissoesSelecionadas: new Set<string>()
-    });
-    setModalPerfilTab('permissoes');
+    setPerfilSelecionadoParaEditar(null);
     setIsModalPerfilOpen(true);
   };
 
   const handleOpenEditarPerfil = (p: Perfil) => {
-    setEditingPerfilId(p.id);
-    const perms = new Set<string>(p.permissoes ? p.permissoes.split(',').map(s => s.trim()) : []);
-    setFormPerfil({
-      codigo: p.codigo,
-      nome: p.nome,
-      descricao: p.descricao || '',
-      permissoesSelecionadas: perms
-    });
-    setModalPerfilTab('permissoes');
+    setPerfilSelecionadoParaEditar(p);
     setIsModalPerfilOpen(true);
-  };
-
-  const handleTogglePermissao = (permKey: string) => {
-    setFormPerfil(prev => {
-      const next = new Set(prev.permissoesSelecionadas);
-      if (next.has(permKey)) next.delete(permKey);
-      else next.add(permKey);
-      return { ...prev, permissoesSelecionadas: next };
-    });
-  };
-
-  const handleMarcarTodas = () => {
-    const all = new Set<string>();
-    MODULOS_RBAC.forEach(m => m.permissoes.forEach(p => all.add(p.key)));
-    setFormPerfil(prev => ({ ...prev, permissoesSelecionadas: all }));
-  };
-
-  const handleLimparTodas = () => {
-    setFormPerfil(prev => ({ ...prev, permissoesSelecionadas: new Set() }));
-  };
-
-  const handlePresetOperador = () => {
-    const preset = new Set<string>([
-      'Dashboard_Operacional',
-      'Estoque_View',
-      'Estoque_Ajuste',
-      'Vendas_View',
-      'Vendas_Create/Edit',
-      'Relatorios_View'
-    ]);
-    setFormPerfil(prev => ({ ...prev, permissoesSelecionadas: preset }));
-  };
-
-  const handleSalvarPerfil = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formPerfil.nome.trim()) {
-      showFeedback('error', 'Nome do perfil é obrigatório');
-      return;
-    }
-
-    setIsSavingPerfil(true);
-    const permsStr = Array.from(formPerfil.permissoesSelecionadas).join(',');
-    const cod = formPerfil.codigo.trim() || formPerfil.nome.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
-
-    try {
-      if (editingPerfilId) {
-        const res = await fetch(`/api/global/perfis/${editingPerfilId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nome: formPerfil.nome.trim(),
-            descricao: formPerfil.descricao.trim(),
-            permissoes: permsStr
-          })
-        });
-        if (!res.ok) throw new Error('Erro ao atualizar perfil');
-        showFeedback('success', 'Perfil de acesso atualizado com sucesso!');
-      } else {
-        const res = await fetch('/api/global/perfis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            codigo: cod,
-            nome: formPerfil.nome.trim(),
-            descricao: formPerfil.descricao.trim(),
-            permissoes: permsStr
-          })
-        });
-        if (!res.ok) throw new Error('Erro ao cadastrar novo perfil');
-        showFeedback('success', 'Novo perfil de acesso criado com sucesso!');
-      }
-      setIsModalPerfilOpen(false);
-      await carregarPerfis();
-    } catch (err: any) {
-      showFeedback('error', err.message || 'Erro ao salvar perfil');
-    } finally {
-      setIsSavingPerfil(false);
-    }
   };
 
   const handleExcluirPerfil = async (id: number, nome: string) => {
@@ -1274,6 +1175,8 @@ export const SuperAdminPage: React.FC = () => {
                 <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="py-3 px-4">Nome do Perfil</th>
+                    <th className="py-3 px-4">Código</th>
+                    <th className="py-3 px-4">Funcionalidades Ativas</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Nível de Acesso</th>
                     <th className="py-3 px-4 text-center">Ações</th>
@@ -1281,7 +1184,8 @@ export const SuperAdminPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {perfis.map((p) => {
-                    const isFundamental = p.id <= 4;
+                    const isRootAdmin = p.codigo === 'ADMIN';
+                    const qtdFuncs = contarFuncionalidadesAtivas(p.permissoes);
                     const nivelAcesso = p.codigo === 'ADMIN' ? 'Total' :
                                         p.codigo === 'ADMIN_MATRIZ' ? 'Total (Matriz)' :
                                         p.codigo === 'GERENTE_FILIAL' ? 'Parcial (Filial)' :
@@ -1290,7 +1194,7 @@ export const SuperAdminPage: React.FC = () => {
                     return (
                       <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4 font-semibold text-slate-900 flex items-center gap-2">
-                          {isFundamental ? (
+                          {isRootAdmin ? (
                             <div className="p-1 rounded bg-slate-800 text-white">
                               <Lock size={12} />
                             </div>
@@ -1301,6 +1205,19 @@ export const SuperAdminPage: React.FC = () => {
                           )}
                           <span>{p.nome}</span>
                         </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                          {p.codigo}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                            qtdFuncs === 13 ? 'bg-emerald-100 text-emerald-800' :
+                            qtdFuncs >= 7 ? 'bg-blue-100 text-blue-800' :
+                            qtdFuncs > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            <Sliders size={12} />
+                            <span>{qtdFuncs} de 13 ativas</span>
+                          </span>
+                        </td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">
                             Ativo
@@ -1310,30 +1227,17 @@ export const SuperAdminPage: React.FC = () => {
                           {nivelAcesso}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {isFundamental ? (
-                            <span className="px-2.5 py-1 rounded bg-[#0f172a] text-white text-[10px] font-bold inline-block shadow-sm">
-                              {p.codigo === 'ADMIN' 
-                                ? 'Perfil Fundamental - Proteção contra Exclusão e Alteração'
-                                : 'Perfil Fundamental - Proteção contra Exclusão'}
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditarPerfil(p)}
-                                className="px-2 py-1 text-slate-700 hover:bg-slate-200 rounded text-xs font-semibold flex items-center gap-1"
-                              >
-                                <Edit2 size={12} />
-                                <span>Ver/Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => showFeedback('success', `Perfil "${p.nome}" inativado temporariamente.`)}
-                                className="px-2 py-1 text-amber-700 hover:bg-amber-100 rounded text-xs font-semibold flex items-center gap-1"
-                              >
-                                <X size={12} />
-                                <span>Inativar</span>
-                              </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditarPerfil(p)}
+                              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                              title="Selecionar funcionalidades e montar permissões deste perfil"
+                            >
+                              <Sliders size={12} />
+                              <span>Montar / Editar</span>
+                            </button>
+                            {!isRootAdmin && p.id > 4 && (
                               <button
                                 type="button"
                                 onClick={() => handleExcluirPerfil(p.id, p.nome)}
@@ -1342,8 +1246,8 @@ export const SuperAdminPage: React.FC = () => {
                                 <Trash2 size={12} />
                                 <span>Excluir</span>
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1749,126 +1653,13 @@ export const SuperAdminPage: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR / EDITAR PERFIL RBAC (IMAGEM 3) */}
-      {/* ========================================================================= */}
-      {isModalPerfilOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-300 shadow-2xl max-w-2xl w-full overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Topo Dark Slate */}
-            <div className="p-4 bg-[#2b394e] text-white flex justify-between items-center">
-              <h3 className="text-sm font-bold m-0">Criar / Editar Perfil de Acesso (RBAC)</h3>
-              <button onClick={() => setIsModalPerfilOpen(false)} className="text-slate-300 hover:text-white">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSalvarPerfil} className="p-5 overflow-y-auto flex-1 space-y-4 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Perfil Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Financeiro"
-                  value={formPerfil.nome}
-                  onChange={(e) => setFormPerfil(prev => ({ ...prev, nome: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-medium"
-                />
-              </div>
-
-              {/* Abas Internas: Geral | Permissões */}
-              <div className="flex border-b border-slate-200 gap-4 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setModalPerfilTab('geral')}
-                  className={`pb-2 border-b-2 ${modalPerfilTab === 'geral' ? 'border-[#2b394e] text-slate-900' : 'border-transparent text-slate-400'}`}
-                >
-                  Geral
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalPerfilTab('permissoes')}
-                  className={`pb-2 border-b-2 ${modalPerfilTab === 'permissoes' ? 'border-[#2b394e] text-slate-900' : 'border-transparent text-slate-400'}`}
-                >
-                  Permissões
-                </button>
-
-                {/* Botões de Ação em Lote */}
-                <div className="ml-auto flex gap-1.5 pb-1">
-                  <button
-                    type="button"
-                    onClick={handleMarcarTodas}
-                    className="px-2.5 py-1 bg-slate-700 hover:bg-slate-800 text-white rounded text-[10px] font-bold"
-                  >
-                    Marcar Todas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLimparTodas}
-                    className="px-2.5 py-1 bg-slate-700 hover:bg-slate-800 text-white rounded text-[10px] font-bold"
-                  >
-                    Limpar Todas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePresetOperador}
-                    title="Automatically selects a logical set of OPERADOR-level"
-                    className="px-2.5 py-1 bg-slate-700 hover:bg-slate-800 text-white rounded text-[10px] font-bold"
-                  >
-                    Preset Operacional Padrão
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid 2 Colunas com Caixas Modulares (Imagem 3) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {MODULOS_RBAC.map((mod) => (
-                  <div key={mod.titulo} className="p-3 border border-slate-200 rounded-lg bg-slate-50/50">
-                    <div className="font-bold text-slate-800 text-[11px] mb-2 flex items-center gap-1.5">
-                      <span>{mod.icone}</span>
-                      <span>{mod.titulo}</span>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      {mod.permissoes.map((p) => {
-                        const isChecked = formPerfil.permissoesSelecionadas.has(p.key);
-
-                        return (
-                          <label key={p.key} className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleTogglePermissao(p.key)}
-                              className="w-3.5 h-3.5 rounded text-blue-600"
-                            />
-                            <span>{p.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-                <button
-                  type="submit"
-                  disabled={isSavingPerfil}
-                  className="px-4 py-2 bg-[#2b394e] hover:bg-[#1e293b] text-white rounded text-xs font-bold uppercase transition-colors"
-                >
-                  Salvar Alterações
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsModalPerfilOpen(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-xs font-bold uppercase transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* MODAL: MONTAR / EDITAR PERFIL DE ACESSO RBAC */}
+      <ModalMontarPerfil
+        isOpen={isModalPerfilOpen}
+        onClose={() => setIsModalPerfilOpen(false)}
+        perfilParaEditar={perfilSelecionadoParaEditar}
+        onSalvarSucesso={carregarPerfis}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL 1: CADASTRAR NOVO ADMINISTRADOR (IMAGEM 1) */}

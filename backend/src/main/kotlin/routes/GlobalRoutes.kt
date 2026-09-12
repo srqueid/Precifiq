@@ -255,7 +255,8 @@ private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: 
                     schemaName = row[EmpresasTable.schemaName],
                     perfilId = row[PerfisTable.id],
                     perfilCodigo = row[PerfisTable.codigo],
-                    perfilNome = row[PerfisTable.nome]
+                    perfilNome = row[PerfisTable.nome],
+                    permissoes = row[PerfisTable.permissoes]
                 )
             }
 
@@ -1306,7 +1307,8 @@ fun Route.globalRoutes() {
                                     schemaName = row[EmpresasTable.schemaName],
                                     perfilId = row[PerfisTable.id],
                                     perfilCodigo = row[PerfisTable.codigo],
-                                    perfilNome = row[PerfisTable.nome]
+                                    perfilNome = row[PerfisTable.nome],
+                                    permissoes = row[PerfisTable.permissoes]
                                 )
                             }
 

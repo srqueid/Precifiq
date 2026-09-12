@@ -31,6 +31,7 @@ import {
 import { useTheme } from './contexts/ThemeContext';
 import { useTenant, EmpresaItem } from './contexts/TenantContext';
 import { useAuth } from './contexts/AuthContext';
+import { usePermissions } from './hooks/usePermissions';
 import AlterarSenhaModal from './components/AlterarSenhaModal';
 import packageJson from '../package.json';
 import precifiqLogo from './assets/precifiq.png';
@@ -103,6 +104,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   const { theme, setTheme } = useTheme();
   const { activeCompany, empresasHierarquia, selectCompany } = useTenant();
   const { user, isSuperuser, logout } = useAuth();
+  const { hasPermission, perfilNome } = usePermissions();
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isAlterarSenhaOpen, setIsAlterarSenhaOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -133,7 +135,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   // 1. Visão Geral / Principal
   const overviewItems: MenuItem[] = [
     ...(isSuperuser ? [{ path: '/superadmin', label: 'Superadmin DcSys', icon: ShieldCheck }] : []),
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    ...(hasPermission('dashboard') ? [{ path: '/', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ];
 
   // 2. Grupo de PRODUTOS (EM DESTAQUE) - Sequência solicitada pelo usuário:
@@ -142,26 +144,26 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   // 3 - Kits
   // 4 - Estoque de produtos
   const productItems: MenuItem[] = [
-    { path: '/pedido', label: 'Pedido de clientes', icon: FileText },
-    { path: '/produtos', label: 'Produtos', icon: ShoppingBag },
-    { path: '/kits', label: 'Kits', icon: PackagePlus },
-    { path: '/estoque', label: 'Estoque de produtos', icon: Warehouse },
+    ...(hasPermission('pedidos_clientes') ? [{ path: '/pedido', label: 'Pedido de clientes', icon: FileText }] : []),
+    ...(hasPermission('produtos') ? [{ path: '/produtos', label: 'Produtos', icon: ShoppingBag }] : []),
+    ...(hasPermission('kits') ? [{ path: '/kits', label: 'Kits', icon: PackagePlus }] : []),
+    ...(hasPermission('estoque_produtos') ? [{ path: '/estoque', label: 'Estoque de produtos', icon: Warehouse }] : []),
   ];
 
   // 3. Suprimentos & Compras
   const supplyItems: MenuItem[] = [
-    { path: '/insumos', label: 'Estoque de Insumos', icon: Package },
-    { path: '/pedidos', label: 'Pedidos de Compra', icon: Truck },
-    { path: '/compras', label: 'Compras', icon: ShoppingCart },
-    { path: '/fornecedores', label: 'Fornecedores', icon: Users },
-    { path: '/orcamentos', label: 'Orçamentos', icon: ClipboardList },
+    ...(hasPermission('insumos') ? [{ path: '/insumos', label: 'Estoque de Insumos', icon: Package }] : []),
+    ...(hasPermission('pedidos_compra') ? [{ path: '/pedidos', label: 'Pedidos de Compra', icon: Truck }] : []),
+    ...(hasPermission('compras') ? [{ path: '/compras', label: 'Compras', icon: ShoppingCart }] : []),
+    ...(hasPermission('fornecedores') ? [{ path: '/fornecedores', label: 'Fornecedores', icon: Users }] : []),
+    ...(hasPermission('orcamentos') ? [{ path: '/orcamentos', label: 'Orçamentos', icon: ClipboardList }] : []),
   ];
 
   // 4. Cadastros & Governança
   const systemItems: MenuItem[] = [
-    { path: '/unidades', label: 'Unidades de Medida', icon: Ruler },
+    ...(hasPermission('unidades_medida') ? [{ path: '/unidades', label: 'Unidades de Medida', icon: Ruler }] : []),
     ...(isSuperuser ? [{ path: '/gestao-global', label: 'Gestão Global', icon: Building2 }] : []),
-    { path: '/configuracoes', label: 'Configurações', icon: Settings },
+    ...(hasPermission('configuracoes') ? [{ path: '/configuracoes', label: 'Configurações', icon: Settings }] : []),
   ];
 
   // Renderiza um link padrão da navegação
@@ -222,6 +224,8 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
 
   // Renderiza o grupo de destaque com as 4 funções de produtos na sequência requerida
   const renderProductHighlightGroup = (isMobile = false) => {
+    if (productItems.length === 0) return null;
+
     return (
       <div className="sidebar-products-group" role="region" aria-label="Gestão de Produtos">
         <div className="sidebar-products-header">
@@ -479,25 +483,37 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
         {/* Navegação Desktop com Seções & Destaque Especial */}
         <nav className="sidebar-nav" aria-label="Menu principal">
           {/* 1. Visão Geral / Principal */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Principal</span>
-          </div>
-          {overviewItems.map((item) => renderStandardLink(item))}
+          {overviewItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Principal</span>
+              </div>
+              {overviewItems.map((item) => renderStandardLink(item))}
+            </>
+          )}
 
           {/* 2. Produtos & Operação (DESTAQUE DA SEQUENCIA PEDIDA) */}
           {renderProductHighlightGroup()}
 
           {/* 3. Suprimentos & Compras */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Suprimentos & Compras</span>
-          </div>
-          {supplyItems.map((item) => renderStandardLink(item))}
+          {supplyItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Suprimentos & Compras</span>
+              </div>
+              {supplyItems.map((item) => renderStandardLink(item))}
+            </>
+          )}
 
           {/* 4. Cadastros & Sistema */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Cadastros & Sistema</span>
-          </div>
-          {systemItems.map((item) => renderStandardLink(item))}
+          {systemItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Cadastros & Sistema</span>
+              </div>
+              {systemItems.map((item) => renderStandardLink(item))}
+            </>
+          )}
         </nav>
 
         {/* Card do Usuário Logado & Botão Sair / Trocar Conta */}
@@ -547,7 +563,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
                 {user?.nome || 'Usuário'}
               </div>
               <div style={{ fontSize: '9px', color: isSuperuser ? '#7c3aed' : 'var(--text-secondary, #64748b)', fontWeight: isSuperuser ? 700 : 500 }}>
-                {isSuperuser ? 'Superusuário DcSys' : (user?.email || 'Colaborador')}
+                {isSuperuser ? 'Superusuário DcSys' : (perfilNome || user?.email || 'Colaborador')}
               </div>
             </div>
           </div>
@@ -633,25 +649,37 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
       <div className="sidebar-mobile-menu" role="menu" aria-label="Menu mobile">
         <nav className="sidebar-mobile-menu-inner" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {/* 1. Visão Geral */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Principal</span>
-          </div>
-          {overviewItems.map((item) => renderStandardLink(item, true))}
+          {overviewItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Principal</span>
+              </div>
+              {overviewItems.map((item) => renderStandardLink(item, true))}
+            </>
+          )}
 
           {/* 2. Produtos & Operação (DESTAQUE) */}
           {renderProductHighlightGroup(true)}
 
           {/* 3. Suprimentos & Compras */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Suprimentos & Compras</span>
-          </div>
-          {supplyItems.map((item) => renderStandardLink(item, true))}
+          {supplyItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Suprimentos & Compras</span>
+              </div>
+              {supplyItems.map((item) => renderStandardLink(item, true))}
+            </>
+          )}
 
           {/* 4. Cadastros & Sistema */}
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Cadastros & Sistema</span>
-          </div>
-          {systemItems.map((item) => renderStandardLink(item, true))}
+          {systemItems.length > 0 && (
+            <>
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">Cadastros & Sistema</span>
+              </div>
+              {systemItems.map((item) => renderStandardLink(item, true))}
+            </>
+          )}
         </nav>
 
         {/* Rodapé do Usuário & Logout no Mobile */}
@@ -687,7 +715,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
                   {user?.nome || 'Usuário'}
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {isSuperuser ? 'Superusuário DcSys' : (user?.email || 'Colaborador')}
+                  {isSuperuser ? 'Superusuário DcSys' : (perfilNome || user?.email || 'Colaborador')}
                 </div>
               </div>
             </div>
