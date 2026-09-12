@@ -401,6 +401,37 @@ fun Route.globalRoutes() {
             }
         }
 
+        // 1.2 Validação / Sincronização de Sessão
+        get("/auth/me") {
+            try {
+                val userEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
+                if (userEmail.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Sessão não identificada"))
+                    return@get
+                }
+                val user = transaction {
+                    UsuariosTable.select { UsuariosTable.email eq userEmail }.singleOrNull()
+                }
+                if (user == null) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Usuário não encontrado"))
+                    return@get
+                }
+                if (!user[UsuariosTable.ativo]) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Usuário desativado"))
+                    return@get
+                }
+                val sessao = montarSessaoUsuario(
+                    user = user,
+                    ipOrigem = call.getCallerIp(),
+                    metodoAuth = "VALIDACAO_SESSAO"
+                )
+                call.respond(sessao)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao validar sessão")))
+            }
+        }
+
         // 1.1 Autenticação Google OAuth 2.0 (Google Identity Services)
         post("/auth/google") {
             try {

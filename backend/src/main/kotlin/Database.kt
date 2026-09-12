@@ -278,6 +278,28 @@ object DatabaseConfig {
                             ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
                         END IF;
                     END $$;
+
+                    -- Seed do Administrador da Empresa padrão (silvia@empresa.com / 123456 - is_superuser = FALSE)
+                    INSERT INTO global.usuario (nome, email, senha_hash, is_superuser, ativo)
+                    VALUES ('Silvia Administradora', 'silvia@empresa.com', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', FALSE, TRUE)
+                    ON CONFLICT (email) DO UPDATE SET is_superuser = FALSE;
+
+                    DO $$
+                    DECLARE
+                        v_user_id INTEGER;
+                        v_perfil_id INTEGER;
+                        v_empresa_id INTEGER;
+                    BEGIN
+                        SELECT id INTO v_user_id FROM global.usuario WHERE email = 'silvia@empresa.com' LIMIT 1;
+                        SELECT id INTO v_perfil_id FROM global.perfil WHERE codigo = 'ADMIN_MATRIZ' LIMIT 1;
+                        SELECT id INTO v_empresa_id FROM global.empresa WHERE id = 1 LIMIT 1;
+
+                        IF v_user_id IS NOT NULL AND v_perfil_id IS NOT NULL AND v_empresa_id IS NOT NULL THEN
+                            INSERT INTO global.usuario_empresa (usuario_id, empresa_id, perfil_id)
+                            VALUES (v_user_id, v_empresa_id, v_perfil_id)
+                            ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
+                        END IF;
+                    END $$;
                 """.trimIndent())
 
                 println("INFO: Catálogo global e governança inicializados com sucesso.")
@@ -354,6 +376,25 @@ object DatabaseConfig {
                     );
 
                     CREATE INDEX IF NOT EXISTS idx_variacao_material_var ON variacao_material(variacao_id);
+
+                    -- Tipos de Insumo
+                    CREATE TABLE IF NOT EXISTS tipo_insumo (
+                        id SERIAL PRIMARY KEY,
+                        nome VARCHAR(100) NOT NULL,
+                        descricao VARCHAR(255),
+                        is_embalagem BOOLEAN DEFAULT FALSE,
+                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    INSERT INTO tipo_insumo (id, nome, descricao, is_embalagem) VALUES
+                        (1, 'Matéria-prima', 'Insumos que compõem a receita ou formulação do produto', FALSE),
+                        (2, 'Embalagem', 'Frascos, caixas, tampas, rótulos e embalagens', TRUE)
+                    ON CONFLICT (id) DO NOTHING;
+                    SELECT setval('tipo_insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM tipo_insumo));
+
+                    ALTER TABLE insumo ADD COLUMN IF NOT EXISTS tipo_insumo_id INTEGER REFERENCES tipo_insumo(id) ON DELETE SET NULL;
+                    CREATE INDEX IF NOT EXISTS idx_insumo_tipo_insumo ON insumo(tipo_insumo_id);
+                    UPDATE insumo SET tipo_insumo_id = CASE WHEN is_embalagem = TRUE THEN 2 ELSE 1 END WHERE tipo_insumo_id IS NULL;
 
                     -- Evoluções: Validade, Código de Barras e Integração de Vendas
                     ALTER TABLE insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
@@ -834,6 +875,25 @@ object DatabaseConfig {
                                     ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS total_salarios DOUBLE PRECISION DEFAULT 0.0;
                                     ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS total_despesas_fixas DOUBLE PRECISION DEFAULT 0.0;
                                     ALTER TABLE "$tSchema".configuracao_global ADD COLUMN IF NOT EXISTS custo_minuto_trabalho DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'insumo') THEN
+                                    CREATE TABLE IF NOT EXISTS "$tSchema".tipo_insumo (
+                                        id SERIAL PRIMARY KEY,
+                                        nome VARCHAR(100) NOT NULL,
+                                        descricao VARCHAR(255),
+                                        is_embalagem BOOLEAN DEFAULT FALSE,
+                                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                                    );
+
+                                    INSERT INTO "$tSchema".tipo_insumo (id, nome, descricao, is_embalagem) VALUES
+                                        (1, 'Matéria-prima', 'Insumos que compõem a receita ou formulação do produto', FALSE),
+                                        (2, 'Embalagem', 'Frascos, caixas, tampas, rótulos e embalagens', TRUE)
+                                    ON CONFLICT (id) DO NOTHING;
+                                    PERFORM setval('"$tSchema".tipo_insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM "$tSchema".tipo_insumo));
+
+                                    ALTER TABLE "$tSchema".insumo ADD COLUMN IF NOT EXISTS tipo_insumo_id INTEGER REFERENCES "$tSchema".tipo_insumo(id) ON DELETE SET NULL;
+                                    UPDATE "$tSchema".insumo SET tipo_insumo_id = CASE WHEN is_embalagem = TRUE THEN 2 ELSE 1 END WHERE tipo_insumo_id IS NULL;
                                 END IF;
                             END $$;
                         """.trimIndent())

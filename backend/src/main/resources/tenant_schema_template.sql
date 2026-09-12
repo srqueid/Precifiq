@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.cliente (
     endereco VARCHAR(255)
 );
 
+-- 3.5 Tipos de Insumo
+CREATE TABLE IF NOT EXISTS %SCHEMA%.tipo_insumo (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    descricao VARCHAR(255),
+    is_embalagem BOOLEAN DEFAULT FALSE,
+    criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 4. Insumos
 CREATE TABLE IF NOT EXISTS %SCHEMA%.insumo (
     id SERIAL PRIMARY KEY,
@@ -63,7 +72,8 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.insumo (
     estoque_minimo DOUBLE PRECISION DEFAULT 0.0,
     data_validade DATE,
     lote VARCHAR(50),
-    codigo_barras VARCHAR(50)
+    codigo_barras VARCHAR(50),
+    tipo_insumo_id INTEGER REFERENCES %SCHEMA%.tipo_insumo(id) ON DELETE SET NULL
 );
 
 -- 5. Tabelas Auxiliares e Movimentações de Insumo
@@ -410,6 +420,7 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.historico_cobranca (
 -- 14. Índices de Desempenho
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_fornecedor ON %SCHEMA%.insumo(fornecedor_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_unidade ON %SCHEMA%.insumo(unidade_medida_id);
+CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_tipo ON %SCHEMA%.insumo(tipo_insumo_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_cod_barras ON %SCHEMA%.insumo(codigo_barras);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_insumo_validade ON %SCHEMA%.insumo(data_validade);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_mov_insumo_id ON %SCHEMA%.movimento_estoque_insumo(insumo_id);
@@ -429,6 +440,13 @@ CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_ped_item_ped ON %SCHEMA%.pedido_item(ped
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_kit_itens_kit ON %SCHEMA%.kit_itens(kit_id);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_kits_cod_barras ON %SCHEMA%.kits(codigo_barras);
 CREATE INDEX IF NOT EXISTS idx_%SCHEMA%_ped_fin_cliente ON %SCHEMA%.pedidos_financeiro(cliente_id);
+
+-- 14.5 Tipos de Insumo Iniciais
+INSERT INTO %SCHEMA%.tipo_insumo (id, nome, descricao, is_embalagem) VALUES
+    (1, 'Matéria-prima', 'Insumos que compõem a receita ou formulação do produto', FALSE),
+    (2, 'Embalagem', 'Frascos, caixas, tampas, rótulos e embalagens', TRUE)
+ON CONFLICT (id) DO NOTHING;
+SELECT setval('%SCHEMA%.tipo_insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM %SCHEMA%.tipo_insumo));
 
 -- 15. Unidades de Medida Básicas Iniciais
 INSERT INTO %SCHEMA%.unidade_medida (nome, sigla) VALUES

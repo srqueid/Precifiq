@@ -142,6 +142,7 @@ fun Application.configureRouting(db: AppDatabase) {
     fornecedorRouting(db)
     clienteRouting(db)
     insumoRouting(db)
+    tipoInsumoRouting(db)
     unidadeMedidaRouting(db)
     configuracoesRouting(db)
     produtosFinaisRouting(db)

@@ -157,7 +157,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   // 4. Cadastros & Governança
   const systemItems: MenuItem[] = [
     { path: '/unidades', label: 'Unidades de Medida', icon: Ruler },
-    { path: '/gestao-global', label: 'Gestão Global', icon: Building2 },
+    ...(isSuperuser ? [{ path: '/gestao-global', label: 'Gestão Global', icon: Building2 }] : []),
     { path: '/configuracoes', label: 'Configurações', icon: Settings },
   ];
 
@@ -431,25 +431,27 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
                 );
               })}
 
-              <div style={{ padding: '6px 12px 2px', borderTop: '1px solid var(--border)' }}>
-                <Link
-                  to="/gestao-global"
-                  onClick={() => { setIsCompanyDropdownOpen(false); onClose(); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: '#2563eb',
-                    textDecoration: 'none',
-                    padding: '4px 0'
-                  }}
-                >
-                  <Settings size={12} />
-                  <span>Gerenciar Matrizes & Filiais</span>
-                </Link>
-              </div>
+              {isSuperuser && (
+                <div style={{ padding: '6px 12px 2px', borderTop: '1px solid var(--border)' }}>
+                  <Link
+                    to="/superadmin"
+                    onClick={() => { setIsCompanyDropdownOpen(false); onClose(); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#7c3aed',
+                      textDecoration: 'none',
+                      padding: '4px 0'
+                    }}
+                  >
+                    <ShieldCheck size={12} style={{ color: '#7c3aed' }} />
+                    <span>Console Superadmin (DcSys)</span>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </div>

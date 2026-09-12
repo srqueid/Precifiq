@@ -49,6 +49,15 @@ object ClientesTable : Table("cliente") {
     override val primaryKey = PrimaryKey(id)
 }
 
+// --- Tipos de Insumo ---
+object TiposInsumoTable : Table("tipo_insumo") {
+    val id = integer("id").autoIncrement()
+    val nome = varchar("nome", 100)
+    val descricao = varchar("descricao", 255).nullable()
+    val isEmbalagem = bool("is_embalagem").default(false)
+    override val primaryKey = PrimaryKey(id)
+}
+
 // --- Insumos ---
 object InsumosTable : Table("insumo") {
     val id = integer("id").autoIncrement()
@@ -63,6 +72,7 @@ object InsumosTable : Table("insumo") {
     val dataValidade = date("data_validade").nullable()
     val lote = varchar("lote", 50).nullable()
     val codigoBarras = varchar("codigo_barras", 50).nullable()
+    val tipoInsumoId = integer("tipo_insumo_id").references(TiposInsumoTable.id).nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

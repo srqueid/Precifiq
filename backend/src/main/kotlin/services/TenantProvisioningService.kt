@@ -161,6 +161,14 @@ class TenantProvisioningService {
                 endereco VARCHAR(255)
             );
 
+            CREATE TABLE IF NOT EXISTS $s.tipo_insumo (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                descricao VARCHAR(255),
+                is_embalagem BOOLEAN DEFAULT FALSE,
+                criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS $s.insumo (
                 id SERIAL PRIMARY KEY,
                 nome VARCHAR(255) NOT NULL,
@@ -171,7 +179,8 @@ class TenantProvisioningService {
                 preco DOUBLE PRECISION NOT NULL,
                 is_embalagem BOOLEAN NOT NULL DEFAULT FALSE,
                 estoque DOUBLE PRECISION DEFAULT 0.0,
-                estoque_minimo DOUBLE PRECISION DEFAULT 0.0
+                estoque_minimo DOUBLE PRECISION DEFAULT 0.0,
+                tipo_insumo_id INTEGER REFERENCES $s.tipo_insumo(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS $s.estoque_minimo_insumo_aux (
@@ -490,6 +499,12 @@ class TenantProvisioningService {
                 resposta_cliente TEXT,
                 usuario VARCHAR(100)
             );
+
+            INSERT INTO $s.tipo_insumo (id, nome, descricao, is_embalagem) VALUES
+                (1, 'Matéria-prima', 'Insumos que compõem a receita ou formulação do produto', FALSE),
+                (2, 'Embalagem', 'Frascos, caixas, tampas, rótulos e embalagens', TRUE)
+            ON CONFLICT (id) DO NOTHING;
+            SELECT setval('$s.tipo_insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM $s.tipo_insumo));
 
             INSERT INTO $s.unidade_medida (nome, sigla) VALUES
                 ('Unidade', 'un'),
