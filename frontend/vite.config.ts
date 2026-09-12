@@ -32,6 +32,7 @@ export default defineConfig({
     proxy: {
       '/api': createSpaProxy(),
       '/insumos': createSpaProxy(),
+      '/tipos-insumo': createSpaProxy(),
       '/produtos-finais': createSpaProxy(),
       '/unidades-medida': createSpaProxy(),
       '/fornecedores': createSpaProxy(),

@@ -87,6 +87,15 @@ data class PedidoCompraView(
     val formaPagamento: FormaPagamento
 )
 
+// Tipos de Insumo
+data class TipoInsumo(
+    val id: Int = 0,
+    var nome: String,
+    var descricao: String? = null,
+    var isEmbalagem: Boolean = false,
+    var insumosVinculadosCount: Long = 0
+)
+
 // Insumos
 data class Insumo(
     val id: Int,
@@ -101,7 +110,9 @@ data class Insumo(
     var estoqueMinimo: Double? = 0.0,
     var dataValidade: String? = null,
     var lote: String? = null,
-    var codigoBarras: String? = null
+    var codigoBarras: String? = null,
+    var tipoInsumoId: Int? = null,
+    var tipoInsumoNome: String? = null
 )
 
 // Unidade de Compra / Fator de Conversão de Embalagem

@@ -31,6 +31,14 @@ import {
   Clock
 } from 'lucide-react';
 
+interface TipoInsumo {
+  id: number;
+  nome: string;
+  descricao?: string;
+  isEmbalagem: boolean;
+  insumosVinculadosCount?: number;
+}
+
 interface Insumo {
   id: number;
   nome: string;
@@ -45,6 +53,8 @@ interface Insumo {
   dataValidade?: string;
   lote?: string;
   codigoBarras?: string;
+  tipoInsumoId?: number;
+  tipoInsumoNome?: string;
 }
 
 interface MovimentoEstoque {
@@ -128,6 +138,7 @@ const initialForm = {
   fornecedorId: '',
   preco: '0.00',
   isEmbalagem: 'false',
+  tipoInsumoId: '',
   estoque: '0',
   estoqueMinimo: '0',
   dataValidade: '',
@@ -236,7 +247,7 @@ const InsumosPage: React.FC = () => {
 
   // Estados de Filtros e Busca
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterTipo, setFilterTipo] = useState<'TODOS' | 'Matéria-prima' | 'Embalagem'>('TODOS');
+  const [filterTipo, setFilterTipo] = useState<string>('TODOS');
   const [filterStatus, setFilterStatus] = useState<'TODOS' | 'NORMAL' | 'BAIXO' | 'ZERADO'>('TODOS');
   const [filterValidade, setFilterValidade] = useState<'TODOS' | 'VENCIDOS' | 'A_VENCER' | 'VALIDOS'>('TODOS');
 
@@ -248,6 +259,14 @@ const InsumosPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState(initialForm);
+
+  // Modal de Gerenciamento de Tipos de Insumo (CRUD)
+  const [isModalTiposOpen, setIsModalTiposOpen] = useState(false);
+  const [editingTipo, setEditingTipo] = useState<TipoInsumo | null>(null);
+  const [tipoNome, setTipoNome] = useState('');
+  const [tipoDescricao, setTipoDescricao] = useState('');
+  const [tipoIsEmbalagem, setTipoIsEmbalagem] = useState(false);
+  const [tipoErrorMsg, setTipoErrorMsg] = useState<string | null>(null);
 
   // Modal de Ajuste Rápido de Estoque
   const [editingEstoqueItem, setEditingEstoqueItem] = useState<Insumo | null>(null);
@@ -359,6 +378,23 @@ const InsumosPage: React.FC = () => {
   const insumos: Insumo[] = insumoData?.insumos || [];
   const unidades: UnidadeMedida[] = insumoData?.unidades || [];
 
+  // Query de Tipos de Insumo
+  const { data: tiposInsumoData = [] } = useQuery<TipoInsumo[]>({
+    queryKey: ['tiposInsumo'],
+    queryFn: async () => {
+      const res = await fetch('/tipos-insumo/json');
+      if (!res.ok) {
+        if (insumoData?.tiposInsumo) return insumoData.tiposInsumo;
+        throw new Error('Erro ao buscar tipos de insumo');
+      }
+      return res.json();
+    }
+  });
+
+  const tiposInsumo: TipoInsumo[] = Array.isArray(tiposInsumoData) && tiposInsumoData.length > 0
+    ? tiposInsumoData
+    : (Array.isArray(insumoData?.tiposInsumo) ? insumoData.tiposInsumo : []);
+
   const getUnidadeSigla = (id: number) => unidades.find((u) => u.id === id)?.sigla || '—';
   const getFornecedorNome = (id?: number) => fornecedores.find((f) => f.id === id)?.nome || '—';
 
@@ -396,6 +432,67 @@ const InsumosPage: React.FC = () => {
   };
 
   // Mutations
+  const saveTipoMutation = useMutation({
+    mutationFn: async () => {
+      setTipoErrorMsg(null);
+      const url = editingTipo ? `/tipos-insumo/atualizar/${editingTipo.id}` : `/tipos-insumo`;
+      const form = new URLSearchParams();
+      form.append('nome', tipoNome.trim());
+      if (tipoDescricao.trim()) form.append('descricao', tipoDescricao.trim());
+      form.append('isEmbalagem', tipoIsEmbalagem ? 'true' : 'false');
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: form
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao salvar tipo de insumo');
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      if (!editingTipo && data?.id) {
+        setFormData(prev => ({
+          ...prev,
+          tipoInsumoId: data.id.toString(),
+          isEmbalagem: tipoIsEmbalagem ? 'true' : 'false'
+        }));
+      }
+      setEditingTipo(null);
+      setTipoNome('');
+      setTipoDescricao('');
+      setTipoIsEmbalagem(false);
+      setTipoErrorMsg(null);
+      queryClient.invalidateQueries({ queryKey: ['tiposInsumo'] });
+      queryClient.invalidateQueries({ queryKey: ['insumos'] });
+    },
+    onError: (err: any) => {
+      setTipoErrorMsg(err.message || 'Erro ao salvar tipo de insumo');
+    }
+  });
+
+  const deleteTipoMutation = useMutation({
+    mutationFn: async (id: number) => {
+      setTipoErrorMsg(null);
+      const res = await fetch(`/tipos-insumo/deletar/${id}`);
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        throw new Error(data.error || 'Falha ao excluir tipo de insumo');
+      }
+      return data;
+    },
+    onSuccess: () => {
+      setTipoErrorMsg(null);
+      queryClient.invalidateQueries({ queryKey: ['tiposInsumo'] });
+      queryClient.invalidateQueries({ queryKey: ['insumos'] });
+    },
+    onError: (err: any) => {
+      setTipoErrorMsg(err.message || 'Erro ao excluir tipo de insumo');
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/insumos/deletar/${id}`);
@@ -555,9 +652,10 @@ const InsumosPage: React.FC = () => {
       const matchTipo =
         filterTipo === 'TODOS'
           ? true
-          : filterTipo === 'Matéria-prima'
-            ? !i.isEmbalagem
-            : i.isEmbalagem;
+          : (i.tipoInsumoId !== undefined && i.tipoInsumoId !== null && i.tipoInsumoId.toString() === filterTipo) ||
+            (!i.tipoInsumoId && (
+              (tiposInsumo.find(t => t.id.toString() === filterTipo)?.isEmbalagem ?? false) === i.isEmbalagem
+            ));
 
       const min = (i.estoqueMinimo !== undefined && i.estoqueMinimo !== null && i.estoqueMinimo > 0) ? i.estoqueMinimo : 5;
       const matchStatus =
@@ -596,8 +694,8 @@ const InsumosPage: React.FC = () => {
           break;
         }
         case 'tipo': {
-          const tipoA = a.isEmbalagem ? 'Embalagem' : 'Matéria-Prima';
-          const tipoB = b.isEmbalagem ? 'Embalagem' : 'Matéria-Prima';
+          const tipoA = a.tipoInsumoNome || (a.isEmbalagem ? 'Embalagem' : 'Matéria-Prima');
+          const tipoB = b.tipoInsumoNome || (b.isEmbalagem ? 'Embalagem' : 'Matéria-Prima');
           result = tipoA.localeCompare(tipoB, 'pt-BR');
           break;
         }
@@ -637,12 +735,15 @@ const InsumosPage: React.FC = () => {
 
       return sortDirection === 'asc' ? result : -result;
     });
-  }, [insumos, searchTerm, filterTipo, filterStatus, filterValidade, sortField, sortDirection, unidades]);
+  }, [insumos, searchTerm, filterTipo, filterStatus, filterValidade, sortField, sortDirection, unidades, tiposInsumo]);
 
   // Handlers de Modais
   const handleOpenCadastroModal = (i?: Insumo) => {
     if (i) {
       setEditingId(i.id);
+      const matchedTipoId = i.tipoInsumoId ? i.tipoInsumoId.toString() : (
+        tiposInsumo.find(t => t.isEmbalagem === i.isEmbalagem)?.id.toString() || ''
+      );
       setFormData({
         nome: i.nome,
         unidadeMedidaId: i.unidadeMedidaId.toString(),
@@ -650,6 +751,7 @@ const InsumosPage: React.FC = () => {
         fornecedorId: i.fornecedorId ? i.fornecedorId.toString() : '',
         preco: i.preco !== undefined && i.preco !== null ? i.preco.toString() : '0.00',
         isEmbalagem: i.isEmbalagem ? 'true' : 'false',
+        tipoInsumoId: matchedTipoId,
         estoque: i.estoque !== undefined && i.estoque !== null ? i.estoque.toString() : '0',
         estoqueMinimo: i.estoqueMinimo !== undefined && i.estoqueMinimo !== null ? i.estoqueMinimo.toString() : '0',
         dataValidade: i.dataValidade || '',
@@ -658,9 +760,30 @@ const InsumosPage: React.FC = () => {
       });
     } else {
       setEditingId(null);
-      setFormData(initialForm);
+      const defaultTipo = tiposInsumo.find(t => !t.isEmbalagem) || tiposInsumo[0];
+      setFormData({
+        ...initialForm,
+        tipoInsumoId: defaultTipo ? defaultTipo.id.toString() : '',
+        isEmbalagem: defaultTipo?.isEmbalagem ? 'true' : 'false'
+      });
     }
     setIsModalOpen(true);
+  };
+
+  const handleOpenTiposModal = (t?: TipoInsumo) => {
+    if (t) {
+      setEditingTipo(t);
+      setTipoNome(t.nome);
+      setTipoDescricao(t.descricao || '');
+      setTipoIsEmbalagem(t.isEmbalagem);
+    } else {
+      setEditingTipo(null);
+      setTipoNome('');
+      setTipoDescricao('');
+      setTipoIsEmbalagem(false);
+    }
+    setTipoErrorMsg(null);
+    setIsModalTiposOpen(true);
   };
 
   const handleOpenAjusteEstoque = (item: Insumo) => {
@@ -742,6 +865,29 @@ const InsumosPage: React.FC = () => {
           >
             <RefreshCw size={18} className={syncEstoqueMutation.isPending ? 'animate-spin' : ''} />
             {syncEstoqueMutation.isPending ? 'Sincronizando...' : 'Preencher Saldo com Qtd/Embalagem'}
+          </button>
+          <button
+            onClick={() => handleOpenTiposModal()}
+            className="btn btn-secondary"
+            title="Gerenciar tipos de insumo (cadastrar, editar, excluir)"
+          >
+            <Layers size={18} />
+            <span>Tipos de Insumo</span>
+            {tiposInsumo.length > 0 && (
+              <span
+                style={{
+                  background: 'var(--surface-2, #e2e8f0)',
+                  color: 'var(--foreground, #1e293b)',
+                  borderRadius: '12px',
+                  padding: '1px 7px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  marginLeft: '4px'
+                }}
+              >
+                {tiposInsumo.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => handleOpenCadastroModal()}
@@ -885,11 +1031,20 @@ const InsumosPage: React.FC = () => {
             <select
               id="filtro-tipo"
               value={filterTipo}
-              onChange={(e) => setFilterTipo(e.target.value as 'TODOS' | 'Matéria-prima' | 'Embalagem')}
+              onChange={(e) => setFilterTipo(e.target.value)}
             >
-              <option value="TODOS">Todos os Tipos</option>
-              <option value="Matéria-prima">Matérias-primas</option>
-              <option value="Embalagem">Embalagens</option>
+              <option value="TODOS">Todos os Tipos ({insumos.length})</option>
+              {tiposInsumo.map(t => {
+                const count = insumos.filter(i => 
+                  (i.tipoInsumoId !== undefined && i.tipoInsumoId !== null && i.tipoInsumoId === t.id) ||
+                  (!i.tipoInsumoId && (t.isEmbalagem === i.isEmbalagem))
+                ).length;
+                return (
+                  <option key={t.id} value={t.id.toString()}>
+                    {t.nome} ({count})
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="form-group">
@@ -1095,8 +1250,8 @@ const InsumosPage: React.FC = () => {
 
                         {/* Tipo */}
                         <td className="table-cell">
-                          <span className={`badge ${i.isEmbalagem ? 'badge-blue' : 'badge-green'}`}>
-                            {i.isEmbalagem ? 'Embalagem' : 'Matéria-Prima'}
+                          <span className={`badge ${i.isEmbalagem ? 'badge-blue' : 'badge-green'}`} title={i.tipoInsumoNome || (i.isEmbalagem ? 'Embalagem' : 'Matéria-Prima')}>
+                            {i.tipoInsumoNome || (i.isEmbalagem ? 'Embalagem' : 'Matéria-Prima')}
                           </span>
                         </td>
 
@@ -1576,16 +1731,52 @@ const InsumosPage: React.FC = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="isEmbalagem">Tipo</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label htmlFor="tipoInsumoId" style={{ margin: 0 }} className="required">
+                      Tipo de Insumo
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenTiposModal()}
+                      style={{
+                        fontSize: '12px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: 0,
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        background: 'none',
+                        border: 'none',
+                        fontWeight: 500
+                      }}
+                      title="Gerenciar tipos de insumo"
+                    >
+                      <Plus size={13} /> Gerenciar Tipos
+                    </button>
+                  </div>
                   <select
-                    id="isEmbalagem"
-                    name="isEmbalagem"
-                    value={formData.isEmbalagem}
-                    onChange={e => setFormData({ ...formData, isEmbalagem: e.target.value })}
+                    id="tipoInsumoId"
+                    name="tipoInsumoId"
+                    value={formData.tipoInsumoId}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const tipoObj = tiposInsumo.find(t => t.id.toString() === val);
+                      setFormData({
+                        ...formData,
+                        tipoInsumoId: val,
+                        isEmbalagem: tipoObj ? (tipoObj.isEmbalagem ? 'true' : 'false') : formData.isEmbalagem
+                      });
+                    }}
                     className="w-full"
+                    required
                   >
-                    <option value="false">Matéria-Prima</option>
-                    <option value="true">Embalagem</option>
+                    <option value="">Selecione um Tipo...</option>
+                    {tiposInsumo.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome} {t.isEmbalagem ? '(Embalagem)' : '(Matéria-Prima)'}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
@@ -2066,6 +2257,333 @@ const InsumosPage: React.FC = () => {
                 className="btn btn-secondary"
               >
                 Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Gerenciamento de Tipos de Insumo (CRUD) */}
+      {isModalTiposOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-container" style={{ maxWidth: '680px', width: '100%' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="page-heading-icon" style={{ width: '36px', height: '36px' }}>
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <h3 className="modal-title" style={{ margin: 0, fontSize: '18px' }}>
+                    Tipos de Insumo
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                    Cadastre, edite e gerencie as classificações dos insumos da empresa
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModalTiposOpen(false);
+                  setEditingTipo(null);
+                  setTipoNome('');
+                  setTipoDescricao('');
+                  setTipoIsEmbalagem(false);
+                  setTipoErrorMsg(null);
+                }}
+                className="btn-icon"
+                title="Fechar"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+              {/* Alerta de erro */}
+              {tipoErrorMsg && (
+                <div
+                  style={{
+                    backgroundColor: '#fee2e2',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    marginBottom: '16px',
+                    color: '#991b1b',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{tipoErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Formulário de Criação / Edição */}
+              <div
+                style={{
+                  background: 'var(--surface-2, #f8fafc)',
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  borderRadius: '10px',
+                  padding: '16px',
+                  marginBottom: '20px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {editingTipo ? <Edit2 size={16} color="var(--primary)" /> : <Plus size={16} color="var(--primary)" />}
+                    {editingTipo ? `Editar Tipo: "${editingTipo.nome}"` : 'Adicionar Novo Tipo de Insumo'}
+                  </h4>
+                  {editingTipo && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTipo(null);
+                        setTipoNome('');
+                        setTipoDescricao('');
+                        setTipoIsEmbalagem(false);
+                        setTipoErrorMsg(null);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--muted)',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Cancelar Edição
+                    </button>
+                  )}
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!tipoNome.trim()) {
+                      setTipoErrorMsg('O nome do tipo é obrigatório.');
+                      return;
+                    }
+                    saveTipoMutation.mutate();
+                  }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ marginBottom: '12px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label htmlFor="tipoNomeInput" style={{ fontSize: '12px', fontWeight: 600 }}>
+                        Nome do Tipo *
+                      </label>
+                      <input
+                        id="tipoNomeInput"
+                        type="text"
+                        placeholder="Ex: Fragrância, Frasco, Matéria-prima..."
+                        value={tipoNome}
+                        onChange={(e) => setTipoNome(e.target.value)}
+                        required
+                        className="w-full"
+                        style={{ fontSize: '13px', padding: '8px 10px' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label htmlFor="tipoDescricaoInput" style={{ fontSize: '12px', fontWeight: 600 }}>
+                        Descrição (opcional)
+                      </label>
+                      <input
+                        id="tipoDescricaoInput"
+                        type="text"
+                        placeholder="Ex: Óleos essenciais e aromas concentrados"
+                        value={tipoDescricao}
+                        onChange={(e) => setTipoDescricao(e.target.value)}
+                        className="w-full"
+                        style={{ fontSize: '13px', padding: '8px 10px' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Natureza / Classificação Base */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                      Natureza do Tipo *
+                    </label>
+                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: !tipoIsEmbalagem ? '1.5px solid #22c55e' : '1px solid var(--border-color)',
+                          background: !tipoIsEmbalagem ? 'rgba(34, 197, 94, 0.08)' : 'var(--surface, #ffffff)',
+                          fontWeight: !tipoIsEmbalagem ? 600 : 400
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="naturezaTipo"
+                          checked={!tipoIsEmbalagem}
+                          onChange={() => setTipoIsEmbalagem(false)}
+                        />
+                        <span>Matéria-Prima / Produção</span>
+                      </label>
+
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: tipoIsEmbalagem ? '1.5px solid #3b82f6' : '1px solid var(--border-color)',
+                          background: tipoIsEmbalagem ? 'rgba(59, 130, 246, 0.08)' : 'var(--surface, #ffffff)',
+                          fontWeight: tipoIsEmbalagem ? 600 : 400
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="naturezaTipo"
+                          checked={tipoIsEmbalagem}
+                          onChange={() => setTipoIsEmbalagem(true)}
+                        />
+                        <span>Embalagem (Frascos, Caixas, Rótulos)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={saveTipoMutation.isPending}
+                      style={{ fontSize: '13px', padding: '8px 16px' }}
+                    >
+                      {saveTipoMutation.isPending ? 'Salvando...' : (editingTipo ? 'Atualizar Tipo' : 'Cadastrar Tipo')}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Tabela de Tipos Cadastrados */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>
+                    Tipos Cadastrados ({tiposInsumo.length})
+                  </h4>
+                </div>
+
+                {tiposInsumo.length === 0 ? (
+                  <p style={{ color: 'var(--muted)', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>
+                    Nenhum tipo de insumo cadastrado no momento.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto" style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px' }}>
+                    <table className="w-full" style={{ fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--surface-2, #f8fafc)' }}>
+                          <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Nome</th>
+                          <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Descrição</th>
+                          <th className="table-cell" style={{ textAlign: 'center', width: '130px', fontWeight: 600 }}>Natureza</th>
+                          <th className="table-cell text-center" style={{ width: '100px', fontWeight: 600 }}>Insumos</th>
+                          <th className="table-cell text-center" style={{ width: '90px', fontWeight: 600 }}>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tiposInsumo.map((t) => {
+                          const vinculados = t.insumosVinculadosCount ?? insumos.filter(i => i.tipoInsumoId === t.id).length;
+                          return (
+                            <tr key={t.id} style={{ borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                              <td className="table-cell font-medium">
+                                <span>{t.nome}</span>
+                              </td>
+                              <td className="table-cell td-muted">
+                                {t.descricao || '—'}
+                              </td>
+                              <td className="table-cell text-center">
+                                <span className={`badge ${t.isEmbalagem ? 'badge-blue' : 'badge-green'}`}>
+                                  {t.isEmbalagem ? 'Embalagem' : 'Matéria-Prima'}
+                                </span>
+                              </td>
+                              <td className="table-cell text-center">
+                                <span
+                                  style={{
+                                    background: vinculados > 0 ? 'var(--surface-2, #f1f5f9)' : '#f3f4f6',
+                                    color: vinculados > 0 ? 'var(--foreground, #0f172a)' : '#9ca3af',
+                                    borderRadius: '12px',
+                                    padding: '2px 8px',
+                                    fontSize: '12px',
+                                    fontWeight: 600
+                                  }}
+                                  title={`${vinculados} insumo(s) vinculado(s)`}
+                                >
+                                  {vinculados}
+                                </span>
+                              </td>
+                              <td className="table-cell text-center">
+                                <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'center' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTipo(t);
+                                      setTipoNome(t.nome);
+                                      setTipoDescricao(t.descricao || '');
+                                      setTipoIsEmbalagem(t.isEmbalagem);
+                                      setTipoErrorMsg(null);
+                                    }}
+                                    className="btn btn-action btn-icon"
+                                    title="Editar este tipo"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (vinculados > 0) {
+                                        alert(`Não é possível excluir o tipo "${t.nome}" pois existem ${vinculados} insumo(s) vinculado(s) a ele. Altere o tipo desses insumos antes de excluir.`);
+                                        return;
+                                      }
+                                      if (window.confirm(`Deseja realmente excluir o tipo de insumo "${t.nome}"?`)) {
+                                        deleteTipoMutation.mutate(t.id);
+                                      }
+                                    }}
+                                    className="btn btn-action-danger btn-icon"
+                                    title={vinculados > 0 ? `Não pode ser excluído (${vinculados} insumo(s) vinculado(s))` : 'Excluir tipo'}
+                                    disabled={deleteTipoMutation.isPending}
+                                    style={{ opacity: vinculados > 0 ? 0.45 : 1 }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModalTiposOpen(false);
+                  setEditingTipo(null);
+                  setTipoNome('');
+                  setTipoDescricao('');
+                  setTipoIsEmbalagem(false);
+                  setTipoErrorMsg(null);
+                }}
+                className="btn btn-secondary"
+              >
+                Fechar
               </button>
             </div>
           </div>

@@ -35,15 +35,6 @@ interface AuthContextType {
 const AUTH_USER_KEY = 'precific_auth_user';
 const AUTH_TOKEN_KEY = 'precific_auth_token';
 
-// Usuário padrão de desenvolvimento / sessão inicial
-const DEFAULT_USER: UsuarioGlobal = {
-  id: 1,
-  nome: 'Administrador DCSYS',
-  email: 'admin@dcsys.com',
-  isSuperuser: true,
-  ativo: true
-};
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -60,6 +51,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem(AUTH_TOKEN_KEY) || null;
   });
+
+  // Sincroniza e valida a sessão real com o banco de dados na inicialização
+  useEffect(() => {
+    if (!token || !user?.email) return;
+
+    let isMounted = true;
+    const syncSession = async () => {
+      try {
+        const res = await fetch('/api/global/auth/me', {
+          headers: {
+            'X-User-Email': user.email,
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.usuario) {
+            setUser(data.usuario);
+            localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.usuario));
+          }
+        } else if (res.status === 401 || res.status === 403) {
+          if (isMounted) {
+            logout();
+          }
+        }
+      } catch (err) {
+        console.warn('Não foi possível sincronizar sessão com o servidor:', err);
+      }
+    };
+
+    syncSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -158,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         isAuthenticated: !!user,
-        isSuperuser: !!user?.isSuperuser,
+        isSuperuser: Boolean(user && user.isSuperuser === true),
         login,
         loginWithGoogle,
         logout

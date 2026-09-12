@@ -91,7 +91,7 @@ const AppContent: React.FC = () => {
           <Route path="/pedido" element={<PedidoPage />} />
           <Route path="/compras" element={<ComprasPage />} />
           <Route path="/estoque" element={<EstoquePage />} />
-          <Route path="/gestao-global" element={<GestaoGlobalPage />} />
+          <Route path="/gestao-global" element={isSuperuser ? <GestaoGlobalPage /> : <Navigate to="/" replace />} />
           <Route path="/superadmin" element={isSuperuser ? <SuperAdminPage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -16,7 +16,8 @@ fun Application.insumoRouting(db: AppDatabase) {
             get("/json") {
                 val insumos = database.insumos.lerTodos()
                 val unidades = database.unidadesMedida.lerTodos()
-                call.respond(mapOf("insumos" to insumos, "unidades" to unidades))
+                val tiposInsumo = database.tiposInsumo.lerTodos()
+                call.respond(mapOf("insumos" to insumos, "unidades" to unidades, "tiposInsumo" to tiposInsumo))
             }
 
             get {
@@ -133,7 +134,21 @@ private suspend fun ApplicationCall.insumoFromParameters(db: AppDatabase): Insum
     var estoque = p["estoque"]?.toDoubleOrNull() ?: 0.0
     var estoqueMinimo = p["estoqueMinimo"]?.toDoubleOrNull() ?: 0.0
     val preco = p["preco"]?.toDoubleOrNull() ?: 0.0
-    val isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull() ?: false
+    var isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull() ?: false
+    var tipoInsumoId = p["tipoInsumoId"]?.toIntOrNull()
+
+    if (tipoInsumoId != null) {
+        val tipo = db.tiposInsumo.lerPorId(tipoInsumoId)
+        if (tipo != null) {
+            isEmbalagem = tipo.isEmbalagem
+        }
+    } else {
+        val tipos = db.tiposInsumo.lerTodos()
+        val tipoCorrespondente = tipos.firstOrNull { it.isEmbalagem == isEmbalagem }
+        if (tipoCorrespondente != null) {
+            tipoInsumoId = tipoCorrespondente.id
+        }
+    }
 
     val unidade = db.unidadesMedida.lerPorId(unidadeId)
     val sigla = unidade?.sigla?.lowercase() ?: ""
@@ -183,7 +198,8 @@ private suspend fun ApplicationCall.insumoFromParameters(db: AppDatabase): Insum
         estoqueMinimo = estoqueMinimo,
         dataValidade = p["dataValidade"]?.takeIf { it.isNotBlank() },
         lote = p["lote"]?.takeIf { it.isNotBlank() },
-        codigoBarras = p["codigoBarras"]?.takeIf { it.isNotBlank() }
+        codigoBarras = p["codigoBarras"]?.takeIf { it.isNotBlank() },
+        tipoInsumoId = tipoInsumoId
     )
 }
 

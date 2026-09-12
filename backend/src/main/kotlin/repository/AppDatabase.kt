@@ -2,6 +2,7 @@ package org.example.repository
 
 class AppDatabase {
     val unidadesMedida = UnidadesMedidaRepository()
+    val tiposInsumo = TipoInsumoRepository()
     val fornecedores = FornecedorRepository()
     val clientes = ClienteRepository()
     val insumos = InsumoRepository()
