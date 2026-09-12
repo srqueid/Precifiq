@@ -43,6 +43,8 @@ fun main(args: Array<String>) {
             allowHeader(HttpHeaders.ContentType)
             allowHeader(HttpHeaders.Authorization)
             allowHeader("X-Company-Schema")
+            allowHeader("X-User-Email")
+            allowHeader("X-Company-Id")
             allowMethod(HttpMethod.Get)
             allowMethod(HttpMethod.Post)
             allowMethod(HttpMethod.Put)
@@ -60,15 +62,61 @@ fun main(args: Array<String>) {
             }
         }
 
-        // Interceptor Multi-Tenant: extrai e valida o header X-Company-Schema
+        // Interceptor Multi-Tenant Estrito: Valida permissões e bloqueia acesso cruzado não autorizado
         intercept(ApplicationCallPipeline.Plugins) {
-            val schemaHeader = call.request.headers["X-Company-Schema"]
-            val schema = if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader.trim())) {
-                schemaHeader.trim()
-            } else {
-                "controle"
+            val uri = call.request.uri
+            val path = uri.substringBefore("?")
+
+            // Rotas isentas de validação de tenant operacional:
+            // 1. Healthcheck do container
+            // 2. Autenticação global (login, google)
+            // 3. Arquivos estáticos do frontend (não iniciados com /api/)
+            if (path == "/api/health" || path.startsWith("/api/global/auth/") || !path.startsWith("/api/")) {
+                proceed()
+                return@intercept
             }
-            TenantContext.setCurrentSchema(schema)
+
+            val callerEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
+            val schemaHeader = call.request.headers["X-Company-Schema"]?.trim()?.lowercase()
+
+            // Rotas de governança central (/api/global/...): tratam segurança em nível de endpoint
+            if (path.startsWith("/api/global/")) {
+                if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader)) {
+                    TenantContext.setCurrentSchema(schemaHeader)
+                }
+                proceed()
+                return@intercept
+            }
+
+            // Rotas operacionais do negócio (/api/insumos, /api/produtos, /api/pedidos, etc.):
+            // Requerem usuário autenticado e permissão explícita para o schema solicitado
+            if (callerEmail.isNullOrBlank()) {
+                call.respond(
+                    HttpStatusCode.Unauthorized, 
+                    mapOf("error" to "Autenticação obrigatória: cabeçalho X-User-Email ausente.")
+                )
+                finish()
+                return@intercept
+            }
+
+            val schemaToUse = if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader)) {
+                schemaHeader
+            } else {
+                obterSchemaPadraoUsuario(callerEmail) ?: "controle"
+            }
+
+            if (!isUserAuthorizedForSchema(callerEmail, schemaToUse)) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf(
+                        "error" to "Acesso negado: O usuário '$callerEmail' não possui permissão para acessar a empresa/unidade de schema '$schemaToUse'."
+                    )
+                )
+                finish()
+                return@intercept
+            }
+
+            TenantContext.setCurrentSchema(schemaToUse)
             proceed()
         }
 

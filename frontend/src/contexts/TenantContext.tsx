@@ -56,7 +56,23 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.schemaName) return parsed;
+      }
+      // Se não há empresa salva, mas há usuário logado com vínculo:
+      const authSaved = localStorage.getItem('precific_auth_user');
+      if (authSaved) {
+        const parsedUser = JSON.parse(authSaved);
+        if (parsedUser?.empresas && parsedUser.empresas.length > 0) {
+          const first = parsedUser.empresas[0];
+          return {
+            id: first.empresaId,
+            tipo: first.empresaTipo || 'MATRIZ',
+            nomeFantasia: first.empresaNome,
+            schemaName: first.schemaName,
+            ativo: true
+          };
+        }
       }
     } catch {
       // Ignora erro de JSON
@@ -91,11 +107,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (parsed?.email) {
               headers.set('X-User-Email', parsed.email);
             }
-          } else {
-            headers.set('X-User-Email', 'admin@dcsys.com');
           }
         } catch {
-          headers.set('X-User-Email', 'admin@dcsys.com');
+          // Ignora erro
         }
       }
 
@@ -123,7 +137,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const data: EmpresaHierarquia[] = await res.json();
         setEmpresasHierarquia(data);
 
-        // Se a empresa ativa não existir na lista ou for nula, garante uma válida
+        // Se a empresa ativa não pertencer às empresas permitidas pelo backend, ajusta imediatamente
         if (data.length > 0) {
           const allCompanies: EmpresaItem[] = [];
           data.forEach(m => {
@@ -139,8 +153,11 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             m.filiais?.forEach(f => allCompanies.push(f));
           });
 
-          const currentStillActive = allCompanies.some(c => c.schemaName === activeCompanyRef.current?.schemaName && c.ativo);
-          if (!currentStillActive && allCompanies.length > 0) {
+          const currentStillAuthorized = allCompanies.some(
+            c => c.schemaName === activeCompanyRef.current?.schemaName && c.ativo
+          );
+
+          if (!currentStillAuthorized && allCompanies.length > 0) {
             const firstActive = allCompanies.find(c => c.ativo) || allCompanies[0];
             selectCompany(firstActive);
           }
@@ -155,9 +172,39 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     refreshEmpresas();
+
+    const handleAuthChanged = () => {
+      refreshEmpresas();
+    };
+
+    window.addEventListener('authChanged', handleAuthChanged);
+    return () => window.removeEventListener('authChanged', handleAuthChanged);
   }, []);
 
   const selectCompany = (empresa: EmpresaItem) => {
+    // Validação de Segurança: o usuário só pode alternar para empresas pertencentes à sua hierarquia permitida
+    if (empresasHierarquia.length > 0) {
+      const allCompanies: EmpresaItem[] = [];
+      empresasHierarquia.forEach(m => {
+        allCompanies.push({
+          id: m.id,
+          tipo: m.tipo,
+          nomeFantasia: m.nomeFantasia,
+          razaoSocial: m.razaoSocial,
+          cnpj: m.cnpj,
+          schemaName: m.schemaName,
+          ativo: m.ativo
+        });
+        m.filiais?.forEach(f => allCompanies.push(f));
+      });
+
+      const isAllowed = allCompanies.some(c => c.id === empresa.id);
+      if (!isAllowed) {
+        console.warn(`Tentativa de alternar para empresa não autorizada ID ${empresa.id} (${empresa.nomeFantasia}). Ação bloqueada.`);
+        return;
+      }
+    }
+
     setActiveCompanyState(empresa);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(empresa));

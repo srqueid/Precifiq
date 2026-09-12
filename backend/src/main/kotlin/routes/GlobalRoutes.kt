@@ -54,11 +54,11 @@ private fun ApplicationCall.getCallerIp(): String {
         ?: request.local.remoteHost
 }
 
-private fun ApplicationCall.checkSuperuser(): Pair<Boolean, String?> {
-    val callerEmail = request.headers["X-User-Email"]?.trim()
+fun ApplicationCall.checkSuperuser(): Pair<Boolean, String?> {
+    val callerEmail = request.headers["X-User-Email"]?.trim()?.lowercase()
     val isSuper = transaction {
         if (callerEmail.isNullOrBlank()) {
-            true // Ambiente de desenvolvimento / requisições diretas
+            false
         } else {
             val u = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
             u?.get(UsuariosTable.isSuperuser) == true
@@ -67,27 +67,83 @@ private fun ApplicationCall.checkSuperuser(): Pair<Boolean, String?> {
     return Pair(isSuper, callerEmail)
 }
 
-private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: String = "SENHA"): LoginResponse {
-    val userId = user[UsuariosTable.id]
-    val isSuperuser = user[UsuariosTable.isSuperuser]
-    val userEmail = user[UsuariosTable.email]
+fun isUserAuthorizedForSchema(userEmail: String?, schema: String): Boolean {
+    val cleanSchema = schema.trim().lowercase()
+    if (cleanSchema == "public" || cleanSchema == "global") {
+        return true
+    }
+    if (userEmail.isNullOrBlank()) {
+        return false
+    }
+    return transaction {
+        val user = UsuariosTable.select { UsuariosTable.email eq userEmail.trim().lowercase() }.firstOrNull()
+            ?: return@transaction false
 
-    // Buscar empresas do usuário e hierarquia
-    val (vinculos, hierarquia) = transaction {
-        val vinculosRows = (UsuarioEmpresasTable innerJoin EmpresasTable innerJoin PerfisTable)
-            .select { UsuarioEmpresasTable.usuarioId eq userId }
-            .map { row ->
-                UsuarioEmpresaVinculoDTO(
-                    id = row[UsuarioEmpresasTable.id],
-                    empresaId = row[EmpresasTable.id],
-                    empresaNome = row[EmpresasTable.nomeFantasia],
-                    empresaTipo = row[EmpresasTable.tipo],
-                    schemaName = row[EmpresasTable.schemaName],
-                    perfilId = row[PerfisTable.id],
-                    perfilCodigo = row[PerfisTable.codigo],
-                    perfilNome = row[PerfisTable.nome]
-                )
-            }
+        // Superusuário possui acesso a qualquer schema
+        if (user[UsuariosTable.isSuperuser]) {
+            return@transaction true
+        }
+
+        val empresaAlvo = EmpresasTable.select { EmpresasTable.schemaName eq cleanSchema }.firstOrNull()
+            ?: return@transaction false
+
+        if (!empresaAlvo[EmpresasTable.ativo]) {
+            return@transaction false
+        }
+
+        val empresaAlvoId = empresaAlvo[EmpresasTable.id]
+        val matrizAlvoId = empresaAlvo[EmpresasTable.matrizId]
+        val userId = user[UsuariosTable.id]
+
+        // 1. Vínculo direto com a empresa alvo
+        val temVinculoDireto = UsuarioEmpresasTable.select {
+            (UsuarioEmpresasTable.usuarioId eq userId) and (UsuarioEmpresasTable.empresaId eq empresaAlvoId)
+        }.count() > 0
+        if (temVinculoDireto) return@transaction true
+
+        // 2. Se a empresa alvo for uma filial, verificar se o usuário é ADMIN_MATRIZ da matriz controladora
+        if (matrizAlvoId != null) {
+            val isAdminMatrizPai = (UsuarioEmpresasTable innerJoin PerfisTable).select {
+                (UsuarioEmpresasTable.usuarioId eq userId) and 
+                (UsuarioEmpresasTable.empresaId eq matrizAlvoId) and 
+                (PerfisTable.codigo eq "ADMIN_MATRIZ")
+            }.count() > 0
+            if (isAdminMatrizPai) return@transaction true
+        }
+
+        false
+    }
+}
+
+fun obterSchemaPadraoUsuario(userEmail: String?): String? {
+    if (userEmail.isNullOrBlank()) return null
+    return transaction {
+        val user = UsuariosTable.select { UsuariosTable.email eq userEmail.trim().lowercase() }.firstOrNull()
+            ?: return@transaction null
+
+        if (user[UsuariosTable.isSuperuser]) {
+            return@transaction "controle"
+        }
+
+        val userId = user[UsuariosTable.id]
+        val vinculo = (UsuarioEmpresasTable innerJoin EmpresasTable)
+            .select { (UsuarioEmpresasTable.usuarioId eq userId) and (EmpresasTable.ativo eq true) }
+            .firstOrNull()
+
+        vinculo?.get(EmpresasTable.schemaName)
+    }
+}
+
+fun obterEmpresasPermitidas(callerEmail: String?): List<EmpresaHierarquiaDTO> {
+    if (callerEmail.isNullOrBlank()) return emptyList()
+    val emailNorm = callerEmail.trim().lowercase()
+
+    return transaction {
+        val user = UsuariosTable.select { UsuariosTable.email eq emailNorm }.firstOrNull()
+            ?: return@transaction emptyList()
+
+        val isSuper = user[UsuariosTable.isSuperuser]
+        val userId = user[UsuariosTable.id]
 
         val todasEmpresas = EmpresasTable.selectAll().map { row ->
             EmpresaDTO(
@@ -104,16 +160,67 @@ private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: 
             )
         }
 
-        // Se for superusuário, tem acesso a todas. Caso contrário, apenas às vinculadas.
-        val permitidas = if (isSuperuser) todasEmpresas else {
-            val idsPermitidos = vinculosRows.map { it.empresaId }.toSet()
-            todasEmpresas.filter { it.id in idsPermitidos }
+        if (isSuper) {
+            val matrizes = todasEmpresas.filter { it.tipo.equals("MATRIZ", ignoreCase = true) }
+            val filiais = todasEmpresas.filter { it.tipo.equals("FILIAL", ignoreCase = true) }
+            return@transaction matrizes.map { m ->
+                EmpresaHierarquiaDTO(
+                    id = m.id,
+                    tipo = m.tipo,
+                    nomeFantasia = m.nomeFantasia,
+                    razaoSocial = m.razaoSocial,
+                    cnpj = m.cnpj,
+                    schemaName = m.schemaName,
+                    bancoDados = m.bancoDados,
+                    ativo = m.ativo,
+                    filiais = filiais.filter { it.matrizId == m.id }
+                )
+            }
         }
 
-        val matrizes = permitidas.filter { it.tipo.equals("MATRIZ", ignoreCase = true) }
-        val filiais = permitidas.filter { it.tipo.equals("FILIAL", ignoreCase = true) }
+        // Para usuário comum: buscar vínculos diretos
+        val vinculos = (UsuarioEmpresasTable innerJoin PerfisTable)
+            .select { UsuarioEmpresasTable.usuarioId eq userId }
+            .map { row ->
+                Pair(row[UsuarioEmpresasTable.empresaId], row[PerfisTable.codigo])
+            }
 
-        val hierarquiaTree = matrizes.map { m ->
+        if (vinculos.isEmpty()) {
+            return@transaction emptyList()
+        }
+
+        val empresasVinculadasIds = vinculos.map { it.first }.toSet()
+        val ehAdminMatrizIds = vinculos.filter { it.second == "ADMIN_MATRIZ" }.map { it.first }.toSet()
+
+        // Filtrar apenas empresas ativas
+        val empresasAtivas = todasEmpresas.filter { it.ativo }
+
+        // Identificar matrizes autorizadas para este usuário:
+        // 1. Matrizes onde o usuário tem vínculo direto
+        val matrizesDiretasIds = empresasVinculadasIds.filter { id ->
+            empresasAtivas.any { it.id == id && it.tipo.equals("MATRIZ", ignoreCase = true) }
+        }.toSet()
+
+        // 2. Matrizes pai das filiais onde o usuário tem vínculo
+        val filiaisVinculadas = empresasAtivas.filter { 
+            it.tipo.equals("FILIAL", ignoreCase = true) && it.id in empresasVinculadasIds 
+        }
+        val matrizesPaisDeFiliaisIds = filiaisVinculadas.mapNotNull { it.matrizId }.toSet()
+
+        val todasMatrizesAutorizadasIds = matrizesDiretasIds + matrizesPaisDeFiliaisIds
+        val matrizes = empresasAtivas.filter { it.id in todasMatrizesAutorizadasIds && it.tipo.equals("MATRIZ", ignoreCase = true) }
+
+        // Montar a árvore estritamente isolada:
+        matrizes.map { m ->
+            val isAdminDestaMatriz = m.id in ehAdminMatrizIds
+            // Se for ADMIN_MATRIZ daquela Matriz: tem visão e acesso a todas as filiais daquela matriz
+            // Se for outro perfil: vê apenas as filiais daquela matriz às quais está expressamente vinculado
+            val filiaisDestaMatriz = empresasAtivas.filter { f ->
+                f.tipo.equals("FILIAL", ignoreCase = true) && 
+                f.matrizId == m.id && 
+                (isAdminDestaMatriz || f.id in empresasVinculadasIds)
+            }
+
             EmpresaHierarquiaDTO(
                 id = m.id,
                 tipo = m.tipo,
@@ -121,12 +228,38 @@ private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: 
                 razaoSocial = m.razaoSocial,
                 cnpj = m.cnpj,
                 schemaName = m.schemaName,
+                bancoDados = m.bancoDados,
                 ativo = m.ativo,
-                filiais = filiais.filter { it.matrizId == m.id }
+                filiais = filiaisDestaMatriz
             )
         }
+    }
+}
 
-        Pair(vinculosRows, hierarquiaTree)
+private fun montarSessaoUsuario(user: ResultRow, ipOrigem: String?, metodoAuth: String = "SENHA"): LoginResponse {
+    val userId = user[UsuariosTable.id]
+    val isSuperuser = user[UsuariosTable.isSuperuser]
+    val userEmail = user[UsuariosTable.email]
+
+    // Buscar empresas do usuário e hierarquia permitida
+    val (vinculos, hierarquia) = transaction {
+        val vinculosRows = (UsuarioEmpresasTable innerJoin EmpresasTable innerJoin PerfisTable)
+            .select { (UsuarioEmpresasTable.usuarioId eq userId) and (EmpresasTable.ativo eq true) }
+            .map { row ->
+                UsuarioEmpresaVinculoDTO(
+                    id = row[UsuarioEmpresasTable.id],
+                    empresaId = row[EmpresasTable.id],
+                    empresaNome = row[EmpresasTable.nomeFantasia],
+                    empresaTipo = row[EmpresasTable.tipo],
+                    schemaName = row[EmpresasTable.schemaName],
+                    perfilId = row[PerfisTable.id],
+                    perfilCodigo = row[PerfisTable.codigo],
+                    perfilNome = row[PerfisTable.nome]
+                )
+            }
+
+        val tree = obterEmpresasPermitidas(userEmail)
+        Pair(vinculosRows, tree)
     }
 
     val usuarioDTO = UsuarioGlobalDTO(
@@ -372,42 +505,11 @@ fun Route.globalRoutes() {
             }
         }
 
-        // 2. Listagem de Empresas (Hierarquia Matriz e Filiais)
+        // 2. Listagem de Empresas (Hierarquia Matriz e Filiais com Isolamento por Usuário)
         get("/empresas") {
             try {
-                val hierarquia = transaction {
-                    val todas = EmpresasTable.selectAll().map { row ->
-                        EmpresaDTO(
-                            id = row[EmpresasTable.id],
-                            tipo = row[EmpresasTable.tipo],
-                            matrizId = row[EmpresasTable.matrizId],
-                            nomeFantasia = row[EmpresasTable.nomeFantasia],
-                            razaoSocial = row[EmpresasTable.razaoSocial],
-                            cnpj = row[EmpresasTable.cnpj],
-                            schemaName = row[EmpresasTable.schemaName],
-                            bancoDados = row[EmpresasTable.bancoDados],
-                            ativo = row[EmpresasTable.ativo],
-                            criadoEm = row[EmpresasTable.criadoEm].toString()
-                        )
-                    }
-
-                    val matrizes = todas.filter { it.tipo.equals("MATRIZ", ignoreCase = true) }
-                    val filiais = todas.filter { it.tipo.equals("FILIAL", ignoreCase = true) }
-
-                    matrizes.map { m ->
-                        EmpresaHierarquiaDTO(
-                            id = m.id,
-                            tipo = m.tipo,
-                            nomeFantasia = m.nomeFantasia,
-                            razaoSocial = m.razaoSocial,
-                            cnpj = m.cnpj,
-                            schemaName = m.schemaName,
-                            bancoDados = m.bancoDados,
-                            ativo = m.ativo,
-                            filiais = filiais.filter { it.matrizId == m.id }
-                        )
-                    }
-                }
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
+                val hierarquia = obterEmpresasPermitidas(callerEmail)
                 call.respond(hierarquia)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -919,9 +1021,10 @@ fun Route.globalRoutes() {
             }
         }
 
-        // 4. Listar Usuários Globais e seus Vínculos
+        // 4. Listar Usuários Globais e seus Vínculos (Isolamento por Organização)
         get("/usuarios") {
             try {
+                val (isSuper, callerEmail) = call.checkSuperuser()
                 val usuarios = transaction {
                     val todosUsuarios = UsuariosTable.selectAll().map { uRow ->
                         val uId = uRow[UsuariosTable.id]
@@ -951,7 +1054,39 @@ fun Route.globalRoutes() {
                             empresas = vinculos
                         )
                     }
-                    todosUsuarios
+
+                    if (isSuper) {
+                        todosUsuarios
+                    } else if (callerEmail.isNullOrBlank()) {
+                        emptyList()
+                    } else {
+                        val callerUser = UsuariosTable.select { UsuariosTable.email eq callerEmail }.firstOrNull()
+                        if (callerUser == null) {
+                            emptyList()
+                        } else {
+                            val callerEmpresasIds = (UsuarioEmpresasTable innerJoin PerfisTable)
+                                .select { UsuarioEmpresasTable.usuarioId eq callerUser[UsuariosTable.id] }
+                                .map { it[UsuarioEmpresasTable.empresaId] }.toSet()
+
+                            val matrizesQueAdministra = (UsuarioEmpresasTable innerJoin PerfisTable)
+                                .select { 
+                                    (UsuarioEmpresasTable.usuarioId eq callerUser[UsuariosTable.id]) and 
+                                    (PerfisTable.codigo eq "ADMIN_MATRIZ") 
+                                }
+                                .map { it[UsuarioEmpresasTable.empresaId] }.toSet()
+
+                            val filiaisDasMatrizes = if (matrizesQueAdministra.isNotEmpty()) {
+                                EmpresasTable.select { EmpresasTable.matrizId inList matrizesQueAdministra }
+                                    .map { it[EmpresasTable.id] }.toSet()
+                            } else emptySet()
+
+                            val todasEmpresasVisiveis = callerEmpresasIds + filiaisDasMatrizes
+
+                            todosUsuarios.filter { u ->
+                                u.empresas?.any { v -> v.empresaId in todasEmpresasVisiveis } == true
+                            }
+                        }
+                    }
                 }
                 call.respond(usuarios)
             } catch (e: Exception) {
