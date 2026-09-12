@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:15-alpine
+    profiles:
+      - db
     restart: unless-stopped
     command: postgres -p 5444
     environment:
@@ -29,18 +31,16 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=${DB_HOST:-postgres}
-      - DB_PORT=${DB_PORT:-5444}
-      - DB_NAME=${DB_NAME:-precifiq_db}
-      - DB_USER=${DB_USER:-precifiq_user}
-      - DB_PASSWORD=${DB_PASSWORD:-p2QL+2Svy&3cQUaM}
-      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - DB_HOST=${DB_HOST:-ep-winter-wildflower-ap91sljr-pooler.c-7.us-east-1.aws.neon.tech}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-neondb}
+      - DB_USER=${DB_USER:-neondb_owner}
+      - DB_PASSWORD=${DB_PASSWORD:-npg_OnP97uVYqigX}
+      - DB_SSLMODE=${DB_SSLMODE:-require}
+      - JDBC_DATABASE_URL=${JDBC_DATABASE_URL:-jdbc:postgresql://ep-winter-wildflower-ap91sljr-pooler.c-7.us-east-1.aws.neon.tech:5432/neondb?sslmode=require&channel_binding=require}
     restart: unless-stopped
     expose:
       - "8081"
-    depends_on:
-      postgres:
-        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.precifiq-backend.rule=Host(`precifiq.dcsys.info`) && PathPrefix(`/api`)"
