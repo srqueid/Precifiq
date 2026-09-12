@@ -93,6 +93,14 @@ class TenantProvisioningService {
      * Carrega o arquivo de template DDL do disco ou usa o fallback embutido.
      */
     private fun carregarTemplateDdl(schemaName: String): String {
+        // 1. Tenta carregar do classpath (ideal para JAR/Docker)
+        val resourceStream = TenantProvisioningService::class.java.getResourceAsStream("/tenant_schema_template.sql")
+        if (resourceStream != null) {
+            val raw = resourceStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            return raw.replace("%SCHEMA%", schemaName)
+        }
+
+        // 2. Tenta carregar de caminhos relativos no filesystem
         val userDir = System.getProperty("user.dir")
         val possiblePaths = listOf(
             File(userDir, "tenant_schema_template.sql"),
@@ -107,7 +115,7 @@ class TenantProvisioningService {
             }
         }
 
-        // Fallback robusto caso o arquivo não seja encontrado no filesystem
+        // 3. Fallback robusto caso o arquivo não seja encontrado
         return gerarFallbackDdl(schemaName)
     }
 

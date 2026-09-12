@@ -104,8 +104,8 @@ export const GestaoGlobalPage: React.FC = () => {
     nomeFantasia: '',
     razaoSocial: '',
     cnpj: '',
-    bancoDados: 'bd_controle',
-    schemaName: 'matriz',
+    bancoDados: '',
+    schemaName: '',
     adminNome: '',
     adminEmail: '',
     adminSenha: ''
@@ -116,7 +116,7 @@ export const GestaoGlobalPage: React.FC = () => {
     nomeFantasia: '',
     razaoSocial: '',
     cnpj: '',
-    schemaName: 'filial_',
+    schemaName: '',
     adminNome: '',
     adminEmail: '',
     adminSenha: ''
@@ -236,9 +236,13 @@ export const GestaoGlobalPage: React.FC = () => {
 
     setIsSavingEmpresa(true);
     try {
-      const slug = formMatriz.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
-      const dbAuto = formMatriz.bancoDados.trim() || ('bd_' + slug).substring(0, 50);
-      const schemaAuto = formMatriz.schemaName.trim() || 'matriz';
+      const clean = formMatriz.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const dbAuto = (formMatriz.bancoDados.trim() && formMatriz.bancoDados.trim() !== 'bd_controle')
+        ? formMatriz.bancoDados.trim()
+        : (`bd_${clean}` || 'bd_empresa');
+      const schemaAuto = (formMatriz.schemaName.trim() && formMatriz.schemaName.trim() !== 'matriz')
+        ? formMatriz.schemaName.trim()
+        : (`db_${clean}` || 'db_empresa');
 
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
@@ -264,7 +268,7 @@ export const GestaoGlobalPage: React.FC = () => {
 
       showFeedback('success', `Matriz cadastrada no banco '${dbAuto}' com schema '${schemaAuto}' e governança 'global'!`);
       setIsModalNovaMatrizOpen(false);
-      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: 'bd_controle', schemaName: 'matriz', adminNome: '', adminEmail: '', adminSenha: '' });
+      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: '', schemaName: '', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
     } catch (err: any) {
       showFeedback('error', err.message || 'Erro inesperado ao criar matriz');
@@ -284,8 +288,10 @@ export const GestaoGlobalPage: React.FC = () => {
     setIsSavingEmpresa(true);
     try {
       const matrizPai = empresasHierarquia.find(m => m.id === Number(formFilial.matrizId));
-      const slug = formFilial.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
-      const schemaAuto = formFilial.schemaName.trim() || ('filial_' + slug).substring(0, 50);
+      const clean = formFilial.nomeFantasia.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const schemaAuto = formFilial.schemaName.trim() && !formFilial.schemaName.trim().startsWith('filial_')
+        ? formFilial.schemaName.trim()
+        : (`db_${clean}` || 'db_filial');
 
       const res = await fetch('/api/global/empresas', {
         method: 'POST',
@@ -311,7 +317,7 @@ export const GestaoGlobalPage: React.FC = () => {
 
       showFeedback('success', `Filial cadastrada no schema '${schemaAuto}' dentro do banco '${matrizPai?.bancoDados || 'bd_controle'}'!`);
       setIsModalNovaFilialOpen(false);
-      setFormFilial({ matrizId: empresasHierarquia[0]?.id || 1, nomeFantasia: '', razaoSocial: '', cnpj: '', schemaName: 'filial_', adminNome: '', adminEmail: '', adminSenha: '' });
+      setFormFilial({ matrizId: empresasHierarquia[0]?.id || 1, nomeFantasia: '', razaoSocial: '', cnpj: '', schemaName: '', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
     } catch (err: any) {
       showFeedback('error', err.message || 'Erro inesperado ao criar filial');
@@ -1143,12 +1149,13 @@ export const GestaoGlobalPage: React.FC = () => {
                   value={formMatriz.nomeFantasia}
                   onChange={e => {
                     const val = e.target.value;
-                    const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                    const clean = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
                     setFormMatriz(prev => ({
                       ...prev,
                       nomeFantasia: val,
                       razaoSocial: prev.razaoSocial || val,
-                      bancoDados: slug ? `bd_${slug}` : 'bd_controle'
+                      bancoDados: clean ? `bd_${clean}` : '',
+                      schemaName: clean ? `db_${clean}` : ''
                     }));
                   }}
                   className="w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500"
@@ -1202,7 +1209,7 @@ export const GestaoGlobalPage: React.FC = () => {
                     onChange={e => setFormMatriz({ ...formMatriz, schemaName: e.target.value })}
                     className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-purple-500 font-bold text-purple-700 bg-slate-50"
                   />
-                  <span className="text-xs text-gray-400 mt-0.5 block">Padrão: matriz ou controle</span>
+                  <span className="text-xs text-gray-400 mt-0.5 block">Padrão: db_&lt;empresa&gt; (ex.: db_galeriavagalume)</span>
                 </div>
               </div>
 
@@ -1332,11 +1339,11 @@ export const GestaoGlobalPage: React.FC = () => {
                   value={formFilial.nomeFantasia}
                   onChange={e => {
                     const val = e.target.value;
-                    const slug = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+                    const clean = val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
                     setFormFilial(prev => ({
                       ...prev,
                       nomeFantasia: val,
-                      schemaName: slug ? `filial_${slug}` : 'filial_'
+                      schemaName: clean ? `db_${clean}` : ''
                     }));
                   }}
                   className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500"
@@ -1373,12 +1380,12 @@ export const GestaoGlobalPage: React.FC = () => {
                 <label className="block font-medium text-gray-700 mb-1">Schema da Filial (PostgreSQL)</label>
                 <input
                   type="text"
-                  placeholder="filial_shopping_sul"
+                  placeholder="db_filialshopping"
                   value={formFilial.schemaName}
                   onChange={e => setFormFilial({ ...formFilial, schemaName: e.target.value })}
                   className="w-full p-2 border rounded-md font-mono text-xs focus:ring-2 focus:ring-green-500 font-bold text-teal-700 bg-slate-50"
                 />
-                <span className="text-xs text-gray-400 mt-0.5 block">Convenção: filial_&lt;nome&gt;. Criado no banco de dados da Matriz.</span>
+                <span className="text-xs text-gray-400 mt-0.5 block">Convenção: db_&lt;nome&gt;. Criado no banco de dados da Matriz.</span>
               </div>
 
               {/* Administrador Inicial da Filial */}
