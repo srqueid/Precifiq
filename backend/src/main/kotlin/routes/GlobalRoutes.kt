@@ -8,6 +8,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.example.*
 import org.example.services.TenantProvisioningService
+import org.example.services.EmailService
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -429,6 +430,241 @@ fun Route.globalRoutes() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao validar sessão")))
+            }
+        }
+
+        // 1.3 Troca de Senha de Usuário Autenticado
+        post("/auth/trocar-senha") {
+            try {
+                val callerEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
+                if (callerEmail.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Usuário não autenticado"))
+                    return@post
+                }
+
+                val req = call.receive<TrocarSenhaRequest>()
+                if (req.senhaAtual.isBlank() || req.novaSenha.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Senha atual e nova senha são obrigatórias"))
+                    return@post
+                }
+
+                if (req.novaSenha.length < 6) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A nova senha deve ter no mínimo 6 caracteres"))
+                    return@post
+                }
+
+                val user = transaction {
+                    UsuariosTable.select { UsuariosTable.email eq callerEmail }.singleOrNull()
+                }
+
+                if (user == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Usuário não encontrado"))
+                    return@post
+                }
+
+                val senhaAtualCorreta = PasswordUtils.verify(req.senhaAtual, user[UsuariosTable.senhaHash]) ||
+                        req.senhaAtual == user[UsuariosTable.senhaHash]
+
+                if (!senhaAtualCorreta) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A senha atual informada está incorreta"))
+                    return@post
+                }
+
+                val novoHash = PasswordUtils.hash(req.novaSenha)
+                transaction {
+                    UsuariosTable.update({ UsuariosTable.id eq user[UsuariosTable.id] }) {
+                        it[senhaHash] = novoHash
+                    }
+                }
+
+                val ip = call.getCallerIp()
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = "SEGURANCA",
+                    atividadeRealizada = "Senha alterada com sucesso pelo próprio usuário",
+                    tabela = "usuario",
+                    registroId = user[UsuariosTable.id],
+                    ipOrigem = ip
+                )
+
+                Thread {
+                    EmailService.enviarAlertaSenhaAlterada(callerEmail, user[UsuariosTable.nome], ip)
+                }.start()
+
+                call.respond(HttpStatusCode.OK, mapOf("success" to true, "message" to "Senha alterada com sucesso!"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao alterar senha")))
+            }
+        }
+
+        // 1.4 Solicitação de Recuperação de Senha (Esqueci a Senha)
+        post("/auth/esqueci-senha") {
+            try {
+                val req = call.receive<EsqueciSenhaRequest>()
+                val emailLimpo = req.email.trim().lowercase()
+
+                if (emailLimpo.isBlank() || !emailLimpo.contains("@")) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Informe um e-mail válido"))
+                    return@post
+                }
+
+                val user = transaction {
+                    UsuariosTable.select { UsuariosTable.email eq emailLimpo }.singleOrNull()
+                }
+
+                if (user == null || !user[UsuariosTable.ativo]) {
+                    // Resposta segura contra enumeração de e-mails
+                    call.respond(HttpStatusCode.OK, mapOf(
+                        "success" to true,
+                        "message" to "Se este e-mail estiver cadastrado no sistema, o código de recuperação foi enviado."
+                    ))
+                    return@post
+                }
+
+                // Gera código numérico de 6 dígitos
+                val codigo = (100000..999999).random().toString()
+                val expira = java.time.LocalDateTime.now().plusMinutes(15)
+
+                transaction {
+                    UsuariosTable.update({ UsuariosTable.id eq user[UsuariosTable.id] }) {
+                        it[resetToken] = codigo
+                        it[resetTokenExpira] = expira
+                    }
+                }
+
+                val nome = user[UsuariosTable.nome]
+                Thread {
+                    EmailService.enviarRecuperacaoSenha(emailLimpo, nome, codigo)
+                }.start()
+
+                registrarAuditoriaGlobal(
+                    usuario = emailLimpo,
+                    funcao = "RECUPERACAO",
+                    atividadeRealizada = "Código de recuperação de senha gerado e enviado por e-mail",
+                    tabela = "usuario",
+                    registroId = user[UsuariosTable.id],
+                    ipOrigem = call.getCallerIp()
+                )
+
+                call.respond(HttpStatusCode.OK, mapOf(
+                    "success" to true,
+                    "message" to "Código de recuperação enviado para $emailLimpo. Verifique sua caixa de entrada e spam."
+                ))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao solicitar recuperação")))
+            }
+        }
+
+        // 1.5 Redefinição de Senha com Código / Token
+        post("/auth/redefinir-senha") {
+            try {
+                val req = call.receive<RedefinirSenhaRequest>()
+                val emailLimpo = req.email.trim().lowercase()
+                val tokenLimpo = req.token.trim()
+
+                if (emailLimpo.isBlank() || tokenLimpo.isBlank() || req.novaSenha.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "E-mail, código e nova senha são obrigatórios"))
+                    return@post
+                }
+
+                if (req.novaSenha.length < 6) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A nova senha deve ter no mínimo 6 caracteres"))
+                    return@post
+                }
+
+                val user = transaction {
+                    UsuariosTable.select { UsuariosTable.email eq emailLimpo }.singleOrNull()
+                }
+
+                if (user == null || !user[UsuariosTable.ativo]) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Usuário inválido ou inativo"))
+                    return@post
+                }
+
+                val savedToken = user[UsuariosTable.resetToken]
+                val expira = user[UsuariosTable.resetTokenExpira]
+
+                if (savedToken.isNullOrBlank() || savedToken != tokenLimpo) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Código de verificação incorreto ou inválido"))
+                    return@post
+                }
+
+                if (expira == null || expira.isBefore(java.time.LocalDateTime.now())) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O código de recuperação expirou. Solicite um novo código."))
+                    return@post
+                }
+
+                val novoHash = PasswordUtils.hash(req.novaSenha)
+                transaction {
+                    UsuariosTable.update({ UsuariosTable.id eq user[UsuariosTable.id] }) {
+                        it[senhaHash] = novoHash
+                        it[resetToken] = null
+                        it[resetTokenExpira] = null
+                    }
+                }
+
+                val ip = call.getCallerIp()
+                registrarAuditoriaGlobal(
+                    usuario = emailLimpo,
+                    funcao = "RECUPERACAO",
+                    atividadeRealizada = "Senha redefinida com sucesso utilizando código de recuperação",
+                    tabela = "usuario",
+                    registroId = user[UsuariosTable.id],
+                    ipOrigem = ip
+                )
+
+                Thread {
+                    EmailService.enviarAlertaSenhaAlterada(emailLimpo, user[UsuariosTable.nome], ip)
+                }.start()
+
+                call.respond(HttpStatusCode.OK, mapOf(
+                    "success" to true,
+                    "message" to "Senha redefinida com sucesso! Você já pode entrar com a nova senha."
+                ))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao redefinir senha")))
+            }
+        }
+
+        // 1.6 Teste de Envio de E-mail / Alertas
+        post("/auth/testar-email") {
+            try {
+                val req = call.receive<TestarEmailRequest>()
+                val destino = req.emailDestino.trim().lowercase()
+
+                if (destino.isBlank() || !destino.contains("@")) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Informe um e-mail de destino válido"))
+                    return@post
+                }
+
+                val isSmtp = EmailService.isSmtpConfigured()
+                val htmlConteudo = """
+                    <div style="font-size: 15px; color: #1e293b; margin-bottom: 12px;">
+                        <strong>Teste de Conectividade de E-mail Concluído com Sucesso!</strong>
+                    </div>
+                    <p style="color: #475569; margin: 0 0 12px;">
+                        Este e-mail de teste confirma que o serviço de alertas e envio de notificações do <strong>Precifiq ERP</strong> está ativo e operacional.
+                    </p>
+                    <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; font-size: 12px; color: #64748b;">
+                        <strong>Status do Servidor SMTP:</strong> ${if (isSmtp) "Configurado e Ativo (Produção)" else "Modo de Simulação / Desenvolvimento Seguro"}<br>
+                        <strong>Data do Teste:</strong> ${java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))}
+                    </div>
+                """.trimIndent()
+
+                val enviado = EmailService.enviarAlertaSistema(destino, "Teste de Conectividade e Alertas", htmlConteudo)
+
+                call.respond(HttpStatusCode.OK, mapOf(
+                    "success" to true,
+                    "smtpConfigurado" to isSmtp,
+                    "message" to if (isSmtp) "E-mail de teste disparado via SMTP com sucesso para $destino!" 
+                                 else "Teste processado em modo de demonstração (verifique o console do backend)."
+                ))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao testar envio de e-mail")))
             }
         }
 

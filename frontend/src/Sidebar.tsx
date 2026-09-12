@@ -25,11 +25,13 @@ import {
   Check, 
   GitFork, 
   ShieldCheck, 
-  LogOut 
+  LogOut,
+  KeyRound 
 } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useTenant, EmpresaItem } from './contexts/TenantContext';
 import { useAuth } from './contexts/AuthContext';
+import AlterarSenhaModal from './components/AlterarSenhaModal';
 import packageJson from '../package.json';
 import precifiqLogo from './assets/precifiq.png';
 
@@ -102,6 +104,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   const { activeCompany, empresasHierarquia, selectCompany } = useTenant();
   const { user, isSuperuser, logout } = useAuth();
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [isAlterarSenhaOpen, setIsAlterarSenhaOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const appVersion = packageJson?.version || '0.1.0';
 
@@ -548,27 +551,47 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              logout();
-              navigate('/login');
-            }}
-            title="Sair / Trocar Conta"
-            style={{
-              padding: '6px 8px',
-              borderRadius: '6px',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              color: 'var(--text-secondary, #64748b)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <LogOut size={13} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button
+              type="button"
+              onClick={() => setIsAlterarSenhaOpen(true)}
+              title="Alterar Senha"
+              style={{
+                padding: '6px 8px',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-secondary, #64748b)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <KeyRound size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+              title="Sair / Trocar Conta"
+              style={{
+                padding: '6px 8px',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-secondary, #64748b)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <LogOut size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Rodapé com Seletor de Tema */}
@@ -669,30 +692,55 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                logout();
-                onClose();
-                navigate('/login');
-              }}
-              title="Sair / Trocar Conta"
-              className="btn-action-danger"
-              style={{
-                padding: '6px',
-                borderRadius: 'var(--radius)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}
-            >
-              <LogOut size={16} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  setIsAlterarSenhaOpen(true);
+                }}
+                title="Alterar Senha"
+                style={{
+                  padding: '6px',
+                  borderRadius: 'var(--radius)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <KeyRound size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  onClose();
+                  navigate('/login');
+                }}
+                title="Sair / Trocar Conta"
+                className="btn-action-danger"
+                style={{
+                  padding: '6px',
+                  borderRadius: 'var(--radius)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>
+      {/* Modal de Alteração de Senha */}
+      <AlterarSenhaModal isOpen={isAlterarSenhaOpen} onClose={() => setIsAlterarSenhaOpen(false)} />
     </aside>
   );
 };

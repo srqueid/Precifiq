@@ -46,6 +46,8 @@ object UsuariosTable : Table("usuario") {
     val criadoEm = datetime("criado_em").defaultExpression(CurrentDateTime)
     val fotoUrl = varchar("foto_url", 500).nullable()
     val googleId = varchar("google_id", 100).nullable()
+    val resetToken = varchar("reset_token", 100).nullable()
+    val resetTokenExpira = datetime("reset_token_expira").nullable()
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -207,6 +209,25 @@ data class DesvincularEmpresaUsuarioRequest(
 data class LoginRequest(
     val email: String,
     val senha: String
+)
+
+data class TrocarSenhaRequest(
+    val senhaAtual: String,
+    val novaSenha: String
+)
+
+data class EsqueciSenhaRequest(
+    val email: String
+)
+
+data class RedefinirSenhaRequest(
+    val email: String,
+    val token: String,
+    val novaSenha: String
+)
+
+data class TestarEmailRequest(
+    val emailDestino: String
 )
 
 data class LoginResponse(

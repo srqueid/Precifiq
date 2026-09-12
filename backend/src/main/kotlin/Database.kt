@@ -197,6 +197,8 @@ object DatabaseConfig {
                     );
                     ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS foto_url VARCHAR(500);
                     ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);
+                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);
+                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP WITHOUT TIME ZONE;
                 """.trimIndent())
 
                 exec("""

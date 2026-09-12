@@ -1,7 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, X, Save, Moon, Sun, Monitor, Settings, Users, Receipt, Clock } from 'lucide-react';
+import { 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  X, 
+  Save, 
+  Moon, 
+  Sun, 
+  Monitor, 
+  Settings, 
+  Users, 
+  Receipt, 
+  Clock, 
+  KeyRound, 
+  Mail, 
+  Send, 
+  ShieldCheck, 
+  CheckCircle2, 
+  AlertCircle, 
+  Loader2 
+} from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import AlterarSenhaModal from '../components/AlterarSenhaModal';
 
 interface Funcionario {
   id: number;
@@ -36,6 +58,42 @@ const ConfiguracoesPage: React.FC = () => {
   const [despModalOpen, setDespModalOpen] = useState(false);
   const [editingDesp, setEditingDesp] = useState<Despesa | null>(null);
   const [despForm, setDespForm] = useState({ descricao: '', valorMensal: '' });
+
+  const { user } = useAuth();
+  const [alterarSenhaOpen, setAlterarSenhaOpen] = useState(false);
+  const [emailTeste, setEmailTeste] = useState(user?.email || '');
+  const [testandoEmail, setTestandoEmail] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
+
+  useEffect(() => {
+    if (user?.email && !emailTeste) {
+      setEmailTeste(user.email);
+    }
+  }, [user?.email]);
+
+  const handleTestarEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailTeste) return;
+    setTestandoEmail(true);
+    setEmailFeedback(null);
+    try {
+      const res = await fetch('/api/global/auth/testar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailTeste })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEmailFeedback({ tipo: 'sucesso', msg: data.mensagem || 'E-mail de teste enviado com sucesso!' });
+      } else {
+        setEmailFeedback({ tipo: 'erro', msg: data.error || 'Falha ao enviar e-mail de teste.' });
+      }
+    } catch {
+      setEmailFeedback({ tipo: 'erro', msg: 'Erro de conexão com o servidor ao testar e-mail.' });
+    } finally {
+      setTestandoEmail(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['configuracoes'],
@@ -392,6 +450,113 @@ const ConfiguracoesPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+        {/* Seção: Segurança & Alertas do Sistema */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          {/* Card: Segurança & Senha */}
+          <div className="card">
+            <div className="flex items-center gap-3 mb-4">
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                color: '#2563eb',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900" style={{ margin: 0 }}>Segurança da Conta</h2>
+                <p className="text-xs text-gray-500" style={{ margin: 0 }}>Controle de credenciais e senha de acesso</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              Mantenha sua conta segura alterando sua senha periodicamente. Ao atualizar sua senha, todas as suas sessões anteriores permanecem protegidas e um alerta de segurança é emitido.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setAlterarSenhaOpen(true)}
+              className="btn btn-primary flex items-center gap-2"
+              style={{ width: 'fit-content' }}
+            >
+              <KeyRound size={16} />
+              Alterar Minha Senha
+            </button>
+          </div>
+
+          {/* Card: Alertas & Notificações por E-mail */}
+          <div className="card">
+            <div className="flex items-center gap-3 mb-4">
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                color: '#10b981',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Mail size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900" style={{ margin: 0 }}>Notificações & Alertas</h2>
+                <p className="text-xs text-gray-500" style={{ margin: 0 }}>Disparo de e-mails do sistema e recuperação</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              O Precifiq envia códigos de recuperação e alertas de segurança através do serviço de e-mail integrado. Teste a entrega enviando um e-mail para seu endereço:
+            </p>
+
+            <form onSubmit={handleTestarEmail} className="space-y-3">
+              <div className="form-group">
+                <label htmlFor="email-teste" className="text-xs font-semibold text-gray-700">E-mail para Teste de Envio</label>
+                <div className="flex gap-2">
+                  <input
+                    id="email-teste"
+                    type="email"
+                    required
+                    value={emailTeste}
+                    onChange={e => setEmailTeste(e.target.value)}
+                    placeholder="seuemail@exemplo.com"
+                    className="w-full"
+                    style={{ fontSize: '13px' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={testandoEmail || !emailTeste}
+                    className="btn btn-secondary flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {testandoEmail ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                    <span>{testandoEmail ? 'Enviando...' : 'Testar'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {emailFeedback && (
+                <div
+                  className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                    emailFeedback.tipo === 'sucesso' 
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {emailFeedback.tipo === 'sucesso' ? <CheckCircle2 size={16} className="flex-shrink-0" /> : <AlertCircle size={16} className="flex-shrink-0" />}
+                  <span>{emailFeedback.msg}</span>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+
+        {/* Modal de Alteração de Senha */}
+        <AlterarSenhaModal isOpen={alterarSenhaOpen} onClose={() => setAlterarSenhaOpen(false)} />
       
         {/* Modal Reutilizável (Funcionário ou Despesa) */}
         {(funcModalOpen || despModalOpen) && (
