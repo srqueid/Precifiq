@@ -8,7 +8,9 @@ import {
   ArrowRight, 
   Loader2, 
   AlertCircle,
-  Server
+  Server,
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from '../js/app';
 import precifiqLogo from '../assets/precifiq.png';
@@ -22,6 +24,13 @@ export const LoginPage: React.FC = () => {
   const [senha, setSenha] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
+  const [showDemo, setShowDemo] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('demo') === 'true' || params.get('demo') === '1';
+    }
+    return false;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,62 +182,82 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Atalhos Rápidos para Acesso de Teste / Apresentação */}
-        <div className="login-demo-section">
-          <div className="login-demo-title">
-            Acesso Rápido para Demonstração
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {/* Superusuário DcSys */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin@dcsys.com', 'admin123')}
-              className="login-demo-btn"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="login-demo-icon-box bg-purple-700">
-                  <Server size={16} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-purple-900">
-                    Superusuário (DcSys)
-                  </div>
-                  <div className="text-[11px] text-purple-700">
-                    admin@dcsys.com • Infraestrutura & Bancos
-                  </div>
-                </div>
-              </div>
-              <span className="login-demo-badge bg-purple-100 text-purple-900">
-                Preencher
-              </span>
-            </button>
-
-            {/* Administrador da Matriz */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('silvia@empresa.com', '123456')}
-              className="login-demo-btn"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="login-demo-icon-box bg-blue-600">
-                  <Building2 size={16} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">
-                    Administrador da Empresa
-                  </div>
-                  <div className="text-[11px] text-slate-600">
-                    silvia@empresa.com • Operação ERP
-                  </div>
-                </div>
-              </div>
-              <span className="login-demo-badge bg-slate-200 text-slate-700">
-                Preencher
-              </span>
-            </button>
-          </div>
+        {/* Link para Demonstração ("demo") */}
+        <div className="flex justify-center pt-1 pb-1">
+          <button
+            type="button"
+            onClick={() => setShowDemo(prev => !prev)}
+            className="text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer bg-transparent border-0 py-1 px-2.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+            title={showDemo ? 'Ocultar credenciais de demonstração' : 'Exibir credenciais de demonstração'}
+          >
+            <Sparkles size={13} className={showDemo ? 'text-indigo-600' : 'text-slate-400'} />
+            <span>{showDemo ? 'Ocultar demonstração' : 'Acesso para demonstração ("demo")'}</span>
+            <ChevronDown 
+              size={13} 
+              className={`transition-transform duration-200 ${showDemo ? 'rotate-180 text-indigo-600' : 'text-slate-400'}`} 
+            />
+          </button>
         </div>
+
+        {/* Atalhos Rápidos para Acesso de Teste / Apresentação (exibido apenas ao clicar no link de demonstração) */}
+        {showDemo && (
+          <div className="login-demo-section animate-in fade-in duration-200">
+            <div className="login-demo-title flex items-center justify-center gap-1.5">
+              <Sparkles size={12} className="text-indigo-500" />
+              <span>Acesso Rápido para Demonstração (Demo)</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {/* Superusuário DcSys */}
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('admin@dcsys.com', 'admin123')}
+                className="login-demo-btn"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="login-demo-icon-box bg-purple-700">
+                    <Server size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-purple-900">
+                      Superusuário (DcSys)
+                    </div>
+                    <div className="text-[11px] text-purple-700">
+                      admin@dcsys.com • Infraestrutura & Bancos
+                    </div>
+                  </div>
+                </div>
+                <span className="login-demo-badge bg-purple-100 text-purple-900">
+                  Preencher
+                </span>
+              </button>
+
+              {/* Administrador da Matriz */}
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('silvia@empresa.com', '123456')}
+                className="login-demo-btn"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="login-demo-icon-box bg-blue-600">
+                    <Building2 size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">
+                      Administrador da Empresa
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      silvia@empresa.com • Operação ERP
+                    </div>
+                  </div>
+                </div>
+                <span className="login-demo-badge bg-slate-200 text-slate-700">
+                  Preencher
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Rodapé Informativo */}
         <div className="text-center text-[11px] text-slate-400">
