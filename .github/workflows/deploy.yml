@@ -30,6 +30,11 @@ jobs:
             # 3. Define função de Rollback em caso de falha no deploy
             rollback() {
               echo "❌ ERRO CRÍTICO NO DEPLOY! Os containers não ficaram saudáveis."
+              echo "📋 ==================== LOGS DO BACKEND ===================="
+              docker compose logs --tail=100 backend || true
+              echo "📋 ==================== LOGS DO POSTGRES ==================="
+              docker compose logs --tail=50 postgres || true
+              echo "📋 ========================================================="
               if [ -n "$PREV_COMMIT" ]; then
                 echo "⚠️ Iniciando ROLLBACK AUTOMÁTICO para o commit: ${PREV_COMMIT}..."
                 git reset --hard "$PREV_COMMIT"

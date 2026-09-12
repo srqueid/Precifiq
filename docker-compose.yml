@@ -16,10 +16,11 @@ services:
     networks:
       - precifiq-app-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -p 5444 -U $${DB_USER:-precifiq_user} -d $${DB_NAME:-precifiq_db}" ]
+      test: [ "CMD-SHELL", "pg_isready -p 5444 -U $${POSTGRES_USER:-precifiq_user} -d $${POSTGRES_DB:-precifiq_db}" ]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   backend:
     build:
@@ -38,7 +39,8 @@ services:
     expose:
       - "8081"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.precifiq-backend.rule=Host(`precifiq.dcsys.info`) && PathPrefix(`/api`)"
