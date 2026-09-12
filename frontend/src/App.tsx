@@ -28,7 +28,7 @@ import SuperAdminPage from './pages/SuperAdminPage';
 import { LoginPage } from './pages/LoginPage';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isSuperuser } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const location = useLocation();
@@ -92,7 +92,7 @@ const AppContent: React.FC = () => {
           <Route path="/compras" element={<ComprasPage />} />
           <Route path="/estoque" element={<EstoquePage />} />
           <Route path="/gestao-global" element={<GestaoGlobalPage />} />
-          <Route path="/superadmin" element={<SuperAdminPage />} />
+          <Route path="/superadmin" element={isSuperuser ? <SuperAdminPage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>
 

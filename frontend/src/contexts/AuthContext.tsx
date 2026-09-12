@@ -81,6 +81,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.usuario));
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
 
+      // Se o usuário possui empresa vinculada, define a primeira como empresa ativa
+      if (data.usuario?.empresas && data.usuario.empresas.length > 0) {
+        const first = data.usuario.empresas[0];
+        const initialCompany = {
+          id: first.empresaId,
+          tipo: first.empresaTipo || 'MATRIZ',
+          nomeFantasia: first.empresaNome,
+          schemaName: first.schemaName,
+          ativo: true
+        };
+        localStorage.setItem('precific_active_company', JSON.stringify(initialCompany));
+      }
+
+      window.dispatchEvent(new CustomEvent('authChanged'));
+
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message || 'Erro ao conectar ao servidor' };
@@ -107,6 +122,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.usuario));
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
 
+      // Se o usuário possui empresa vinculada, define a primeira como empresa ativa
+      if (data.usuario?.empresas && data.usuario.empresas.length > 0) {
+        const first = data.usuario.empresas[0];
+        const initialCompany = {
+          id: first.empresaId,
+          tipo: first.empresaTipo || 'MATRIZ',
+          nomeFantasia: first.empresaNome,
+          schemaName: first.schemaName,
+          ativo: true
+        };
+        localStorage.setItem('precific_active_company', JSON.stringify(initialCompany));
+      }
+
+      window.dispatchEvent(new CustomEvent('authChanged'));
+
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message || 'Erro ao conectar ao servidor' };
@@ -118,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     localStorage.removeItem(AUTH_USER_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem('precific_active_company');
+    window.dispatchEvent(new CustomEvent('authChanged'));
   };
 
   return (
