@@ -15,6 +15,7 @@ import {
 import { toast } from '../js/app';
 import precifiqLogo from '../assets/precifiq.png';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
+import { RecuperarSenhaModal } from '../components/RecuperarSenhaModal';
 
 export const LoginPage: React.FC = () => {
   const { login, loginWithGoogle } = useAuth();
@@ -24,6 +25,7 @@ export const LoginPage: React.FC = () => {
   const [senha, setSenha] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
+  const [isRecuperarModalOpen, setIsRecuperarModalOpen] = useState(false);
   const [showDemo, setShowDemo] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -149,6 +151,13 @@ export const LoginPage: React.FC = () => {
               <label className="login-label m-0">
                 Senha
               </label>
+              <button
+                type="button"
+                onClick={() => setIsRecuperarModalOpen(true)}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline bg-transparent border-0 cursor-pointer p-0"
+              >
+                Esqueceu sua senha?
+              </button>
             </div>
             <div className="login-input-wrapper">
               <Lock size={18} className="login-input-icon" />
@@ -264,6 +273,17 @@ export const LoginPage: React.FC = () => {
           DcSys Tecnologia • Plataforma Precifiq v1.0.0
         </div>
       </div>
+
+      {/* Modal de Recuperação de Senha por E-mail */}
+      <RecuperarSenhaModal
+        isOpen={isRecuperarModalOpen}
+        onClose={() => setIsRecuperarModalOpen(false)}
+        initialEmail={email}
+        onSenhaRedefinida={(emailRedefinido) => {
+          setEmail(emailRedefinido);
+          setSenha('');
+        }}
+      />
     </div>
   );
 };
