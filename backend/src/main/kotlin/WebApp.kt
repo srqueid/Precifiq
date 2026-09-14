@@ -301,7 +301,7 @@ fun Application.configureRouting(db: AppDatabase) {
                 val pedidosPendentesEntregaCount = pedidosPendentesEntrega.size
                 val pedidosPendentesEntregaTotal = pedidosPendentesEntrega.sumOf { it[PedidosTable.valor] ?: 0.0 }
                 val pedidosPendentesEntregaList = pedidosPendentesEntrega.take(15).map { row ->
-                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)?.toString()
+                    val dpStr = row[PedidosTable.dataPagamento]
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
@@ -318,12 +318,12 @@ fun Application.configureRouting(db: AppDatabase) {
 
                 // Pedidos Pendentes de Pagamento (dataPagamento nulo ou vazio)
                 val pedidosPendentesPagamento = pedidos.filter { row ->
-                    row.getOrNull(PedidosTable.dataPagamento)?.toString().isNullOrBlank()
+                    row[PedidosTable.dataPagamento].isNullOrBlank()
                 }
                 val pedidosPendentesPagamentoCount = pedidosPendentesPagamento.size
                 val pedidosPendentesPagamentoTotal = pedidosPendentesPagamento.sumOf { it[PedidosTable.valor] ?: 0.0 }
                 val pedidosPendentesPagamentoList = pedidosPendentesPagamento.take(15).map { row ->
-                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)?.toString()
+                    val dpStr = row[PedidosTable.dataPagamento]
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),

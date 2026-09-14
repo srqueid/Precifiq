@@ -93,7 +93,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
+                dataPagamento = row[PedidosTable.dataPagamento],
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )
@@ -119,7 +119,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
+                dataPagamento = row[PedidosTable.dataPagamento],
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )
@@ -261,7 +261,7 @@ class PedidoRepository {
             }
         }
 
-        buscarPorId(novoPedidoId.toInt()) ?: pedido.copy(id = novoPedidoId.toInt())
+        buscarPorId(novoPedidoId) ?: pedido.copy(id = novoPedidoId)
     }
 
     fun atualizarEntrega(id: Int, entregue: Boolean) = transaction {
@@ -296,7 +296,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
+                dataPagamento = row[PedidosTable.dataPagamento],
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )
