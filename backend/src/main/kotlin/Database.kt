@@ -488,7 +488,8 @@ object DatabaseConfig {
 
                     ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor DOUBLE PRECISION DEFAULT 0.0;
                     ALTER TABLE pedido ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(50) DEFAULT 'OUTROS';
-                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(20);
+                    ALTER TABLE pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(50);
+                    ALTER TABLE pedido ALTER COLUMN data_pagamento TYPE VARCHAR(50) USING data_pagamento::text;
                     ALTER TABLE pedido ADD COLUMN IF NOT EXISTS entregue BOOLEAN DEFAULT FALSE;
 
                     ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'PRODUTO';
@@ -929,10 +930,16 @@ object DatabaseConfig {
                                     ALTER TABLE "$tSchema".pedido ALTER COLUMN valor_total SET DEFAULT 0.0;
                                     ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS valor DOUBLE PRECISION DEFAULT 0.0;
                                     ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(50) DEFAULT 'OUTROS';
-                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(20);
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(50);
+                                    ALTER TABLE "$tSchema".pedido ALTER COLUMN data_pagamento TYPE VARCHAR(50) USING data_pagamento::text;
                                     ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS entregue BOOLEAN DEFAULT FALSE;
                                     ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
                                     ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'produto_variacao') THEN
+                                    ALTER TABLE "$tSchema".produto_variacao ALTER COLUMN unidade_medida_tamanho_id DROP NOT NULL;
+                                    UPDATE "$tSchema".produto_variacao SET unidade_medida_tamanho_id = 1 WHERE unidade_medida_tamanho_id IS NULL;
                                 END IF;
 
                                 IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedido_item') THEN

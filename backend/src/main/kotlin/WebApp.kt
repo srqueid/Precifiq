@@ -301,6 +301,7 @@ fun Application.configureRouting(db: AppDatabase) {
                 val pedidosPendentesEntregaCount = pedidosPendentesEntrega.size
                 val pedidosPendentesEntregaTotal = pedidosPendentesEntrega.sumOf { it[PedidosTable.valor] ?: 0.0 }
                 val pedidosPendentesEntregaList = pedidosPendentesEntrega.take(15).map { row ->
+                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)?.toString()
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
@@ -309,17 +310,20 @@ fun Application.configureRouting(db: AppDatabase) {
                         "tipoEnvio" to row[PedidosTable.tipoEnvio],
                         "prazoEnvio" to row[PedidosTable.prazoEnvio],
                         "formaPagamento" to row[PedidosTable.formaPagamento],
-                        "dataPagamento" to row[PedidosTable.dataPagamento],
-                        "pago" to !row[PedidosTable.dataPagamento].isNullOrBlank(),
+                        "dataPagamento" to dpStr,
+                        "pago" to !dpStr.isNullOrBlank(),
                         "entregue" to row[PedidosTable.entregue]
                     )
                 }
 
                 // Pedidos Pendentes de Pagamento (dataPagamento nulo ou vazio)
-                val pedidosPendentesPagamento = pedidos.filter { it[PedidosTable.dataPagamento].isNullOrBlank() }
+                val pedidosPendentesPagamento = pedidos.filter { row ->
+                    row.getOrNull(PedidosTable.dataPagamento)?.toString().isNullOrBlank()
+                }
                 val pedidosPendentesPagamentoCount = pedidosPendentesPagamento.size
                 val pedidosPendentesPagamentoTotal = pedidosPendentesPagamento.sumOf { it[PedidosTable.valor] ?: 0.0 }
                 val pedidosPendentesPagamentoList = pedidosPendentesPagamento.take(15).map { row ->
+                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)?.toString()
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
@@ -328,7 +332,7 @@ fun Application.configureRouting(db: AppDatabase) {
                         "tipoEnvio" to row[PedidosTable.tipoEnvio],
                         "prazoEnvio" to row[PedidosTable.prazoEnvio],
                         "formaPagamento" to row[PedidosTable.formaPagamento],
-                        "dataPagamento" to row[PedidosTable.dataPagamento],
+                        "dataPagamento" to dpStr,
                         "pago" to false,
                         "entregue" to row[PedidosTable.entregue]
                     )

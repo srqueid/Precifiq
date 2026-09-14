@@ -93,7 +93,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
+                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )
@@ -119,7 +119,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
+                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )
@@ -296,7 +296,7 @@ class PedidoRepository {
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
+                dataPagamento = row.getOrNull(PedidosTable.dataPagamento)?.toString(),
                 entregue = row[PedidosTable.entregue],
                 itens = listarItens(pedidoId)
             )

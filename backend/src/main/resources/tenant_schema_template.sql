@@ -337,7 +337,7 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido (
     observacoes TEXT,
     valor DOUBLE PRECISION DEFAULT 0.0,
     forma_pagamento VARCHAR(50),
-    data_pagamento TIMESTAMP WITHOUT TIME ZONE,
+    data_pagamento VARCHAR(50),
     entregue BOOLEAN DEFAULT FALSE,
     valor_frete DOUBLE PRECISION DEFAULT 0.0,
     tipo_envio VARCHAR(50) DEFAULT 'RETIRADA',
