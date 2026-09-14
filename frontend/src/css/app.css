@@ -1105,6 +1105,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .badge-green  { background: var(--green-dim); color: var(--green); }

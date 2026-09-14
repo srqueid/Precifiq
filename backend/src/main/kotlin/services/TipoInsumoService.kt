@@ -32,19 +32,16 @@ fun Application.tipoInsumoRouting(db: AppDatabase) {
 
             post {
                 try {
-                    val p = call.receiveParameters()
-                    val nome = p["nome"]?.trim().orEmpty()
-                    if (nome.isBlank()) {
+                    val input = call.receiveTipoInsumoInput()
+                    if (input.nome.isBlank()) {
                         return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do tipo de insumo é obrigatório"))
                     }
-                    val descricao = p["descricao"]?.trim()?.takeIf { it.isNotBlank() }
-                    val isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull() ?: false
 
                     val novoTipo = TipoInsumo(
                         id = 0,
-                        nome = nome,
-                        descricao = descricao,
-                        isEmbalagem = isEmbalagem
+                        nome = input.nome,
+                        descricao = input.descricao,
+                        isEmbalagem = input.isEmbalagem
                     )
                     val id = database.tiposInsumo.criar(novoTipo)
                     call.respond(HttpStatusCode.Created, mapOf("status" to "success", "id" to id))
@@ -57,15 +54,12 @@ fun Application.tipoInsumoRouting(db: AppDatabase) {
                 val id = call.parameters["id"]?.toIntOrNull()
                     ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID inválido"))
                 try {
-                    val p = call.receiveParameters()
-                    val nome = p["nome"]?.trim().orEmpty()
-                    if (nome.isBlank()) {
+                    val input = call.receiveTipoInsumoInput()
+                    if (input.nome.isBlank()) {
                         return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do tipo de insumo é obrigatório"))
                     }
-                    val descricao = p["descricao"]?.trim()?.takeIf { it.isNotBlank() }
-                    val isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull() ?: false
 
-                    database.tiposInsumo.atualizar(id, nome, descricao, isEmbalagem)
+                    database.tiposInsumo.atualizar(id, input.nome, input.descricao, input.isEmbalagem)
                     call.respond(mapOf("status" to "success"))
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao atualizar tipo de insumo")))
@@ -76,15 +70,12 @@ fun Application.tipoInsumoRouting(db: AppDatabase) {
                 val id = call.parameters["id"]?.toIntOrNull()
                     ?: return@put call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID inválido"))
                 try {
-                    val p = call.receiveParameters()
-                    val nome = p["nome"]?.trim().orEmpty()
-                    if (nome.isBlank()) {
+                    val input = call.receiveTipoInsumoInput()
+                    if (input.nome.isBlank()) {
                         return@put call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do tipo de insumo é obrigatório"))
                     }
-                    val descricao = p["descricao"]?.trim()?.takeIf { it.isNotBlank() }
-                    val isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull() ?: false
 
-                    database.tiposInsumo.atualizar(id, nome, descricao, isEmbalagem)
+                    database.tiposInsumo.atualizar(id, input.nome, input.descricao, input.isEmbalagem)
                     call.respond(mapOf("status" to "success"))
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao atualizar tipo de insumo")))
@@ -121,5 +112,31 @@ fun Application.tipoInsumoRouting(db: AppDatabase) {
         route("/tipos-insumo", routeHandlers)
         route("/insumos/tipos", routeHandlers)
         route("/api/tipos-insumo", routeHandlers)
+    }
+}
+
+data class TipoInsumoInput(
+    val nome: String,
+    val descricao: String?,
+    val isEmbalagem: Boolean
+)
+
+private suspend fun ApplicationCall.receiveTipoInsumoInput(): TipoInsumoInput {
+    val ct = request.contentType()
+    if (ct.match(io.ktor.http.ContentType.Application.Json)) {
+        val map = runCatching { receive<Map<String, Any?>>() }.getOrElse { emptyMap() }
+        val nome = (map["nome"] as? String)?.trim().orEmpty()
+        val descricao = (map["descricao"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val isEmbalagem = (map["isEmbalagem"] as? Boolean)
+            ?: (map["isEmbalagem"]?.toString()?.toBooleanStrictOrNull())
+            ?: nome.contains("embalagem", ignoreCase = true)
+        return TipoInsumoInput(nome, descricao, isEmbalagem)
+    } else {
+        val p = receiveParameters()
+        val nome = p["nome"]?.trim().orEmpty()
+        val descricao = p["descricao"]?.trim()?.takeIf { it.isNotBlank() }
+        val isEmbalagem = p["isEmbalagem"]?.toBooleanStrictOrNull()
+            ?: nome.contains("embalagem", ignoreCase = true)
+        return TipoInsumoInput(nome, descricao, isEmbalagem)
     }
 }

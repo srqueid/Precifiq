@@ -33,6 +33,7 @@ interface TenantContextType {
   isLoadingEmpresas: boolean;
   selectCompany: (empresa: EmpresaItem) => void;
   refreshEmpresas: () => Promise<void>;
+  isDemo: boolean;
 }
 
 const STORAGE_KEY = 'precific_active_company';
@@ -41,7 +42,7 @@ const DEFAULT_COMPANY: EmpresaItem = {
   id: 1,
   tipo: 'MATRIZ',
   matrizId: null,
-  nomeFantasia: 'Controle Silvia (Matriz)',
+  nomeFantasia: 'Controle Silvia (Produção)',
   razaoSocial: 'Silvia Artes & Cosméticos Ltda',
   cnpj: '12.345.678/0001-90',
   schemaName: 'controle',
@@ -91,6 +92,18 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const urlString = typeof input === 'string' 
+        ? input 
+        : (input instanceof URL ? input.href : (input as Request).url || '');
+      
+      const isInternal = !urlString.startsWith('http://') && !urlString.startsWith('https://') 
+        || (typeof window !== 'undefined' && urlString.startsWith(window.location.origin));
+
+      // Se for requisição para API externa (ex: ViaCEP), não injeta headers internos para não quebrar o CORS
+      if (!isInternal) {
+        return originalFetch(input, init);
+      }
+
       const currentSchema = activeCompanyRef.current?.schemaName || 'controle';
       const modifiedInit: RequestInit = { ...init };
       const headers = new Headers(modifiedInit.headers || {});
@@ -215,6 +228,11 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     window.dispatchEvent(new CustomEvent('companyChanged', { detail: empresa }));
   };
 
+  const isDemo = Boolean(
+    activeCompany?.schemaName === 'db_demo' ||
+    activeCompany?.nomeFantasia?.toLowerCase().includes('demo')
+  );
+
   return (
     <TenantContext.Provider
       value={{
@@ -222,7 +240,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         empresasHierarquia,
         isLoadingEmpresas,
         selectCompany,
-        refreshEmpresas
+        refreshEmpresas,
+        isDemo
       }}
     >
       {children}

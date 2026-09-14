@@ -13,12 +13,66 @@ import org.example.KitItensTable
 import org.example.MovimentosEstoqueVariacaoTable
 import org.example.PedidosFinanceiroTable
 import org.example.TransacoesFinanceirasTable
+import org.example.ProdutosFinaisTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDateTime
 
 class PedidoRepository {
+
+    private fun resolverItem(item: PedidoItem): PedidoItem {
+        var resolvedVarId = item.variacaoId
+        var resolvedKitId = item.kitId
+        var resolvedTipo = item.tipo ?: "PRODUTO"
+        var custoUnit = item.custoUnitario ?: 0.0
+
+        if (resolvedVarId == null && resolvedKitId == null && item.nome.isNotBlank()) {
+            val varRow = ProdutoVariacoesTable.select { ProdutoVariacoesTable.nomeTamanho eq item.nome }.firstOrNull()
+            if (varRow != null) {
+                resolvedVarId = varRow[ProdutoVariacoesTable.id]
+                resolvedTipo = "PRODUTO"
+                if (custoUnit == 0.0) custoUnit = varRow[ProdutoVariacoesTable.custoUnitarioCalculado]
+            } else {
+                val allVars = (ProdutoVariacoesTable innerJoin ProdutosFinaisTable).selectAll().toList()
+                val matchVar = allVars.firstOrNull { r ->
+                    val pNome = r[ProdutosFinaisTable.nome]
+                    val tNome = r[ProdutoVariacoesTable.nomeTamanho]
+                    item.nome.contains(pNome, ignoreCase = true) && (item.nome.contains(tNome, ignoreCase = true) || tNome.equals("Padrão", ignoreCase = true))
+                }
+                if (matchVar != null) {
+                    resolvedVarId = matchVar[ProdutoVariacoesTable.id]
+                    resolvedTipo = "PRODUTO"
+                    if (custoUnit == 0.0) custoUnit = matchVar[ProdutoVariacoesTable.custoUnitarioCalculado]
+                } else {
+                    val kitRow = KitsTable.select { KitsTable.nome eq item.nome }.firstOrNull()
+                        ?: KitsTable.selectAll().firstOrNull { item.nome.contains(it[KitsTable.nome], ignoreCase = true) }
+                    if (kitRow != null) {
+                        resolvedKitId = kitRow[KitsTable.id]
+                        resolvedTipo = "KIT"
+                        if (custoUnit == 0.0) custoUnit = kitRow[KitsTable.custoTotalCalculado]
+                    }
+                }
+            }
+        } else if (resolvedVarId != null && custoUnit == 0.0) {
+            val varRow = ProdutoVariacoesTable.select { ProdutoVariacoesTable.id eq resolvedVarId }.firstOrNull()
+            if (varRow != null) {
+                custoUnit = varRow[ProdutoVariacoesTable.custoUnitarioCalculado]
+            }
+        } else if (resolvedKitId != null && custoUnit == 0.0) {
+            val kitRow = KitsTable.select { KitsTable.id eq resolvedKitId }.firstOrNull()
+            if (kitRow != null) {
+                custoUnit = kitRow[KitsTable.custoTotalCalculado]
+            }
+        }
+
+        return item.copy(
+            variacaoId = resolvedVarId,
+            kitId = resolvedKitId,
+            tipo = resolvedTipo,
+            custoUnitario = custoUnit
+        )
+    }
 
     fun listarTodos(): List<Pedido> = transaction {
         (PedidosTable leftJoin ClientesTable).selectAll().map { row ->
@@ -28,6 +82,14 @@ class PedidoRepository {
                 clienteId = row[PedidosTable.clienteId],
                 clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
                 valor = row[PedidosTable.valor],
+                valorFrete = row[PedidosTable.valorFrete],
+                tipoEnvio = row[PedidosTable.tipoEnvio],
+                cepDestino = row[PedidosTable.cepDestino],
+                prazoEnvio = row[PedidosTable.prazoEnvio],
+                comprimentoCm = row[PedidosTable.comprimentoCm],
+                larguraCm = row[PedidosTable.larguraCm],
+                alturaCm = row[PedidosTable.alturaCm],
+                pesoKg = row[PedidosTable.pesoKg],
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
@@ -46,6 +108,14 @@ class PedidoRepository {
                 clienteId = row[PedidosTable.clienteId],
                 clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
                 valor = row[PedidosTable.valor],
+                valorFrete = row[PedidosTable.valorFrete],
+                tipoEnvio = row[PedidosTable.tipoEnvio],
+                cepDestino = row[PedidosTable.cepDestino],
+                prazoEnvio = row[PedidosTable.prazoEnvio],
+                comprimentoCm = row[PedidosTable.comprimentoCm],
+                larguraCm = row[PedidosTable.larguraCm],
+                alturaCm = row[PedidosTable.alturaCm],
+                pesoKg = row[PedidosTable.pesoKg],
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
@@ -58,58 +128,27 @@ class PedidoRepository {
 
     fun criar(pedido: Pedido): Pedido = transaction {
         // 1. Resolver itens, calcular custos unitários e verificar disponibilidade de estoque
-        var somaCustoTotal = 0.0
-
-        val itensResolvidos = pedido.itens.map { item ->
-            var resolvedVarId = item.variacaoId
-            var resolvedKitId = item.kitId
-            var resolvedTipo = item.tipo ?: "PRODUTO"
-            var custoUnit = item.custoUnitario ?: 0.0
-
-            // Se não tiver ID explícito, tentar resolver por nome
-            if (resolvedVarId == null && resolvedKitId == null && item.nome.isNotBlank()) {
-                val varRow = ProdutoVariacoesTable.select { ProdutoVariacoesTable.nomeTamanho eq item.nome }.firstOrNull()
-                if (varRow != null) {
-                    resolvedVarId = varRow[ProdutoVariacoesTable.id]
-                    resolvedTipo = "PRODUTO"
-                    custoUnit = varRow[ProdutoVariacoesTable.custoUnitarioCalculado]
-                } else {
-                    val kitRow = KitsTable.select { KitsTable.nome eq item.nome }.firstOrNull()
-                    if (kitRow != null) {
-                        resolvedKitId = kitRow[KitsTable.id]
-                        resolvedTipo = "KIT"
-                        custoUnit = kitRow[KitsTable.custoTotalCalculado]
-                    }
-                }
-            } else if (resolvedVarId != null && custoUnit == 0.0) {
-                val varRow = ProdutoVariacoesTable.select { ProdutoVariacoesTable.id eq resolvedVarId }.firstOrNull()
-                if (varRow != null) {
-                    custoUnit = varRow[ProdutoVariacoesTable.custoUnitarioCalculado]
-                }
-            } else if (resolvedKitId != null && custoUnit == 0.0) {
-                val kitRow = KitsTable.select { KitsTable.id eq resolvedKitId }.firstOrNull()
-                if (kitRow != null) {
-                    custoUnit = kitRow[KitsTable.custoTotalCalculado]
-                }
-            }
-
-            somaCustoTotal += (custoUnit * item.qtd)
-
-            item.copy(
-                variacaoId = resolvedVarId,
-                kitId = resolvedKitId,
-                tipo = resolvedTipo,
-                custoUnitario = custoUnit
-            )
-        }
-
-        val valorVenda = pedido.valor ?: itensResolvidos.sumOf { it.preco * it.qtd }
-        val lucroCalculado = valorVenda - somaCustoTotal
+        val itensResolvidos = pedido.itens.map { resolverItem(it) }
+        val somaCustoTotal = itensResolvidos.sumOf { (it.custoUnitario ?: 0.0) * it.qtd }
+        val valorItens = itensResolvidos.sumOf { it.preco * it.qtd }
+        val valorFrete = pedido.valorFrete ?: 0.0
+        val valorFinal = pedido.valor ?: (valorItens + valorFrete)
+        val lucroCalculado = valorItens - somaCustoTotal
 
         // 2. Gravar o Pedido no banco
         val novoPedidoId = PedidosTable.insert {
             it[clienteId] = pedido.clienteId
-            it[valor] = valorVenda
+            it[valor] = valorFinal
+            it[valorTotal] = valorFinal
+            it[PedidosTable.valorFrete] = valorFrete
+            it[PedidosTable.tipoEnvio] = pedido.tipoEnvio ?: "RETIRADA"
+            it[PedidosTable.cepDestino] = pedido.cepDestino
+            it[PedidosTable.prazoEnvio] = pedido.prazoEnvio
+            it[PedidosTable.comprimentoCm] = pedido.comprimentoCm ?: 20.0
+            it[PedidosTable.larguraCm] = pedido.larguraCm ?: 15.0
+            it[PedidosTable.alturaCm] = pedido.alturaCm ?: 10.0
+            it[PedidosTable.pesoKg] = pedido.pesoKg ?: 0.5
+            it[status] = if (pedido.entregue) "ENTREGUE" else "PENDENTE"
             it[valorCustoTotal] = somaCustoTotal
             it[lucroBruto] = lucroCalculado
             it[formaPagamento] = pedido.formaPagamento
@@ -119,14 +158,17 @@ class PedidoRepository {
 
         // 3. Gravar Itens do Pedido e Executar Baixa de Estoque
         itensResolvidos.forEach { item ->
+            val vTotal = item.preco * item.qtd
             PedidoItensTable.insert {
                 it[PedidoItensTable.pedidoId] = novoPedidoId
                 it[PedidoItensTable.variacaoId] = item.variacaoId
                 it[PedidoItensTable.kitId] = item.kitId
                 it[PedidoItensTable.tipo] = item.tipo ?: "PRODUTO"
                 it[PedidoItensTable.nomeProduto] = item.nome
+                it[PedidoItensTable.produtoNome] = item.nome
                 it[PedidoItensTable.quantidade] = item.qtd
                 it[PedidoItensTable.precoUnitario] = item.preco
+                it[PedidoItensTable.valorTotal] = vTotal
                 it[PedidoItensTable.custoUnitario] = item.custoUnitario ?: 0.0
             }
 
@@ -195,12 +237,12 @@ class PedidoRepository {
         }
 
         // 4. Integração Financeira Automática
-        if (pedido.clienteId != null && valorVenda > 0.0) {
+        if (pedido.clienteId != null && valorFinal > 0.0) {
             try {
                 val statusFin = if (pedido.entregue || !pedido.dataPagamento.isNullOrBlank()) "PAGO" else "PENDENTE"
                 val novoPedFinId = PedidosFinanceiroTable.insert {
                     it[clienteId] = pedido.clienteId!!
-                    it[valorTotal] = valorVenda
+                    it[valorTotal] = valorFinal
                     it[status] = statusFin
                 } get PedidosFinanceiroTable.id
 
@@ -208,8 +250,8 @@ class PedidoRepository {
                     TransacoesFinanceirasTable.insert {
                         it[pedidoId] = novoPedFinId
                         it[tipo] = "RECEBIMENTO"
-                        it[valor] = valorVenda
-                        it[valorLiquido] = valorVenda
+                        it[valor] = valorFinal
+                        it[valorLiquido] = valorFinal
                         it[formaPagamento] = pedido.formaPagamento
                         it[descricao] = "Recebimento Venda Pedido #$novoPedidoId"
                     }
@@ -225,6 +267,13 @@ class PedidoRepository {
     fun atualizarEntrega(id: Int, entregue: Boolean) = transaction {
         PedidosTable.update({ PedidosTable.id eq id }) {
             it[this.entregue] = entregue
+            it[this.status] = if (entregue) "ENTREGUE" else "PENDENTE"
+        }
+    }
+
+    fun atualizarPagamento(id: Int, dataPagamento: String?) = transaction {
+        PedidosTable.update({ PedidosTable.id eq id }) {
+            it[this.dataPagamento] = dataPagamento
         }
     }
 
@@ -236,6 +285,14 @@ class PedidoRepository {
                 clienteId = row[PedidosTable.clienteId],
                 clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
                 valor = row[PedidosTable.valor],
+                valorFrete = row[PedidosTable.valorFrete],
+                tipoEnvio = row[PedidosTable.tipoEnvio],
+                cepDestino = row[PedidosTable.cepDestino],
+                prazoEnvio = row[PedidosTable.prazoEnvio],
+                comprimentoCm = row[PedidosTable.comprimentoCm],
+                larguraCm = row[PedidosTable.larguraCm],
+                alturaCm = row[PedidosTable.alturaCm],
+                pesoKg = row[PedidosTable.pesoKg],
                 valorCustoTotal = row[PedidosTable.valorCustoTotal],
                 lucroBruto = row[PedidosTable.lucroBruto],
                 formaPagamento = row[PedidosTable.formaPagamento],
@@ -263,9 +320,28 @@ class PedidoRepository {
     }
 
     fun atualizar(id: Int, pedido: Pedido): Boolean = transaction {
+        val itensResolvidos = pedido.itens.map { resolverItem(it) }
+        val somaCustoTotal = itensResolvidos.sumOf { (it.custoUnitario ?: 0.0) * it.qtd }
+        val valorItens = itensResolvidos.sumOf { it.preco * it.qtd }
+        val valorFrete = pedido.valorFrete ?: 0.0
+        val valorFinal = pedido.valor ?: (valorItens + valorFrete)
+        val lucroCalculado = valorItens - somaCustoTotal
+
         val updated = PedidosTable.update({ PedidosTable.id eq id }) {
             it[clienteId] = pedido.clienteId
-            it[valor] = pedido.valor
+            it[valor] = valorFinal
+            it[valorTotal] = valorFinal
+            it[PedidosTable.valorFrete] = valorFrete
+            it[PedidosTable.tipoEnvio] = pedido.tipoEnvio ?: "RETIRADA"
+            it[PedidosTable.cepDestino] = pedido.cepDestino
+            it[PedidosTable.prazoEnvio] = pedido.prazoEnvio
+            it[PedidosTable.comprimentoCm] = pedido.comprimentoCm ?: 20.0
+            it[PedidosTable.larguraCm] = pedido.larguraCm ?: 15.0
+            it[PedidosTable.alturaCm] = pedido.alturaCm ?: 10.0
+            it[PedidosTable.pesoKg] = pedido.pesoKg ?: 0.5
+            it[valorCustoTotal] = somaCustoTotal
+            it[lucroBruto] = lucroCalculado
+            it[status] = if (pedido.entregue) "ENTREGUE" else "PENDENTE"
             it[formaPagamento] = pedido.formaPagamento
             it[dataPagamento] = pedido.dataPagamento
             it[entregue] = pedido.entregue
@@ -273,15 +349,18 @@ class PedidoRepository {
 
         if (updated > 0) {
             PedidoItensTable.deleteWhere { PedidoItensTable.pedidoId eq id }
-            pedido.itens.forEach { item ->
+            itensResolvidos.forEach { item ->
+                val vTotal = item.preco * item.qtd
                 PedidoItensTable.insert {
                     it[PedidoItensTable.pedidoId] = id
                     it[PedidoItensTable.variacaoId] = item.variacaoId
                     it[PedidoItensTable.kitId] = item.kitId
                     it[PedidoItensTable.tipo] = item.tipo ?: "PRODUTO"
                     it[PedidoItensTable.nomeProduto] = item.nome
+                    it[PedidoItensTable.produtoNome] = item.nome
                     it[PedidoItensTable.quantidade] = item.qtd
                     it[PedidoItensTable.precoUnitario] = item.preco
+                    it[PedidoItensTable.valorTotal] = vTotal
                     it[PedidoItensTable.custoUnitario] = item.custoUnitario ?: 0.0
                 }
             }

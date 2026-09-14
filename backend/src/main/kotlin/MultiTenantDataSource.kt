@@ -23,7 +23,7 @@ class MultiTenantDataSource(private val delegate: DataSource) : DataSource {
         try {
             val schema = TenantContext.getCurrentSchema()
             conn.createStatement().use { stmt ->
-                stmt.execute("SET search_path TO \"$schema\", global, public;")
+                stmt.execute("SET search_path TO \"$schema\", global;")
             }
         } catch (e: SQLException) {
             System.err.println("WARN: Falha ao definir search_path para conexão: ${e.message}")

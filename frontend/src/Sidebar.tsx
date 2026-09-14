@@ -101,7 +101,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const { activeCompany, empresasHierarquia, selectCompany } = useTenant();
+  const { activeCompany, empresasHierarquia, selectCompany, isDemo } = useTenant();
   const { user, isSuperuser, logout } = useAuth();
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isAlterarSenhaOpen, setIsAlterarSenhaOpen] = useState(false);
@@ -306,31 +306,85 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
               textAlign: 'left',
               transition: 'all 0.15s ease'
             }}
-            title="Alternar entre Matriz e Filiais"
+            title="Alternar entre Empresas e Unidades"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', flex: 1 }}>
               <div style={{
-                padding: '4px',
+                padding: '5px',
                 borderRadius: '6px',
-                background: activeCompany?.tipo === 'MATRIZ' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                color: activeCompany?.tipo === 'MATRIZ' ? '#2563eb' : '#059669',
-                display: 'flex'
+                background: isDemo 
+                  ? 'rgba(245, 158, 11, 0.15)' 
+                  : (activeCompany?.tipo === 'MATRIZ' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
+                color: isDemo 
+                  ? '#d97706' 
+                  : (activeCompany?.tipo === 'MATRIZ' ? '#2563eb' : '#059669'),
+                display: 'flex',
+                flexShrink: 0
               }}>
-                {activeCompany?.tipo === 'MATRIZ' ? <Building2 size={16} /> : <GitFork size={16} />}
+                {isDemo ? <Sparkles size={16} /> : (activeCompany?.tipo === 'MATRIZ' ? <Building2 size={16} /> : <GitFork size={16} />)}
               </div>
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '140px' }}>
+              <div style={{ overflow: 'hidden', flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '115px' }}>
                     {activeCompany?.nomeFantasia || 'Selecione uma empresa'}
                   </span>
+                  {isDemo ? (
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 800,
+                      background: 'rgba(245, 158, 11, 0.18)',
+                      color: '#d97706',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      padding: '1px 4px',
+                      borderRadius: '4px',
+                      letterSpacing: '0.3px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🟡 DEMO
+                    </span>
+                  ) : (
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 800,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#059669',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      padding: '1px 4px',
+                      borderRadius: '4px',
+                      letterSpacing: '0.3px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🟢 PROD
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-secondary, #64748b)', fontFamily: 'monospace' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary, #64748b)', fontFamily: 'monospace', marginTop: '1px' }}>
                   {activeCompany ? `${activeCompany.tipo === 'MATRIZ' ? 'MATRIZ' : 'FILIAL'} • ${activeCompany.schemaName || 'default'}` : 'Nenhuma empresa ativa'}
                 </div>
               </div>
             </div>
             <ChevronDown size={14} style={{ opacity: 0.7, transform: isCompanyDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
           </button>
+
+          {/* Banner indicador de modo demonstração */}
+          {isDemo && (
+            <div style={{
+              marginTop: '6px',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              fontSize: '10px',
+              color: '#b45309',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontWeight: 600
+            }}>
+              <Sparkles size={11} style={{ flexShrink: 0 }} />
+              <span>Ambiente Demo (dados de teste isolados)</span>
+            </div>
+          )}
 
           {/* Menu Dropdown de Seleção de Filiais */}
           {isCompanyDropdownOpen && (
@@ -355,6 +409,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
               {safeHierarquia.map((matriz) => {
                 const isSelectedMatriz = activeCompany?.id === matriz.id && activeCompany?.tipo === 'MATRIZ';
                 const filiais = Array.isArray(matriz.filiais) ? matriz.filiais : [];
+                const isMatrizDemo = matriz.schemaName === 'db_demo' || matriz.nomeFantasia.toLowerCase().includes('demo');
 
                 return (
                   <div key={matriz.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
@@ -378,21 +433,29 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: isSelectedMatriz ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                        background: isSelectedMatriz ? (isMatrizDemo ? 'rgba(245, 158, 11, 0.1)' : 'rgba(59, 130, 246, 0.08)') : 'transparent',
                         border: 'none',
                         cursor: 'pointer',
-                        color: isSelectedMatriz ? '#2563eb' : 'inherit',
+                        color: isSelectedMatriz ? (isMatrizDemo ? '#d97706' : '#2563eb') : 'inherit',
                         textAlign: 'left',
                         fontSize: '12px',
                         fontWeight: 600
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Building2 size={13} style={{ color: '#2563eb' }} />
-                        <span>{matriz.nomeFantasia}</span>
-                        <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>MATRIZ</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                        {isMatrizDemo ? (
+                          <Sparkles size={13} style={{ color: '#d97706', flexShrink: 0 }} />
+                        ) : (
+                          <Building2 size={13} style={{ color: '#2563eb', flexShrink: 0 }} />
+                        )}
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{matriz.nomeFantasia}</span>
+                        {isMatrizDemo ? (
+                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', color: '#d97706', fontWeight: 800, flexShrink: 0 }}>DEMO</span>
+                        ) : (
+                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#059669', fontWeight: 700, flexShrink: 0 }}>PROD</span>
+                        )}
                       </div>
-                      {isSelectedMatriz && <Check size={14} style={{ color: '#2563eb' }} />}
+                      {isSelectedMatriz && <Check size={14} style={{ color: isMatrizDemo ? '#d97706' : '#2563eb', flexShrink: 0 }} />}
                     </button>
 
                     {/* Filiais */}

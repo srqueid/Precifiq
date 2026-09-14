@@ -48,9 +48,14 @@ fun Application.pedidoRouting(db: AppDatabase) {
             }
 
             post {
-                val pedido = call.receive<Pedido>()
-                val criado = database.pedidos.criar(pedido)
-                call.respond(HttpStatusCode.Created, criado)
+                try {
+                    val pedido = call.receive<Pedido>()
+                    val criado = database.pedidos.criar(pedido)
+                    call.respond(HttpStatusCode.Created, criado)
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao registrar pedido", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao registrar pedido")))
+                }
             }
 
             patch("/{id}/entregue") {
@@ -59,10 +64,32 @@ fun Application.pedidoRouting(db: AppDatabase) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("erro" to "ID inválido"))
                     return@patch
                 }
-                val body = call.receive<Map<String, Boolean>>()
-                val entregue = body["entregue"] ?: false
-                database.pedidos.atualizarEntrega(id, entregue)
-                call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Status de entrega atualizado"))
+                try {
+                    val body = call.receive<Map<String, Boolean>>()
+                    val entregue = body["entregue"] ?: false
+                    database.pedidos.atualizarEntrega(id, entregue)
+                    call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Status de entrega atualizado"))
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao atualizar entrega", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao atualizar entrega")))
+                }
+            }
+
+            patch("/{id}/pagamento") {
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("erro" to "ID inválido"))
+                    return@patch
+                }
+                try {
+                    val body = call.receive<Map<String, String?>>()
+                    val dataPagamento = body["dataPagamento"]
+                    database.pedidos.atualizarPagamento(id, dataPagamento)
+                    call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Status de pagamento atualizado"))
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao atualizar pagamento", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao atualizar pagamento")))
+                }
             }
 
             put("/{id}") {
@@ -71,12 +98,17 @@ fun Application.pedidoRouting(db: AppDatabase) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("erro" to "ID inválido"))
                     return@put
                 }
-                val pedido = call.receive<Pedido>()
-                val sucesso = database.pedidos.atualizar(id, pedido)
-                if (sucesso) {
-                    call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Pedido atualizado com sucesso"))
-                } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("erro" to "Pedido não encontrado"))
+                try {
+                    val pedido = call.receive<Pedido>()
+                    val sucesso = database.pedidos.atualizar(id, pedido)
+                    if (sucesso) {
+                        call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Pedido atualizado com sucesso"))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, mapOf("erro" to "Pedido não encontrado"))
+                    }
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao atualizar pedido", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao atualizar pedido")))
                 }
             }
 
@@ -86,16 +118,23 @@ fun Application.pedidoRouting(db: AppDatabase) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("erro" to "ID inválido"))
                     return@delete
                 }
-                val sucesso = database.pedidos.deletar(id)
-                if (sucesso) {
-                    call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Pedido excluído com sucesso"))
-                } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("erro" to "Pedido não encontrado"))
+                try {
+                    val sucesso = database.pedidos.deletar(id)
+                    if (sucesso) {
+                        call.respond(HttpStatusCode.OK, mapOf("mensagem" to "Pedido excluído com sucesso"))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, mapOf("erro" to "Pedido não encontrado"))
+                    }
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao deletar pedido", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao deletar pedido")))
                 }
             }
         }
 
         route("/pedidos-operacionais", registerPedidoEndpoints)
         route("/pedidos", registerPedidoEndpoints)
+        route("/api/pedidos-operacionais", registerPedidoEndpoints)
+        route("/api/pedidos", registerPedidoEndpoints)
     }
 }

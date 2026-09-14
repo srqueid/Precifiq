@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   BarChart3, 
@@ -18,7 +19,8 @@ import {
   Clock,
   Flame,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  Truck
 } from 'lucide-react';
 
 // Interfaces
@@ -71,6 +73,19 @@ export interface InsumoCritico {
   diasAteVencimento: number;
 }
 
+export interface PedidoPendenteResumo {
+  id: number;
+  clienteNome: string;
+  valorTotal: number;
+  valorFrete?: number;
+  tipoEnvio?: string;
+  prazoEnvio?: string;
+  formaPagamento: string;
+  dataPagamento?: string;
+  pago: boolean;
+  entregue: boolean;
+}
+
 interface DashboardData {
   comprasPendentesCount?: number;
   orcamentosCount?: number;
@@ -97,6 +112,13 @@ interface DashboardData {
   insumosVencidosCount?: number;
   insumosAVencerCount?: number;
   insumosValidadeCritica?: InsumoCritico[];
+  // Novos indicadores de Pedidos Pendentes de Entrega e Pagamento
+  pedidosPendentesEntregaCount?: number;
+  pedidosPendentesEntregaTotal?: number;
+  pedidosPendentesEntregaList?: PedidoPendenteResumo[];
+  pedidosPendentesPagamentoCount?: number;
+  pedidosPendentesPagamentoTotal?: number;
+  pedidosPendentesPagamentoList?: PedidoPendenteResumo[];
   topProdutosVendidos?: TopProduto[];
 }
 
@@ -136,6 +158,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ label, value, trend, color = 'blue', 
 );
 
 const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   // Query dos dados do Dashboard
   const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
@@ -192,10 +215,10 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid 0: Desempenho Comercial, Lucro Realizado e Giro de Estoque */}
+      {/* Grid 0: Desempenho Comercial & Pedidos de Clientes */}
       <div style={{ marginBottom: '8px' }}>
         <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
-          Desempenho Comercial, Lucro Bruto & Giro de Estoque
+          Desempenho Comercial & Pedidos de Clientes
         </h2>
       </div>
       <div className="kpi-grid" style={{ marginBottom: '24px' }}>
@@ -213,6 +236,167 @@ const DashboardPage: React.FC = () => {
           color="green" 
           icon={<DollarSign size={20} />} 
         />
+        <KpiCard 
+          label="Pendentes de Pagamento" 
+          value={fmtBrl(dashboardData?.pedidosPendentesPagamentoTotal)} 
+          trend={`${dashboardData?.pedidosPendentesPagamentoCount || 0} pedido(s) a receber`} 
+          color={(dashboardData?.pedidosPendentesPagamentoCount || 0) > 0 ? 'yellow' : 'green'} 
+          icon={<Clock size={20} />} 
+        />
+        <KpiCard 
+          label="Pendentes de Entrega" 
+          value={`${dashboardData?.pedidosPendentesEntregaCount || 0} pedido(s)`} 
+          trend={`Total: ${fmtBrl(dashboardData?.pedidosPendentesEntregaTotal)} a expedir`} 
+          color={(dashboardData?.pedidosPendentesEntregaCount || 0) > 0 ? 'blue' : 'green'} 
+          icon={<Truck size={20} />} 
+        />
+      </div>
+
+      {/* Seção Operacional: Pedidos Pendentes de Pagamento & Entrega */}
+      <div className="responsive-grid" style={{ marginBottom: '24px' }}>
+        {/* Pedidos Pendentes de Pagamento */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} color="#f59e0b" /> Pedidos Pendentes de Pagamento
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge badge-yellow" style={{ fontSize: '11px' }}>
+                {dashboardData?.pedidosPendentesPagamentoCount || 0} pendente(s)
+              </span>
+              <button 
+                onClick={() => navigate('/pedido')} 
+                className="btn btn-sm btn-secondary"
+                style={{ fontSize: '11px', padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                title="Acessar Gestão de Pedidos"
+              >
+                Ver Pedidos <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido / Cliente</th>
+                  <th>Pagamento</th>
+                  <th className="text-right">Valor</th>
+                  <th className="text-center">Entrega</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && <tr><td colSpan={4}>Carregando pendências...</td></tr>}
+                {!isLoading && (!dashboardData?.pedidosPendentesPagamentoList || dashboardData.pedidosPendentesPagamentoList.length === 0) ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)' }}>
+                      <CheckCircle2 size={18} color="#10b981" style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                      Todos os pedidos estão com pagamento confirmado!
+                    </td>
+                  </tr>
+                ) : (
+                  dashboardData?.pedidosPendentesPagamentoList?.map((ped) => (
+                    <tr key={ped.id}>
+                      <td>
+                        <strong>#{ped.id}</strong> {ped.clienteNome}
+                      </td>
+                      <td>
+                        <span className="badge badge-gray">{ped.formaPagamento || '—'}</span>
+                      </td>
+                      <td className="text-right td-mono font-medium" style={{ color: '#d97706' }}>
+                        {fmtBrl(ped.valorTotal)}
+                      </td>
+                      <td className="text-center">
+                        <span className={`badge ${ped.entregue ? 'badge-green' : 'badge-yellow'}`}>
+                          {ped.entregue ? '✔ Entregue' : '⏳ Pendente'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Pedidos Pendentes de Entrega */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Truck size={18} color="#0284c7" /> Pedidos Aguardando Entrega
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge badge-blue" style={{ fontSize: '11px' }}>
+                {dashboardData?.pedidosPendentesEntregaCount || 0} a enviar
+              </span>
+              <button 
+                onClick={() => navigate('/pedido')} 
+                className="btn btn-sm btn-secondary"
+                style={{ fontSize: '11px', padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                title="Acessar Gestão de Pedidos"
+              >
+                Ver Pedidos <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido / Cliente</th>
+                  <th>Modalidade / Prazo</th>
+                  <th className="text-right">Total</th>
+                  <th className="text-center">Pagamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && <tr><td colSpan={4}>Carregando entregas...</td></tr>}
+                {!isLoading && (!dashboardData?.pedidosPendentesEntregaList || dashboardData.pedidosPendentesEntregaList.length === 0) ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '16px', color: 'var(--muted)' }}>
+                      <CheckCircle2 size={18} color="#10b981" style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                      Todos os pedidos foram entregues aos clientes!
+                    </td>
+                  </tr>
+                ) : (
+                  dashboardData?.pedidosPendentesEntregaList?.map((ped) => (
+                    <tr key={ped.id}>
+                      <td>
+                        <strong>#{ped.id}</strong> {ped.clienteNome}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
+                          {ped.tipoEnvio || 'RETIRADA'}
+                        </div>
+                        {ped.prazoEnvio && (
+                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                            {ped.prazoEnvio}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-right td-mono font-medium">
+                        {fmtBrl(ped.valorTotal)}
+                      </td>
+                      <td className="text-center">
+                        <span className={`badge ${ped.pago ? 'badge-green' : 'badge-yellow'}`}>
+                          {ped.pago ? '✔ Pago' : '⏳ Pendente'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid: Giro de Estoque & Validades */}
+      <div style={{ marginBottom: '8px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+          Eficiência Operacional & Giro de Estoque
+        </h2>
+      </div>
+      <div className="kpi-grid" style={{ marginBottom: '24px' }}>
         <KpiCard 
           label="Giro de Estoque" 
           value={`${dashboardData?.giroEstoque || 0}x / mês`} 

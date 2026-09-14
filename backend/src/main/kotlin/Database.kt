@@ -77,17 +77,12 @@ object DatabaseConfig {
         Database.connect(multiTenantDataSource)
 
         val maxAttempts = 15
-        var attempt = 0
-        var connected = false
-
-        while (!connected && attempt < maxAttempts) {
-            attempt++
+        for (attempt in 1..maxAttempts) {
             try {
                 println("INFO: Tentativa $attempt de $maxAttempts de conexão com o banco de dados...")
                 testConnection()
                 initGlobalCatalog()
                 initDefaultTenantSchema(schema)
-                connected = true
                 println("INFO: Conexão com o banco de dados estabelecida com sucesso!")
 
                 // Executa migrações estruturais legadas em background para não bloquear a inicialização do Netty
@@ -98,6 +93,7 @@ object DatabaseConfig {
                         System.err.println("WARN: Migrações legadas em background: ${e.message}")
                     }
                 }.start()
+                break
             } catch (e: Exception) {
                 if (attempt >= maxAttempts) {
                     println("ERROR: Falha definitiva ao conectar ao banco após $maxAttempts tentativas: ${e.message}")
@@ -392,7 +388,11 @@ object DatabaseConfig {
                         (1, 'Matéria-prima', 'Insumos que compõem a receita ou formulação do produto', FALSE),
                         (2, 'Embalagem', 'Frascos, caixas, tampas, rótulos e embalagens', TRUE)
                     ON CONFLICT (id) DO NOTHING;
-                    SELECT setval('tipo_insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM tipo_insumo));
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'tipo_insumo') THEN
+                            PERFORM setval(pg_get_serial_sequence('tipo_insumo', 'id'), COALESCE((SELECT MAX(id) FROM tipo_insumo), 1));
+                        END IF;
+                    END $$;
 
                     ALTER TABLE insumo ADD COLUMN IF NOT EXISTS tipo_insumo_id INTEGER REFERENCES tipo_insumo(id) ON DELETE SET NULL;
                     CREATE INDEX IF NOT EXISTS idx_insumo_tipo_insumo ON insumo(tipo_insumo_id);
@@ -696,6 +696,14 @@ object DatabaseConfig {
                         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'pedido') THEN
                             ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
                             ALTER TABLE pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS valor_frete DOUBLE PRECISION DEFAULT 0.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS tipo_envio VARCHAR(50) DEFAULT 'RETIRADA';
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS cep_destino VARCHAR(10);
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS prazo_envio VARCHAR(50);
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS comprimento_cm DOUBLE PRECISION DEFAULT 20.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS largura_cm DOUBLE PRECISION DEFAULT 15.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS altura_cm DOUBLE PRECISION DEFAULT 10.0;
+                            ALTER TABLE pedido ADD COLUMN IF NOT EXISTS peso_kg DOUBLE PRECISION DEFAULT 0.5;
                         END IF;
                         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'pedido_item') THEN
                             ALTER TABLE pedido_item ADD COLUMN IF NOT EXISTS kit_id INTEGER;
@@ -896,6 +904,77 @@ object DatabaseConfig {
 
                                     ALTER TABLE "$tSchema".insumo ADD COLUMN IF NOT EXISTS tipo_insumo_id INTEGER REFERENCES "$tSchema".tipo_insumo(id) ON DELETE SET NULL;
                                     UPDATE "$tSchema".insumo SET tipo_insumo_id = CASE WHEN is_embalagem = TRUE THEN 2 ELSE 1 END WHERE tipo_insumo_id IS NULL;
+                                    ALTER TABLE "$tSchema".insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
+                                    ALTER TABLE "$tSchema".insumo ADD COLUMN IF NOT EXISTS lote VARCHAR(50);
+                                    ALTER TABLE "$tSchema".insumo ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(50);
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'movimento_estoque_insumo') THEN
+                                    ALTER TABLE "$tSchema".movimento_estoque_insumo ADD COLUMN IF NOT EXISTS data_validade DATE;
+                                    ALTER TABLE "$tSchema".movimento_estoque_insumo ADD COLUMN IF NOT EXISTS lote VARCHAR(50);
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'orcamento_compra') THEN
+                                    ALTER TABLE "$tSchema".orcamento_compra ADD COLUMN IF NOT EXISTS titulo VARCHAR(200) DEFAULT '';
+                                    ALTER TABLE "$tSchema".orcamento_compra ADD COLUMN IF NOT EXISTS observacoes TEXT;
+                                    ALTER TABLE "$tSchema".orcamento_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+                                    ALTER TABLE "$tSchema".orcamento_compra ADD COLUMN IF NOT EXISTS frete DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".orcamento_compra ADD COLUMN IF NOT EXISTS desconto DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedido') THEN
+                                    ALTER TABLE "$tSchema".pedido ALTER COLUMN status DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedido ALTER COLUMN status SET DEFAULT 'PENDENTE';
+                                    ALTER TABLE "$tSchema".pedido ALTER COLUMN valor_total DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedido ALTER COLUMN valor_total SET DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS valor DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(50) DEFAULT 'OUTROS';
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS data_pagamento VARCHAR(20);
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS entregue BOOLEAN DEFAULT FALSE;
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS lucro_bruto DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido ADD COLUMN IF NOT EXISTS valor_custo_total DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedido_item') THEN
+                                    ALTER TABLE "$tSchema".pedido_item ALTER COLUMN valor_total DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedido_item ALTER COLUMN valor_total SET DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido_item ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'PRODUTO';
+                                    ALTER TABLE "$tSchema".pedido_item ADD COLUMN IF NOT EXISTS nome_produto VARCHAR(255);
+                                    ALTER TABLE "$tSchema".pedido_item ADD COLUMN IF NOT EXISTS kit_id INTEGER;
+                                    ALTER TABLE "$tSchema".pedido_item ADD COLUMN IF NOT EXISTS custo_unitario DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedidos_financeiro') THEN
+                                    ALTER TABLE "$tSchema".pedidos_financeiro ALTER COLUMN data_vencimento DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedidos_financeiro ALTER COLUMN forma_pagamento DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedidos_financeiro ALTER COLUMN status_financeiro DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".pedidos_financeiro ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'PENDENTE';
+                                    ALTER TABLE "$tSchema".pedidos_financeiro ADD COLUMN IF NOT EXISTS data_pedido TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                                    UPDATE "$tSchema".pedidos_financeiro SET status = status_financeiro WHERE status IS NULL AND status_financeiro IS NOT NULL;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'transacoes_financeiras') THEN
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ALTER COLUMN pedido_financeiro_id DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ALTER COLUMN valor_pago DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ALTER COLUMN forma_pagamento DROP NOT NULL;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS pedido_id INTEGER;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'RECEBIMENTO';
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS valor DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS data_transacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS taxas DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS valor_liquido DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".transacoes_financeiras ADD COLUMN IF NOT EXISTS descricao TEXT;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedido_compra') THEN
+                                    ALTER TABLE "$tSchema".pedido_compra ADD COLUMN IF NOT EXISTS data_confirmacao TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+                                    ALTER TABLE "$tSchema".pedido_compra ADD COLUMN IF NOT EXISTS valor_total_itens DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido_compra ADD COLUMN IF NOT EXISTS valor_frete DOUBLE PRECISION DEFAULT 0.0;
+                                    ALTER TABLE "$tSchema".pedido_compra ADD COLUMN IF NOT EXISTS valor_final_confirmado DOUBLE PRECISION DEFAULT 0.0;
+                                END IF;
+
+                                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '$tSchema' AND table_name = 'pedido_compra_item') THEN
+                                    ALTER TABLE "$tSchema".pedido_compra_item ADD COLUMN IF NOT EXISTS item_orcamento_id INTEGER;
                                 END IF;
                             END $$;
                         """.trimIndent())

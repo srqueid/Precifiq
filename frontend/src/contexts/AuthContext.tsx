@@ -108,17 +108,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.usuario));
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
 
-      // Se o usuário possui empresa vinculada, define a primeira como empresa ativa
+      // Se o usuário possui empresa vinculada, preserva a selecionada (se autorizada) ou usa a primeira
       if (data.usuario?.empresas && data.usuario.empresas.length > 0) {
-        const first = data.usuario.empresas[0];
-        const initialCompany = {
-          id: first.empresaId,
-          tipo: first.empresaTipo || 'MATRIZ',
-          nomeFantasia: first.empresaNome,
-          schemaName: first.schemaName,
-          ativo: true
-        };
-        localStorage.setItem('precific_active_company', JSON.stringify(initialCompany));
+        let chosenCompany = null;
+        try {
+          const saved = localStorage.getItem('precific_active_company');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const found = data.usuario.empresas.find((e: any) => 
+              e.empresaId === parsed.id || e.schemaName === parsed.schemaName
+            );
+            if (found) {
+              chosenCompany = {
+                id: found.empresaId,
+                tipo: found.empresaTipo || 'MATRIZ',
+                nomeFantasia: found.empresaNome,
+                schemaName: found.schemaName,
+                ativo: true
+              };
+            }
+          }
+        } catch {
+          // Ignora erro
+        }
+
+        if (!chosenCompany) {
+          const first = data.usuario.empresas[0];
+          chosenCompany = {
+            id: first.empresaId,
+            tipo: first.empresaTipo || 'MATRIZ',
+            nomeFantasia: first.empresaNome,
+            schemaName: first.schemaName,
+            ativo: true
+          };
+        }
+        localStorage.setItem('precific_active_company', JSON.stringify(chosenCompany));
       }
 
       window.dispatchEvent(new CustomEvent('authChanged'));

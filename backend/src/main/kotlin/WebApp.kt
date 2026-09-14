@@ -56,9 +56,7 @@ fun main(args: Array<String>) {
         install(StatusPages) {
             exception<Throwable> { call, cause ->
                 cause.printStackTrace()
-                runBlocking {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Erro Interno", "detalhe" to cause.message))
-                }
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Erro Interno", "detalhe" to cause.message))
             }
         }
 
@@ -211,7 +209,7 @@ fun Application.configureRouting(db: AppDatabase) {
                             "nome" to it[InsumosTable.nome],
                             "tipo" to if (it[InsumosTable.isEmbalagem]) "Embalagem" else "Matéria-prima",
                             "isEmbalagem" to it[InsumosTable.isEmbalagem],
-                            "unidadeSigla" to it[UnidadesMedidaTable.sigla].orEmpty(),
+                            "unidadeSigla" to it.getOrNull(UnidadesMedidaTable.sigla).orEmpty(),
                             "estoque" to (it[InsumosTable.estoque] ?: 0.0),
                             "estoqueMinimo" to (estoqueMinimoMap[insumoId] ?: 0.0),
                             "quantidadePorEmbalagem" to it[InsumosTable.quantidadePorEmbalagem],
@@ -257,7 +255,7 @@ fun Application.configureRouting(db: AppDatabase) {
                 val inicioMes = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
                 val comprasDoMes = PedidosCompraTable
                     .select { PedidosCompraTable.dataCriacao greaterEq inicioMes.atZone(ZoneId.systemDefault()).toInstant() }
-                    .sumOf { row: org.jetbrains.exposed.sql.ResultRow -> row[PedidosCompraTable.valorFinalConfirmado] ?: 0.0 }
+                    .sumOf { row: org.jetbrains.exposed.sql.ResultRow -> row[PedidosCompraTable.valorFinalConfirmado] }
 
                 // Métricas de Produtos Finais e Estoque de Acabados
                 val totalProdutos = ProdutosFinaisTable.selectAll().count()
@@ -287,12 +285,54 @@ fun Application.configureRouting(db: AppDatabase) {
                 }
 
                 // Indicadores de Vendas e Lucro Realizado (Módulo Comercial)
-                val pedidos = PedidosTable.selectAll().toList()
+                val pedidos = try {
+                    (PedidosTable leftJoin ClientesTable).selectAll().toList()
+                } catch (e: Exception) {
+                    PedidosTable.selectAll().toList()
+                }
                 val vendasTotalMes = pedidos.sumOf { it[PedidosTable.valor] ?: 0.0 }
                 val vendasCustoMes = pedidos.sumOf { it[PedidosTable.valorCustoTotal] }
                 val lucroBrutoMes = if (vendasTotalMes > 0.0) (vendasTotalMes - vendasCustoMes) else 0.0
                 val margemLucroRealizada = if (vendasTotalMes > 0.0) (lucroBrutoMes / vendasTotalMes) * 100.0 else 0.0
                 val pedidosCount = pedidos.size
+
+                // Pedidos Pendentes de Entrega (entregue == false)
+                val pedidosPendentesEntrega = pedidos.filter { !it[PedidosTable.entregue] }
+                val pedidosPendentesEntregaCount = pedidosPendentesEntrega.size
+                val pedidosPendentesEntregaTotal = pedidosPendentesEntrega.sumOf { it[PedidosTable.valor] ?: 0.0 }
+                val pedidosPendentesEntregaList = pedidosPendentesEntrega.take(15).map { row ->
+                    mapOf<String, Any?>(
+                        "id" to row[PedidosTable.id],
+                        "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
+                        "valorTotal" to (row[PedidosTable.valor] ?: 0.0),
+                        "valorFrete" to row[PedidosTable.valorFrete],
+                        "tipoEnvio" to row[PedidosTable.tipoEnvio],
+                        "prazoEnvio" to row[PedidosTable.prazoEnvio],
+                        "formaPagamento" to row[PedidosTable.formaPagamento],
+                        "dataPagamento" to row[PedidosTable.dataPagamento],
+                        "pago" to !row[PedidosTable.dataPagamento].isNullOrBlank(),
+                        "entregue" to row[PedidosTable.entregue]
+                    )
+                }
+
+                // Pedidos Pendentes de Pagamento (dataPagamento nulo ou vazio)
+                val pedidosPendentesPagamento = pedidos.filter { it[PedidosTable.dataPagamento].isNullOrBlank() }
+                val pedidosPendentesPagamentoCount = pedidosPendentesPagamento.size
+                val pedidosPendentesPagamentoTotal = pedidosPendentesPagamento.sumOf { it[PedidosTable.valor] ?: 0.0 }
+                val pedidosPendentesPagamentoList = pedidosPendentesPagamento.take(15).map { row ->
+                    mapOf<String, Any?>(
+                        "id" to row[PedidosTable.id],
+                        "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
+                        "valorTotal" to (row[PedidosTable.valor] ?: 0.0),
+                        "valorFrete" to row[PedidosTable.valorFrete],
+                        "tipoEnvio" to row[PedidosTable.tipoEnvio],
+                        "prazoEnvio" to row[PedidosTable.prazoEnvio],
+                        "formaPagamento" to row[PedidosTable.formaPagamento],
+                        "dataPagamento" to row[PedidosTable.dataPagamento],
+                        "pago" to false,
+                        "entregue" to row[PedidosTable.entregue]
+                    )
+                }
 
                 // Indicadores de Giro de Estoque (Turnover Ratio)
                 val estoqueTotalCusto = valorEstoqueInsumos + valorEstoqueProdutosCusto
@@ -396,7 +436,13 @@ fun Application.configureRouting(db: AppDatabase) {
                     // Indicadores de Validade de Insumos
                     "insumosVencidosCount" to insumosVencidosCount,
                     "insumosAVencerCount" to insumosAVencerCount,
-                    "insumosValidadeCritica" to insumosValidadeCritica,
+                    // Indicadores de Pedidos Pendentes de Entrega e Pagamento
+                    "pedidosPendentesEntregaCount" to pedidosPendentesEntregaCount,
+                    "pedidosPendentesEntregaTotal" to pedidosPendentesEntregaTotal,
+                    "pedidosPendentesEntregaList" to pedidosPendentesEntregaList,
+                    "pedidosPendentesPagamentoCount" to pedidosPendentesPagamentoCount,
+                    "pedidosPendentesPagamentoTotal" to pedidosPendentesPagamentoTotal,
+                    "pedidosPendentesPagamentoList" to pedidosPendentesPagamentoList,
                     "topProdutosVendidos" to topProdutosVendidos
                 )
            }
@@ -467,7 +513,7 @@ fun Application.configureRouting(db: AppDatabase) {
                        "precoVenda" to insumoRow[InsumosTable.preco],
                        "custoUnitario" to insumoRow[InsumosTable.preco],
                        "estoque" to (insumoRow[InsumosTable.estoque] ?: 0.0),
-                       "unidadeSigla" to insumoRow[UnidadesMedidaTable.sigla].orEmpty(),
+                       "unidadeSigla" to insumoRow.getOrNull(UnidadesMedidaTable.sigla).orEmpty(),
                        "dataValidade" to insumoRow[InsumosTable.dataValidade]?.toString(),
                        "lote" to insumoRow[InsumosTable.lote],
                        "codigoBarras" to codigo
@@ -515,7 +561,7 @@ fun Application.configureRouting(db: AppDatabase) {
                        "id" to it[InsumosTable.id],
                        "nome" to it[InsumosTable.nome],
                        "estoque" to est,
-                       "unidadeSigla" to it[UnidadesMedidaTable.sigla].orEmpty(),
+                       "unidadeSigla" to it.getOrNull(UnidadesMedidaTable.sigla).orEmpty(),
                        "dataValidade" to validade?.toString(),
                        "lote" to it[InsumosTable.lote],
                        "codigoBarras" to it[InsumosTable.codigoBarras],

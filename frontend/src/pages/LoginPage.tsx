@@ -241,26 +241,74 @@ export const LoginPage: React.FC = () => {
                 </span>
               </button>
 
-              {/* Administrador da Matriz */}
+              {/* Administrador da Empresa (Produção Real) */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin('silvia@empresa.com', '123456')}
+                onClick={() => {
+                  handleQuickLogin('silvia@empresa.com', '123456');
+                  try {
+                    localStorage.setItem('precific_active_company', JSON.stringify({
+                      id: 1,
+                      tipo: 'MATRIZ',
+                      nomeFantasia: 'Controle Silvia (Produção)',
+                      schemaName: 'controle',
+                      ativo: true
+                    }));
+                  } catch {}
+                }}
                 className="login-demo-btn"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="login-demo-icon-box bg-blue-600">
+                  <div className="login-demo-icon-box bg-emerald-600">
                     <Building2 size={16} />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">
-                      Administrador da Empresa
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>Produção Real</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.2 rounded">🟢 PROD</span>
                     </div>
                     <div className="text-[11px] text-slate-600">
-                      silvia@empresa.com • Operação ERP
+                      silvia@empresa.com • Schema 'controle' limpo
                     </div>
                   </div>
                 </div>
-                <span className="login-demo-badge bg-slate-200 text-slate-700">
+                <span className="login-demo-badge bg-emerald-100 text-emerald-800">
+                  Preencher
+                </span>
+              </button>
+
+              {/* Ambiente de Demonstração (Demo) */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleQuickLogin('silvia@empresa.com', '123456');
+                  try {
+                    localStorage.setItem('precific_active_company', JSON.stringify({
+                      id: 6,
+                      tipo: 'MATRIZ',
+                      nomeFantasia: 'Demonstração (Demo)',
+                      schemaName: 'db_demo',
+                      ativo: true
+                    }));
+                  } catch {}
+                }}
+                className="login-demo-btn"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="login-demo-icon-box bg-amber-500">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>Ambiente de Demonstração</span>
+                      <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.2 rounded">🟡 DEMO</span>
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      silvia@empresa.com • Insumos, Produtos e Pedidos Simulados
+                    </div>
+                  </div>
+                </div>
+                <span className="login-demo-badge bg-amber-100 text-amber-800">
                   Preencher
                 </span>
               </button>

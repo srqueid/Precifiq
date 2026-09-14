@@ -148,3 +148,9 @@ INSERT INTO receita_insumo (produto_id, insumo_id, quantidade_usada) VALUES
 (2, 60, 150.0),  -- Essência Cascas e Folhas 150ml
 (2, 58, 50.0)    -- Água Destilada 50ml
 ON CONFLICT DO NOTHING;
+
+-- Atualizar sequências após inserts com IDs explícitos
+SELECT setval('unidade_medida_id_seq', (SELECT COALESCE(MAX(id), 1) FROM unidade_medida));
+SELECT setval('fornecedor_id_seq', (SELECT COALESCE(MAX(id), 1) FROM fornecedor));
+SELECT setval('insumo_id_seq', (SELECT COALESCE(MAX(id), 1) FROM insumo));
+SELECT setval('produto_final_id_seq', (SELECT COALESCE(MAX(id), 1) FROM produto_final));

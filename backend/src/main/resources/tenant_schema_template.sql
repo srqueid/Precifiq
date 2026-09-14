@@ -301,7 +301,30 @@ ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS fornecedor_sugerido_id
 ALTER TABLE %SCHEMA%.item_compra ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
 
 
--- 10. Pedidos de Venda
+-- 10. Kits de Produtos
+CREATE TABLE IF NOT EXISTS %SCHEMA%.kits (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    codigo VARCHAR(100) UNIQUE,
+    codigo_barras VARCHAR(50),
+    descricao TEXT,
+    margem_lucro DOUBLE PRECISION DEFAULT 0.0,
+    custo_total_calculado DOUBLE PRECISION DEFAULT 0.0,
+    preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS %SCHEMA%.kit_itens (
+    id SERIAL PRIMARY KEY,
+    kit_id INTEGER NOT NULL REFERENCES %SCHEMA%.kits(id) ON DELETE CASCADE,
+    produto_variacao_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_variacao(id) ON DELETE RESTRICT,
+    quantidade INTEGER NOT NULL DEFAULT 1,
+    desconto_percentual DOUBLE PRECISION NOT NULL DEFAULT 0.0
+);
+
+-- 11. Pedidos de Venda
 CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido (
     id SERIAL PRIMARY KEY,
     cliente_id INTEGER REFERENCES %SCHEMA%.cliente(id),
@@ -311,7 +334,19 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido (
     valor_custo_total DOUBLE PRECISION DEFAULT 0.0,
     lucro_bruto DOUBLE PRECISION DEFAULT 0.0,
     canal_venda VARCHAR(50),
-    observacoes TEXT
+    observacoes TEXT,
+    valor DOUBLE PRECISION DEFAULT 0.0,
+    forma_pagamento VARCHAR(50),
+    data_pagamento TIMESTAMP WITHOUT TIME ZONE,
+    entregue BOOLEAN DEFAULT FALSE,
+    valor_frete DOUBLE PRECISION DEFAULT 0.0,
+    tipo_envio VARCHAR(50) DEFAULT 'RETIRADA',
+    cep_destino VARCHAR(10),
+    prazo_envio VARCHAR(50),
+    comprimento_cm DOUBLE PRECISION DEFAULT 20.0,
+    largura_cm DOUBLE PRECISION DEFAULT 15.0,
+    altura_cm DOUBLE PRECISION DEFAULT 10.0,
+    peso_kg DOUBLE PRECISION DEFAULT 0.5
 );
 
 CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido_item (
@@ -327,7 +362,7 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.pedido_item (
     valor_total DOUBLE PRECISION NOT NULL
 );
 
--- 11. Controle Operacional e Ordens de Produção
+-- 12. Controle Operacional e Ordens de Produção
 CREATE TABLE IF NOT EXISTS %SCHEMA%.itens_estoque (
     id SERIAL PRIMARY KEY,
     variacao_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_variacao(id) ON DELETE CASCADE,
@@ -360,29 +395,6 @@ CREATE TABLE IF NOT EXISTS %SCHEMA%.ordens_producao (
     data_conclusao TIMESTAMP WITHOUT TIME ZONE,
     responsavel VARCHAR(100),
     observacoes TEXT
-);
-
--- 12. Kits de Produtos
-CREATE TABLE IF NOT EXISTS %SCHEMA%.kits (
-    id SERIAL PRIMARY KEY,
-    nome VARCHAR(255) NOT NULL,
-    codigo VARCHAR(100) UNIQUE,
-    codigo_barras VARCHAR(50),
-    descricao TEXT,
-    margem_lucro DOUBLE PRECISION DEFAULT 0.0,
-    custo_total_calculado DOUBLE PRECISION DEFAULT 0.0,
-    preco_venda DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS %SCHEMA%.kit_itens (
-    id SERIAL PRIMARY KEY,
-    kit_id INTEGER NOT NULL REFERENCES %SCHEMA%.kits(id) ON DELETE CASCADE,
-    produto_variacao_id INTEGER NOT NULL REFERENCES %SCHEMA%.produto_variacao(id) ON DELETE RESTRICT,
-    quantidade INTEGER NOT NULL DEFAULT 1,
-    desconto_percentual DOUBLE PRECISION NOT NULL DEFAULT 0.0
 );
 
 -- 13. Módulo Financeiro

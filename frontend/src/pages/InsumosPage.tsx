@@ -265,7 +265,6 @@ const InsumosPage: React.FC = () => {
   const [editingTipo, setEditingTipo] = useState<TipoInsumo | null>(null);
   const [tipoNome, setTipoNome] = useState('');
   const [tipoDescricao, setTipoDescricao] = useState('');
-  const [tipoIsEmbalagem, setTipoIsEmbalagem] = useState(false);
   const [tipoErrorMsg, setTipoErrorMsg] = useState<string | null>(null);
 
   // Modal de Ajuste Rápido de Estoque
@@ -382,12 +381,25 @@ const InsumosPage: React.FC = () => {
   const { data: tiposInsumoData = [] } = useQuery<TipoInsumo[]>({
     queryKey: ['tiposInsumo'],
     queryFn: async () => {
-      const res = await fetch('/tipos-insumo/json');
-      if (!res.ok) {
-        if (insumoData?.tiposInsumo) return insumoData.tiposInsumo;
-        throw new Error('Erro ao buscar tipos de insumo');
+      try {
+        const res = await fetch('/api/tipos-insumo');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) return data;
+        }
+      } catch (_) {}
+
+      // Fallback para rota legada
+      const fallbackRes = await fetch('/tipos-insumo/json');
+      if (fallbackRes.ok) {
+        try {
+          const fallbackData = await fallbackRes.json();
+          if (Array.isArray(fallbackData)) return fallbackData;
+        } catch (_) {}
       }
-      return res.json();
+
+      if (insumoData?.tiposInsumo) return insumoData.tiposInsumo;
+      return [];
     }
   });
 
@@ -435,11 +447,10 @@ const InsumosPage: React.FC = () => {
   const saveTipoMutation = useMutation({
     mutationFn: async () => {
       setTipoErrorMsg(null);
-      const url = editingTipo ? `/tipos-insumo/atualizar/${editingTipo.id}` : `/tipos-insumo`;
+      const url = editingTipo ? `/api/tipos-insumo/atualizar/${editingTipo.id}` : `/api/tipos-insumo`;
       const form = new URLSearchParams();
       form.append('nome', tipoNome.trim());
       if (tipoDescricao.trim()) form.append('descricao', tipoDescricao.trim());
-      form.append('isEmbalagem', tipoIsEmbalagem ? 'true' : 'false');
 
       const res = await fetch(url, {
         method: 'POST',
@@ -454,16 +465,16 @@ const InsumosPage: React.FC = () => {
     },
     onSuccess: (data) => {
       if (!editingTipo && data?.id) {
+        const isEmb = tipoNome.toLowerCase().includes('embalagem');
         setFormData(prev => ({
           ...prev,
           tipoInsumoId: data.id.toString(),
-          isEmbalagem: tipoIsEmbalagem ? 'true' : 'false'
+          isEmbalagem: isEmb ? 'true' : 'false'
         }));
       }
       setEditingTipo(null);
       setTipoNome('');
       setTipoDescricao('');
-      setTipoIsEmbalagem(false);
       setTipoErrorMsg(null);
       queryClient.invalidateQueries({ queryKey: ['tiposInsumo'] });
       queryClient.invalidateQueries({ queryKey: ['insumos'] });
@@ -476,7 +487,7 @@ const InsumosPage: React.FC = () => {
   const deleteTipoMutation = useMutation({
     mutationFn: async (id: number) => {
       setTipoErrorMsg(null);
-      const res = await fetch(`/tipos-insumo/deletar/${id}`);
+      const res = await fetch(`/api/tipos-insumo/deletar/${id}`);
       const data = await res.json();
       if (!res.ok || data.status === 'error') {
         throw new Error(data.error || 'Falha ao excluir tipo de insumo');
@@ -760,11 +771,12 @@ const InsumosPage: React.FC = () => {
       });
     } else {
       setEditingId(null);
-      const defaultTipo = tiposInsumo.find(t => !t.isEmbalagem) || tiposInsumo[0];
+      const defaultTipo = tiposInsumo[0];
+      const isEmb = defaultTipo?.isEmbalagem || defaultTipo?.nome?.toLowerCase().includes('embalagem') || false;
       setFormData({
         ...initialForm,
         tipoInsumoId: defaultTipo ? defaultTipo.id.toString() : '',
-        isEmbalagem: defaultTipo?.isEmbalagem ? 'true' : 'false'
+        isEmbalagem: isEmb ? 'true' : 'false'
       });
     }
     setIsModalOpen(true);
@@ -775,12 +787,10 @@ const InsumosPage: React.FC = () => {
       setEditingTipo(t);
       setTipoNome(t.nome);
       setTipoDescricao(t.descricao || '');
-      setTipoIsEmbalagem(t.isEmbalagem);
     } else {
       setEditingTipo(null);
       setTipoNome('');
       setTipoDescricao('');
-      setTipoIsEmbalagem(false);
     }
     setTipoErrorMsg(null);
     setIsModalTiposOpen(true);
@@ -944,7 +954,7 @@ const InsumosPage: React.FC = () => {
           <div className="kpi-content">
             <div className="kpi-label">Total de Insumos</div>
             <div className="kpi-value blue">{totalInsumos}</div>
-            <div className="kpi-trend">{materiasPrimas} matérias-primas • {embalagens} embalagens</div>
+            <div className="kpi-trend">{tiposInsumo.length} tipo(s) cadastrado(s)</div>
           </div>
         </div>
         <div className="kpi-card">
@@ -1250,8 +1260,17 @@ const InsumosPage: React.FC = () => {
 
                         {/* Tipo */}
                         <td className="table-cell">
-                          <span className={`badge ${i.isEmbalagem ? 'badge-blue' : 'badge-green'}`} title={i.tipoInsumoNome || (i.isEmbalagem ? 'Embalagem' : 'Matéria-Prima')}>
-                            {i.tipoInsumoNome || (i.isEmbalagem ? 'Embalagem' : 'Matéria-Prima')}
+                          <span
+                            className="badge"
+                            style={{
+                              background: 'var(--surface-2, #f1f5f9)',
+                              color: 'var(--foreground, #334155)',
+                              border: '1px solid var(--border-color, #e2e8f0)',
+                              fontWeight: 500
+                            }}
+                            title={i.tipoInsumoNome || 'Sem classificação'}
+                          >
+                            {i.tipoInsumoNome || '—'}
                           </span>
                         </td>
 
@@ -1762,10 +1781,11 @@ const InsumosPage: React.FC = () => {
                     onChange={e => {
                       const val = e.target.value;
                       const tipoObj = tiposInsumo.find(t => t.id.toString() === val);
+                      const isEmb = tipoObj?.isEmbalagem || (tipoObj?.nome ? tipoObj.nome.toLowerCase().includes('embalagem') : false);
                       setFormData({
                         ...formData,
                         tipoInsumoId: val,
-                        isEmbalagem: tipoObj ? (tipoObj.isEmbalagem ? 'true' : 'false') : formData.isEmbalagem
+                        isEmbalagem: isEmb ? 'true' : 'false'
                       });
                     }}
                     className="w-full"
@@ -1774,7 +1794,7 @@ const InsumosPage: React.FC = () => {
                     <option value="">Selecione um Tipo...</option>
                     {tiposInsumo.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.nome} {t.isEmbalagem ? '(Embalagem)' : '(Matéria-Prima)'}
+                        {t.nome}
                       </option>
                     ))}
                   </select>
@@ -2288,7 +2308,6 @@ const InsumosPage: React.FC = () => {
                   setEditingTipo(null);
                   setTipoNome('');
                   setTipoDescricao('');
-                  setTipoIsEmbalagem(false);
                   setTipoErrorMsg(null);
                 }}
                 className="btn-icon"
@@ -2342,7 +2361,6 @@ const InsumosPage: React.FC = () => {
                         setEditingTipo(null);
                         setTipoNome('');
                         setTipoDescricao('');
-                        setTipoIsEmbalagem(false);
                         setTipoErrorMsg(null);
                       }}
                       style={{
@@ -2402,60 +2420,6 @@ const InsumosPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Natureza / Classificação Base */}
-                  <div style={{ marginBottom: '14px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
-                      Natureza do Tipo *
-                    </label>
-                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          border: !tipoIsEmbalagem ? '1.5px solid #22c55e' : '1px solid var(--border-color)',
-                          background: !tipoIsEmbalagem ? 'rgba(34, 197, 94, 0.08)' : 'var(--surface, #ffffff)',
-                          fontWeight: !tipoIsEmbalagem ? 600 : 400
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="naturezaTipo"
-                          checked={!tipoIsEmbalagem}
-                          onChange={() => setTipoIsEmbalagem(false)}
-                        />
-                        <span>Matéria-Prima / Produção</span>
-                      </label>
-
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          border: tipoIsEmbalagem ? '1.5px solid #3b82f6' : '1px solid var(--border-color)',
-                          background: tipoIsEmbalagem ? 'rgba(59, 130, 246, 0.08)' : 'var(--surface, #ffffff)',
-                          fontWeight: tipoIsEmbalagem ? 600 : 400
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="naturezaTipo"
-                          checked={tipoIsEmbalagem}
-                          onChange={() => setTipoIsEmbalagem(true)}
-                        />
-                        <span>Embalagem (Frascos, Caixas, Rótulos)</span>
-                      </label>
-                    </div>
-                  </div>
-
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                     <button
                       type="submit"
@@ -2488,7 +2452,6 @@ const InsumosPage: React.FC = () => {
                         <tr style={{ background: 'var(--surface-2, #f8fafc)' }}>
                           <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Nome</th>
                           <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Descrição</th>
-                          <th className="table-cell" style={{ textAlign: 'center', width: '130px', fontWeight: 600 }}>Natureza</th>
                           <th className="table-cell text-center" style={{ width: '100px', fontWeight: 600 }}>Insumos</th>
                           <th className="table-cell text-center" style={{ width: '90px', fontWeight: 600 }}>Ações</th>
                         </tr>
@@ -2503,11 +2466,6 @@ const InsumosPage: React.FC = () => {
                               </td>
                               <td className="table-cell td-muted">
                                 {t.descricao || '—'}
-                              </td>
-                              <td className="table-cell text-center">
-                                <span className={`badge ${t.isEmbalagem ? 'badge-blue' : 'badge-green'}`}>
-                                  {t.isEmbalagem ? 'Embalagem' : 'Matéria-Prima'}
-                                </span>
                               </td>
                               <td className="table-cell text-center">
                                 <span
@@ -2532,7 +2490,6 @@ const InsumosPage: React.FC = () => {
                                       setEditingTipo(t);
                                       setTipoNome(t.nome);
                                       setTipoDescricao(t.descricao || '');
-                                      setTipoIsEmbalagem(t.isEmbalagem);
                                       setTipoErrorMsg(null);
                                     }}
                                     className="btn btn-action btn-icon"
@@ -2578,7 +2535,6 @@ const InsumosPage: React.FC = () => {
                   setEditingTipo(null);
                   setTipoNome('');
                   setTipoDescricao('');
-                  setTipoIsEmbalagem(false);
                   setTipoErrorMsg(null);
                 }}
                 className="btn btn-secondary"

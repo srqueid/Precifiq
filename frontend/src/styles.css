@@ -582,5 +582,45 @@ th, td { border-collapse: collapse; }
   border-radius: 4px;
 }
 
+/* ==============================================================================
+   ESTILOS DE IMPRESSÃO
+   ============================================================================== */
+@media print {
+  .sidebar,
+  .navbar,
+  .toast-container,
+  .btn,
+  .modal-close,
+  .modal-footer,
+  .no-print,
+  #toast-container {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .modal-overlay.active {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+
+  .modal-content {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+}
+
 
 
