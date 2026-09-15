@@ -468,7 +468,10 @@ const PedidoPage: React.FC = () => {
   const { data, isLoading: queryLoading, error } = useQuery({
     queryKey: ['pedidos'],
     queryFn: async () => {
-      const res = await fetch('/pedidos-operacionais/json');
+      let res = await fetch('/api/pedidos-operacionais/json');
+      if (!res.ok) {
+        res = await fetch('/pedidos-operacionais/json');
+      }
       if (!res.ok) throw new Error('Erro ao buscar pedidos');
       const json = await res.json();
       return { pedidos: Array.isArray(json.pedidos) ? json.pedidos.map(normalizarPedido) : [] };

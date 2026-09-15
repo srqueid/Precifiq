@@ -67,15 +67,27 @@ fun main(args: Array<String>) {
 
             // Rotas isentas de validação de tenant operacional:
             // 1. Healthcheck do container
+            val callerEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
+                ?: call.request.cookies["user_email"]?.trim()?.lowercase()
+            val schemaHeader = call.request.headers["X-Company-Schema"]?.trim()?.lowercase()
+                ?: call.request.cookies["company_schema"]?.trim()?.lowercase()
+
+            // Rotas de exclusão pública direta:
+            // 1. Healthcheck
             // 2. Autenticação global (login, google)
             // 3. Arquivos estáticos do frontend (não iniciados com /api/)
             if (path == "/api/health" || path.startsWith("/api/global/auth/") || !path.startsWith("/api/")) {
+                // Mesmo para rotas legadas que não iniciam com /api/ (ex: /pedidos-operacionais),
+                // inicializa o schema correto no TenantContext caso os cabeçalhos tenham sido enviados
+                if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader)) {
+                    TenantContext.setCurrentSchema(schemaHeader)
+                } else if (!callerEmail.isNullOrBlank()) {
+                    val schemaToUse = obterSchemaPadraoUsuario(callerEmail) ?: "controle"
+                    TenantContext.setCurrentSchema(schemaToUse)
+                }
                 proceed()
                 return@intercept
             }
-
-            val callerEmail = call.request.headers["X-User-Email"]?.trim()?.lowercase()
-            val schemaHeader = call.request.headers["X-Company-Schema"]?.trim()?.lowercase()
 
             // Rotas de governança central (/api/global/...): tratam segurança em nível de endpoint
             if (path.startsWith("/api/global/")) {
@@ -290,51 +302,51 @@ fun Application.configureRouting(db: AppDatabase) {
                 } catch (e: Exception) {
                     PedidosTable.selectAll().toList()
                 }
-                val vendasTotalMes = pedidos.sumOf { it[PedidosTable.valor] ?: 0.0 }
-                val vendasCustoMes = pedidos.sumOf { it[PedidosTable.valorCustoTotal] }
+                val vendasTotalMes = pedidos.sumOf { (it.getOrNull(PedidosTable.valor) ?: it.getOrNull(PedidosTable.valorTotal) ?: 0.0) }
+                val vendasCustoMes = pedidos.sumOf { (it.getOrNull(PedidosTable.valorCustoTotal) ?: 0.0) }
                 val lucroBrutoMes = if (vendasTotalMes > 0.0) (vendasTotalMes - vendasCustoMes) else 0.0
                 val margemLucroRealizada = if (vendasTotalMes > 0.0) (lucroBrutoMes / vendasTotalMes) * 100.0 else 0.0
                 val pedidosCount = pedidos.size
 
                 // Pedidos Pendentes de Entrega (entregue == false)
-                val pedidosPendentesEntrega = pedidos.filter { !it[PedidosTable.entregue] }
+                val pedidosPendentesEntrega = pedidos.filter { it.getOrNull(PedidosTable.entregue) != true }
                 val pedidosPendentesEntregaCount = pedidosPendentesEntrega.size
-                val pedidosPendentesEntregaTotal = pedidosPendentesEntrega.sumOf { it[PedidosTable.valor] ?: 0.0 }
+                val pedidosPendentesEntregaTotal = pedidosPendentesEntrega.sumOf { (it.getOrNull(PedidosTable.valor) ?: it.getOrNull(PedidosTable.valorTotal) ?: 0.0) }
                 val pedidosPendentesEntregaList = pedidosPendentesEntrega.take(15).map { row ->
-                    val dpStr = row[PedidosTable.dataPagamento]
+                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
-                        "valorTotal" to (row[PedidosTable.valor] ?: 0.0),
-                        "valorFrete" to row[PedidosTable.valorFrete],
-                        "tipoEnvio" to row[PedidosTable.tipoEnvio],
-                        "prazoEnvio" to row[PedidosTable.prazoEnvio],
-                        "formaPagamento" to row[PedidosTable.formaPagamento],
+                        "valorTotal" to (row.getOrNull(PedidosTable.valor) ?: row.getOrNull(PedidosTable.valorTotal) ?: 0.0),
+                        "valorFrete" to (row.getOrNull(PedidosTable.valorFrete) ?: 0.0),
+                        "tipoEnvio" to (row.getOrNull(PedidosTable.tipoEnvio) ?: "RETIRADA"),
+                        "prazoEnvio" to row.getOrNull(PedidosTable.prazoEnvio),
+                        "formaPagamento" to (row.getOrNull(PedidosTable.formaPagamento) ?: "OUTROS"),
                         "dataPagamento" to dpStr,
                         "pago" to !dpStr.isNullOrBlank(),
-                        "entregue" to row[PedidosTable.entregue]
+                        "entregue" to (row.getOrNull(PedidosTable.entregue) ?: false)
                     )
                 }
 
                 // Pedidos Pendentes de Pagamento (dataPagamento nulo ou vazio)
                 val pedidosPendentesPagamento = pedidos.filter { row ->
-                    row[PedidosTable.dataPagamento].isNullOrBlank()
+                    row.getOrNull(PedidosTable.dataPagamento).isNullOrBlank()
                 }
                 val pedidosPendentesPagamentoCount = pedidosPendentesPagamento.size
-                val pedidosPendentesPagamentoTotal = pedidosPendentesPagamento.sumOf { it[PedidosTable.valor] ?: 0.0 }
+                val pedidosPendentesPagamentoTotal = pedidosPendentesPagamento.sumOf { (it.getOrNull(PedidosTable.valor) ?: it.getOrNull(PedidosTable.valorTotal) ?: 0.0) }
                 val pedidosPendentesPagamentoList = pedidosPendentesPagamento.take(15).map { row ->
-                    val dpStr = row[PedidosTable.dataPagamento]
+                    val dpStr = row.getOrNull(PedidosTable.dataPagamento)
                     mapOf<String, Any?>(
                         "id" to row[PedidosTable.id],
                         "clienteNome" to (row.getOrNull(ClientesTable.nome) ?: "Sem cliente"),
-                        "valorTotal" to (row[PedidosTable.valor] ?: 0.0),
-                        "valorFrete" to row[PedidosTable.valorFrete],
-                        "tipoEnvio" to row[PedidosTable.tipoEnvio],
-                        "prazoEnvio" to row[PedidosTable.prazoEnvio],
-                        "formaPagamento" to row[PedidosTable.formaPagamento],
+                        "valorTotal" to (row.getOrNull(PedidosTable.valor) ?: row.getOrNull(PedidosTable.valorTotal) ?: 0.0),
+                        "valorFrete" to (row.getOrNull(PedidosTable.valorFrete) ?: 0.0),
+                        "tipoEnvio" to (row.getOrNull(PedidosTable.tipoEnvio) ?: "RETIRADA"),
+                        "prazoEnvio" to row.getOrNull(PedidosTable.prazoEnvio),
+                        "formaPagamento" to (row.getOrNull(PedidosTable.formaPagamento) ?: "OUTROS"),
                         "dataPagamento" to dpStr,
                         "pago" to false,
-                        "entregue" to row[PedidosTable.entregue]
+                        "entregue" to (row.getOrNull(PedidosTable.entregue) ?: false)
                     )
                 }
 
@@ -392,11 +404,11 @@ fun Application.configureRouting(db: AppDatabase) {
                 // Ranking dos Produtos Mais Vendidos
                 val topProdutosVendidos = try {
                     PedidoItensTable.selectAll()
-                        .groupBy { it[PedidoItensTable.nomeProduto] }
+                        .groupBy { it.getOrNull(PedidoItensTable.nomeProduto) ?: it.getOrNull(PedidoItensTable.produtoNome) ?: "Item" }
                         .map { (nome, itens) ->
-                            val qtdTotal = itens.sumOf { it[PedidoItensTable.quantidade] }
-                            val receitaTotal = itens.sumOf { it[PedidoItensTable.precoUnitario] * it[PedidoItensTable.quantidade] }
-                            val custoTotal = itens.sumOf { it[PedidoItensTable.custoUnitario] * it[PedidoItensTable.quantidade] }
+                            val qtdTotal = itens.sumOf { it.getOrNull(PedidoItensTable.quantidade) ?: 0 }
+                            val receitaTotal = itens.sumOf { (it.getOrNull(PedidoItensTable.precoUnitario) ?: 0.0) * (it.getOrNull(PedidoItensTable.quantidade) ?: 0) }
+                            val custoTotal = itens.sumOf { (it.getOrNull(PedidoItensTable.custoUnitario) ?: 0.0) * (it.getOrNull(PedidoItensTable.quantidade) ?: 0) }
                             val lucroTotal = receitaTotal - custoTotal
                             mapOf(
                                 "nome" to nome,

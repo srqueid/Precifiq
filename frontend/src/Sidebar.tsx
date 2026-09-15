@@ -26,7 +26,10 @@ import {
   GitFork, 
   ShieldCheck, 
   LogOut,
-  KeyRound 
+  KeyRound,
+  BookOpen,
+  Info,
+  Shield
 } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useTenant, EmpresaItem } from './contexts/TenantContext';
@@ -162,6 +165,13 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
     { path: '/unidades', label: 'Unidades de Medida', icon: Ruler },
     ...(isSuperuser ? [{ path: '/gestao-global', label: 'Gestão Global', icon: Building2 }] : []),
     { path: '/configuracoes', label: 'Configurações', icon: Settings },
+  ];
+
+  // 5. Ajuda, Informações & Políticas
+  const infoItems: MenuItem[] = [
+    { path: '/manual', label: 'Manual do Sistema', icon: BookOpen },
+    { path: '/sobre', label: 'Sobre o Precifiq', icon: Info },
+    { path: '/privacidade', label: 'Política de Privacidade', icon: Shield },
   ];
 
   // Renderiza um link padrão da navegação
@@ -561,6 +571,12 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
             <span className="sidebar-section-title">Cadastros & Sistema</span>
           </div>
           {systemItems.map((item) => renderStandardLink(item))}
+
+          {/* 5. Ajuda & Informações */}
+          <div className="sidebar-section-header">
+            <span className="sidebar-section-title">Ajuda & Documentação</span>
+          </div>
+          {infoItems.map((item) => renderStandardLink(item))}
         </nav>
 
         {/* Card do Usuário Logado & Botão Sair / Trocar Conta */}
@@ -657,9 +673,18 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
           </div>
         </div>
 
-        {/* Rodapé com Seletor de Tema */}
+        {/* Rodapé com Seletor de Tema e Links Rápidos */}
         <div className="sidebar-footer" role="group" aria-label="Seletor de tema">
-          <div className="sidebar-version-tag">v{appVersion}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div className="sidebar-version-tag">v{appVersion}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
+              <Link to="/manual" onClick={onClose} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }} title="Manual de Utilização">Manual</Link>
+              <span style={{ color: 'var(--border)' }}>•</span>
+              <Link to="/sobre" onClick={onClose} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }} title="Sobre o Sistema">Sobre</Link>
+              <span style={{ color: 'var(--border)' }}>•</span>
+              <Link to="/privacidade" onClick={onClose} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }} title="Política de Privacidade">LGPD</Link>
+            </div>
+          </div>
           <div className="theme-buttons-wrapper">
             <button
               onClick={() => setTheme('light')}
@@ -715,6 +740,12 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
             <span className="sidebar-section-title">Cadastros & Sistema</span>
           </div>
           {systemItems.map((item) => renderStandardLink(item, true))}
+
+          {/* 5. Ajuda & Informações */}
+          <div className="sidebar-section-header">
+            <span className="sidebar-section-title">Ajuda & Documentação</span>
+          </div>
+          {infoItems.map((item) => renderStandardLink(item, true))}
         </nav>
 
         {/* Rodapé do Usuário & Logout no Mobile */}

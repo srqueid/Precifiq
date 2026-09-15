@@ -14,13 +14,23 @@ fun Application.pedidoRouting(db: AppDatabase) {
     routing {
         val registerPedidoEndpoints: Route.() -> Unit = {
             get("/json") {
-                val pedidos = database.pedidos.listarTodos()
-                call.respond(mapOf("pedidos" to pedidos))
+                try {
+                    val pedidos = database.pedidos.listarTodos()
+                    call.respond(mapOf("pedidos" to pedidos))
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao listar pedidos operacionais (/json)", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao listar pedidos"), "pedidos" to emptyList<Any>()))
+                }
             }
 
             get {
-                val pedidos = database.pedidos.listarTodos()
-                call.respond(pedidos)
+                try {
+                    val pedidos = database.pedidos.listarTodos()
+                    call.respond(pedidos)
+                } catch (e: Exception) {
+                    call.application.environment.log.error("Erro ao listar pedidos operacionais", e)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("erro" to (e.message ?: "Erro ao listar pedidos")))
+                }
             }
 
             get("/cliente/{clienteId}") {

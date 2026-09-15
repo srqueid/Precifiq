@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Building2, 
@@ -317,8 +317,23 @@ export const LoginPage: React.FC = () => {
         )}
 
         {/* Rodapé Informativo */}
-        <div className="text-center text-[11px] text-slate-400">
-          DcSys Tecnologia • Plataforma Precifiq v1.0.0
+        <div className="text-center text-[11px] text-slate-400 flex flex-col items-center gap-1.5 mt-2">
+          <div className="flex items-center gap-2.5 text-[11px]">
+            <Link to="/manual" className="hover:text-blue-600 transition-colors text-slate-500 font-medium">
+              Manual do Sistema
+            </Link>
+            <span className="text-slate-300">•</span>
+            <Link to="/sobre" className="hover:text-blue-600 transition-colors text-slate-500 font-medium">
+              Sobre o Precifiq
+            </Link>
+            <span className="text-slate-300">•</span>
+            <Link to="/privacidade" className="hover:text-blue-600 transition-colors text-slate-500 font-medium">
+              Privacidade
+            </Link>
+          </div>
+          <div>
+            DcSys Tecnologia • Plataforma Precifiq v1.0.0
+          </div>
         </div>
       </div>
 
