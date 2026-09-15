@@ -295,7 +295,24 @@ export const NfeImportModal: React.FC<NfeImportModalProps> = ({ isOpen, onClose,
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1100,
+        padding: '16px'
+      }}
+    >
       <div 
         className="modal-content nfe-modal" 
         style={{ maxWidth: '1050px', width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} 

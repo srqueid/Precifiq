@@ -1098,11 +1098,11 @@ const InsumosPage: React.FC = () => {
       {!loadInsumos && !errorInsumos && (
         <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full" style={{ minWidth: '1220px' }}>
               <thead>
                 <tr>
                   {/* Insumo */}
-                  <th className="table-cell">
+                  <th className="table-cell" style={{ minWidth: '280px', width: 'auto' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('nome')}
@@ -1115,7 +1115,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Tipo */}
-                  <th className="table-cell" style={{ width: '130px' }}>
+                  <th className="table-cell" style={{ width: '130px', minWidth: '110px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('tipo')}
@@ -1128,7 +1128,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Unid. */}
-                  <th className="table-cell" style={{ width: '80px' }}>
+                  <th className="table-cell" style={{ width: '65px', minWidth: '60px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('unidade')}
@@ -1141,7 +1141,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Qtd. em Estoque */}
-                  <th className="table-cell text-right" style={{ width: '150px' }}>
+                  <th className="table-cell text-right" style={{ width: '130px', minWidth: '120px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('estoque')}
@@ -1154,7 +1154,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Tamanho da Embalagem */}
-                  <th className="table-cell text-right" style={{ width: '180px' }}>
+                  <th className="table-cell text-right" style={{ width: '145px', minWidth: '135px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('quantidadePorEmbalagem')}
@@ -1167,7 +1167,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Preço Embalagem / Custo */}
-                  <th className="table-cell text-right" style={{ width: '150px' }}>
+                  <th className="table-cell text-right" style={{ width: '135px', minWidth: '125px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('preco')}
@@ -1180,7 +1180,7 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Valor Total */}
-                  <th className="table-cell text-right" style={{ width: '140px' }}>
+                  <th className="table-cell text-right" style={{ width: '125px', minWidth: '115px' }}>
                     <button
                       type="button"
                       onClick={() => handleSort('valorTotal')}
@@ -1193,17 +1193,17 @@ const InsumosPage: React.FC = () => {
                   </th>
 
                   {/* Validade & Lote */}
-                  <th className="table-cell" style={{ width: '160px' }}>
+                  <th className="table-cell" style={{ width: '135px', minWidth: '125px' }}>
                     <span>Validade & Lote</span>
                   </th>
 
                   {/* Status */}
-                  <th className="table-cell" style={{ width: '100px' }}>
+                  <th className="table-cell" style={{ width: '90px', minWidth: '85px' }}>
                     <span>Status</span>
                   </th>
 
                   {/* Ações */}
-                  <th className="table-cell text-center" style={{ width: '190px' }}>
+                  <th className="table-cell text-center" style={{ width: '175px', minWidth: '165px' }}>
                     <span>Ações</span>
                   </th>
                 </tr>
@@ -1244,14 +1244,18 @@ const InsumosPage: React.FC = () => {
                     return (
                       <tr key={i.id}>
                         {/* Insumo */}
-                        <td className="table-cell">
-                          <strong>{i.nome}</strong>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--muted)', marginTop: '2px', alignItems: 'center' }}>
+                        <td className="table-cell" style={{ minWidth: '280px' }}>
+                          <strong style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text)', display: 'block', lineHeight: 1.4 }}>
+                            {i.nome}
+                          </strong>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '11.5px', color: 'var(--muted)', marginTop: '4px', alignItems: 'center' }}>
                             {i.fornecedorId && (
-                              <span>Forn: {getFornecedorNome(i.fornecedorId)}</span>
+                              <span style={{ whiteSpace: 'nowrap' }}>
+                                Forn: <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{getFornecedorNome(i.fornecedorId)}</span>
+                              </span>
                             )}
                             {i.codigoBarras && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: '4px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
                                 <Barcode size={12} /> {i.codigoBarras}
                               </span>
                             )}
@@ -2285,8 +2289,33 @@ const InsumosPage: React.FC = () => {
 
       {/* Modal de Gerenciamento de Tipos de Insumo (CRUD) */}
       {isModalTiposOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1000 }}>
-          <div className="modal-container" style={{ maxWidth: '680px', width: '100%' }}>
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 1100 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalTiposOpen(false);
+              setEditingTipo(null);
+              setTipoNome('');
+              setTipoDescricao('');
+              setTipoErrorMsg(null);
+            }
+          }}
+        >
+          <div 
+            className="modal-content" 
+            style={{ 
+              maxWidth: '680px', 
+              width: '95%',
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius-lg, 12px)',
+              boxShadow: 'var(--shadow-lg, 0 20px 25px -5px rgba(0, 0, 0, 0.25))',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div className="page-heading-icon" style={{ width: '36px', height: '36px' }}>
@@ -2446,10 +2475,10 @@ const InsumosPage: React.FC = () => {
                     Nenhum tipo de insumo cadastrado no momento.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto" style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px' }}>
-                    <table className="w-full" style={{ fontSize: '13px' }}>
+                  <div className="overflow-x-auto" style={{ border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
+                    <table className="w-full" style={{ fontSize: '13px', background: 'var(--surface)' }}>
                       <thead>
-                        <tr style={{ background: 'var(--surface-2, #f8fafc)' }}>
+                        <tr style={{ background: 'var(--surface-2)' }}>
                           <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Nome</th>
                           <th className="table-cell" style={{ textAlign: 'left', fontWeight: 600 }}>Descrição</th>
                           <th className="table-cell text-center" style={{ width: '100px', fontWeight: 600 }}>Insumos</th>
@@ -2460,7 +2489,7 @@ const InsumosPage: React.FC = () => {
                         {tiposInsumo.map((t) => {
                           const vinculados = t.insumosVinculadosCount ?? insumos.filter(i => i.tipoInsumoId === t.id).length;
                           return (
-                            <tr key={t.id} style={{ borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                            <tr key={t.id} style={{ borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
                               <td className="table-cell font-medium">
                                 <span>{t.nome}</span>
                               </td>

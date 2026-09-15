@@ -111,11 +111,39 @@ export const AlterarSenhaModal: React.FC<AlterarSenhaModalProps> = ({ isOpen, on
   };
 
   return (
-    <div className="modal-backdrop" onClick={handleClose} style={{ zIndex: 1050 }}>
+    <div 
+      className="modal-overlay" 
+      onClick={handleClose} 
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1100,
+        padding: '16px'
+      }}
+    >
       <div 
         className="modal-content animate-in fade-in zoom-in-95 duration-200" 
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '440px', width: '92%', padding: 0, overflow: 'hidden' }}
+        style={{ 
+          maxWidth: '460px', 
+          width: '100%', 
+          maxHeight: '90vh',
+          padding: 0, 
+          overflow: 'hidden',
+          backgroundColor: 'var(--surface)',
+          borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          border: '1px solid var(--border)',
+          margin: 'auto'
+        }}
       >
         {/* Cabeçalho do Modal */}
         <div style={{
