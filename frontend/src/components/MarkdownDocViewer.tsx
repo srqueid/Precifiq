@@ -11,7 +11,9 @@ import {
   ChevronRight,
   Info,
   AlertTriangle,
-  Lightbulb
+  Lightbulb,
+  X,
+  ZoomIn
 } from 'lucide-react';
 
 interface MarkdownDocViewerProps {
@@ -41,6 +43,19 @@ function slugify(text: string): string {
     .replace(/\s+/g, '-');
 }
 
+// Normaliza caminhos de imagens relativas para rota pública absoluta
+function resolveImageUrl(raw: string): string {
+  if (!raw) return '';
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) {
+    return raw;
+  }
+  let cleaned = raw.replace(/^\.\//, '');
+  if (!cleaned.startsWith('/')) {
+    cleaned = '/' + cleaned;
+  }
+  return cleaned;
+}
+
 export const MarkdownDocViewer: React.FC<MarkdownDocViewerProps> = ({
   content,
   title,
@@ -55,14 +70,22 @@ export const MarkdownDocViewer: React.FC<MarkdownDocViewerProps> = ({
   const [showToc, setShowToc] = useState(true);
   const [activeTocId, setActiveTocId] = useState<string>('');
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
 
-  // Monitora scroll para botão "Voltar ao topo"
+  // Monitora scroll para botão "Voltar ao topo" e tecla ESC para fechar modal de imagem
   useEffect(() => {
     const handleScroll = () => {
       setShowScrollTop(window.scrollY > 400);
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedImage(null);
+    };
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Extrai sumário (TOC) a partir dos títulos # e ## e ###
@@ -175,24 +198,53 @@ export const MarkdownDocViewer: React.FC<MarkdownDocViewerProps> = ({
 
         if (first.type === 'img') {
           const alt = first.match[1];
-          const src = first.match[2];
+          const rawSrc = first.match[2];
+          const src = resolveImageUrl(rawSrc);
           parts.push(
-            <span key={`img-${keyCounter++}`} className="doc-img-container" style={{ display: 'block', margin: '16px 0' }}>
-              <img 
-                src={src.startsWith('tests/') ? `/${src}` : src} 
-                alt={alt} 
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
+            <span 
+              key={`img-${keyCounter++}`} 
+              className="doc-img-container" 
+              style={{ display: 'block', margin: '20px 0', textAlign: 'center' }}
+            >
+              <span
                 style={{
+                  position: 'relative',
+                  display: 'inline-block',
                   maxWidth: '100%',
-                  height: 'auto',
+                  cursor: 'zoom-in',
                   borderRadius: '8px',
+                  overflow: 'hidden',
                   border: '1px solid var(--border)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-                }} 
-              />
-              {alt && <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '6px' }}>{alt}</span>}
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.06)'
+                }}
+                onClick={() => setSelectedImage({ src, alt })}
+                title="Clique para ampliar em alta definição"
+              >
+                <img 
+                  src={src} 
+                  alt={alt} 
+                  loading="lazy"
+                  style={{
+                    maxWidth: '100%',
+                    height: 'auto',
+                    maxHeight: '520px',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }} 
+                />
+              </span>
+              {alt && (
+                <span style={{ 
+                  display: 'block', 
+                  fontSize: '11px', 
+                  color: 'var(--text-secondary)', 
+                  textAlign: 'center', 
+                  marginTop: '8px',
+                  fontWeight: 500
+                }}>
+                  📷 {alt}
+                </span>
+              )}
             </span>
           );
         } else if (first.type === 'link') {
@@ -346,6 +398,93 @@ export const MarkdownDocViewer: React.FC<MarkdownDocViewerProps> = ({
       if (trimmed === '---' || trimmed === '***') {
         nodes.push(
           <hr key={`hr-${i}`} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '24px 0' }} />
+        );
+        i++;
+        continue;
+      }
+
+      // Imagem exclusiva na linha: ![alt](url)
+      const blockImgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (blockImgMatch) {
+        const alt = blockImgMatch[1];
+        const rawSrc = blockImgMatch[2];
+        const src = resolveImageUrl(rawSrc);
+        nodes.push(
+          <figure
+            key={`imgblock-${i}`}
+            style={{
+              margin: '28px 0',
+              padding: '12px',
+              borderRadius: '12px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-2, rgba(0,0,0,0.02))',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+              textAlign: 'center'
+            }}
+          >
+            <div 
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                maxWidth: '100%',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                cursor: 'zoom-in',
+                border: '1px solid var(--border)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+              }}
+              onClick={() => setSelectedImage({ src, alt })}
+              title="Clique para ampliar esta captura de tela em alta definição"
+            >
+              <img
+                src={src}
+                alt={alt}
+                loading="lazy"
+                style={{
+                  maxWidth: '100%',
+                  height: 'auto',
+                  maxHeight: '540px',
+                  objectFit: 'contain',
+                  display: 'block',
+                  background: 'var(--surface)'
+                }}
+              />
+              <div style={{
+                position: 'absolute',
+                bottom: '10px',
+                right: '10px',
+                background: 'rgba(15, 23, 42, 0.78)',
+                color: '#ffffff',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                backdropFilter: 'blur(4px)'
+              }}>
+                <ZoomIn size={13} />
+                <span>Ampliar</span>
+              </div>
+            </div>
+            {alt && (
+              <figcaption style={{
+                marginTop: '10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-secondary, #64748b)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}>
+                <span>📷</span>
+                <span>{alt}</span>
+                <span style={{ fontSize: '11px', opacity: 0.7, fontWeight: 400 }}>(clique na imagem para ampliar)</span>
+              </figcaption>
+            )}
+          </figure>
         );
         i++;
         continue;
@@ -803,6 +942,95 @@ export const MarkdownDocViewer: React.FC<MarkdownDocViewerProps> = ({
           }
         }
       `}</style>
+      {/* Modal / Lightbox de Imagem Ampliada */}
+      {selectedImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            cursor: 'zoom-out'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              position: 'relative', 
+              maxWidth: '94vw', 
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'default'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-42px',
+                right: '0',
+                background: 'rgba(255, 255, 255, 0.25)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              title="Fechar (Esc)"
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={selectedImage.src}
+              alt={selectedImage.alt}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '82vh',
+                objectFit: 'contain',
+                borderRadius: '10px',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                background: '#0f172a'
+              }}
+            />
+            {selectedImage.alt && (
+              <div style={{
+                marginTop: '12px',
+                color: '#f8fafc',
+                fontSize: '13px',
+                fontWeight: 600,
+                textAlign: 'center',
+                background: 'rgba(0, 0, 0, 0.5)',
+                padding: '4px 16px',
+                borderRadius: '20px',
+                backdropFilter: 'blur(4px)'
+              }}>
+                {selectedImage.alt}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

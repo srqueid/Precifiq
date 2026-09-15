@@ -222,9 +222,7 @@ class ProdutoFinalRepository {
                 )
             }
 
-            if (lista.isNotEmpty()) {
-                lista
-            } else {
+            lista.ifEmpty {
                 // Compatibilidade com embalagem legada única se houver
                 val v = ProdutoVariacoesTable.select { ProdutoVariacoesTable.id eq variacaoId }.singleOrNull()
                 val embId = v?.get(ProdutoVariacoesTable.embalagemInsumoId)
@@ -258,12 +256,12 @@ class ProdutoFinalRepository {
     fun salvarMateriaisDaVariacao(variacaoId: Int, materiais: List<VariacaoMaterial>) = transaction {
         try {
             VariacaoMateriaisTable.deleteWhere { Op.build { VariacaoMateriaisTable.variacaoId eq variacaoId } }
-            for (m in materiais) {
-                if (m.insumoId > 0 && m.quantidade > 0) {
+            for ((_, _, insumoId, quantidade) in materiais) {
+                if (insumoId > 0 && quantidade > 0) {
                     VariacaoMateriaisTable.insert {
                         it[VariacaoMateriaisTable.variacaoId] = variacaoId
-                        it[VariacaoMateriaisTable.insumoId] = m.insumoId
-                        it[VariacaoMateriaisTable.quantidade] = m.quantidade
+                        it[VariacaoMateriaisTable.insumoId] = insumoId
+                        it[VariacaoMateriaisTable.quantidade] = quantidade
                     }
                 }
             }
