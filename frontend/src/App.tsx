@@ -26,6 +26,9 @@ import KitsPage from './pages/KitsPage';
 import GestaoGlobalPage from './pages/GestaoGlobalPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import { LoginPage } from './pages/LoginPage';
+import ManualPage from './pages/ManualPage';
+import SobrePage from './pages/SobrePage';
+import PrivacidadePage from './pages/PrivacidadePage';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isSuperuser } = useAuth();
@@ -53,10 +56,13 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Se não estiver autenticado: index (/) ou qualquer rota exibe a tela de login
+  // Se não estiver autenticado: permite visualizar manual, sobre e privacidade publicamente, ou exibe login
   if (!isAuthenticated) {
     return (
       <Routes>
+        <Route path="/manual" element={<ManualPage isPublic />} />
+        <Route path="/sobre" element={<SobrePage isPublic />} />
+        <Route path="/privacidade" element={<PrivacidadePage isPublic />} />
         <Route path="*" element={<LoginPage />} />
       </Routes>
     );
@@ -91,6 +97,9 @@ const AppContent: React.FC = () => {
           <Route path="/pedido" element={<PedidoPage />} />
           <Route path="/compras" element={<ComprasPage />} />
           <Route path="/estoque" element={<EstoquePage />} />
+          <Route path="/manual" element={<ManualPage />} />
+          <Route path="/sobre" element={<SobrePage />} />
+          <Route path="/privacidade" element={<PrivacidadePage />} />
           <Route path="/gestao-global" element={isSuperuser ? <GestaoGlobalPage /> : <Navigate to="/" replace />} />
           <Route path="/superadmin" element={isSuperuser ? <SuperAdminPage /> : <Navigate to="/" replace />} />
         </Routes>
