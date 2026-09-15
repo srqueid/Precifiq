@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { installGlobalFetchInterceptor } from '../setupFetchInterceptor';
 
 export interface EmpresaItem {
   id: number;
@@ -88,58 +89,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const activeCompanyRef = useRef<EmpresaItem>(activeCompany);
   activeCompanyRef.current = activeCompany;
 
-  // Interceptador global transparente para window.fetch
+  // Garante que o interceptador global de fetch esteja ativo
   useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const urlString = typeof input === 'string' 
-        ? input 
-        : (input instanceof URL ? input.href : (input as Request).url || '');
-      
-      const isInternal = !urlString.startsWith('http://') && !urlString.startsWith('https://') 
-        || (typeof window !== 'undefined' && urlString.startsWith(window.location.origin));
-
-      // Se for requisição para API externa (ex: ViaCEP), não injeta headers internos para não quebrar o CORS
-      if (!isInternal) {
-        return originalFetch(input, init);
-      }
-
-      const currentSchema = activeCompanyRef.current?.schemaName || 'controle';
-      const modifiedInit: RequestInit = { ...init };
-      const headers = new Headers(modifiedInit.headers || {});
-
-      if (!headers.has('X-Company-Schema')) {
-        headers.set('X-Company-Schema', currentSchema);
-      }
-
-      if (!headers.has('X-User-Email')) {
-        try {
-          const authSaved = localStorage.getItem('precific_auth_user');
-          if (authSaved) {
-            const parsed = JSON.parse(authSaved);
-            if (parsed?.email) {
-              headers.set('X-User-Email', parsed.email);
-            }
-          }
-        } catch {
-          // Ignora erro
-        }
-      }
-
-      if (!headers.has('Authorization')) {
-        const token = localStorage.getItem('precific_auth_token');
-        if (token) {
-          headers.set('Authorization', `Bearer ${token}`);
-        }
-      }
-
-      modifiedInit.headers = headers;
-      return originalFetch(input, modifiedInit);
-    };
-
-    return () => {
-      window.fetch = originalFetch;
-    };
+    installGlobalFetchInterceptor();
   }, []);
 
   const refreshEmpresas = async () => {

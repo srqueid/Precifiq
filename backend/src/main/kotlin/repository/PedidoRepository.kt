@@ -74,55 +74,39 @@ class PedidoRepository {
         )
     }
 
+    private fun mapearLinhaParaPedido(row: ResultRow): Pedido {
+        val pedidoId = row[PedidosTable.id]
+        return Pedido(
+            id = pedidoId,
+            clienteId = row.getOrNull(PedidosTable.clienteId),
+            clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
+            valor = row.getOrNull(PedidosTable.valor) ?: row.getOrNull(PedidosTable.valorTotal) ?: 0.0,
+            valorFrete = row.getOrNull(PedidosTable.valorFrete) ?: 0.0,
+            tipoEnvio = row.getOrNull(PedidosTable.tipoEnvio) ?: "RETIRADA",
+            cepDestino = row.getOrNull(PedidosTable.cepDestino),
+            prazoEnvio = row.getOrNull(PedidosTable.prazoEnvio),
+            comprimentoCm = row.getOrNull(PedidosTable.comprimentoCm) ?: 20.0,
+            larguraCm = row.getOrNull(PedidosTable.larguraCm) ?: 15.0,
+            alturaCm = row.getOrNull(PedidosTable.alturaCm) ?: 10.0,
+            pesoKg = row.getOrNull(PedidosTable.pesoKg) ?: 0.5,
+            valorCustoTotal = row.getOrNull(PedidosTable.valorCustoTotal) ?: 0.0,
+            lucroBruto = row.getOrNull(PedidosTable.lucroBruto) ?: 0.0,
+            formaPagamento = row.getOrNull(PedidosTable.formaPagamento) ?: "OUTROS",
+            dataPagamento = row.getOrNull(PedidosTable.dataPagamento),
+            entregue = row.getOrNull(PedidosTable.entregue) ?: false,
+            itens = listarItens(pedidoId)
+        )
+    }
+
     fun listarTodos(): List<Pedido> = transaction {
         (PedidosTable leftJoin ClientesTable).selectAll().map { row ->
-            val pedidoId = row[PedidosTable.id]
-            Pedido(
-                id = pedidoId,
-                clienteId = row[PedidosTable.clienteId],
-                clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
-                valor = row[PedidosTable.valor],
-                valorFrete = row[PedidosTable.valorFrete],
-                tipoEnvio = row[PedidosTable.tipoEnvio],
-                cepDestino = row[PedidosTable.cepDestino],
-                prazoEnvio = row[PedidosTable.prazoEnvio],
-                comprimentoCm = row[PedidosTable.comprimentoCm],
-                larguraCm = row[PedidosTable.larguraCm],
-                alturaCm = row[PedidosTable.alturaCm],
-                pesoKg = row[PedidosTable.pesoKg],
-                valorCustoTotal = row[PedidosTable.valorCustoTotal],
-                lucroBruto = row[PedidosTable.lucroBruto],
-                formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
-                entregue = row[PedidosTable.entregue],
-                itens = listarItens(pedidoId)
-            )
+            mapearLinhaParaPedido(row)
         }
     }
 
     fun buscarPorId(id: Int): Pedido? = transaction {
         (PedidosTable leftJoin ClientesTable).select { PedidosTable.id eq id }.singleOrNull()?.let { row ->
-            val pedidoId = row[PedidosTable.id]
-            Pedido(
-                id = pedidoId,
-                clienteId = row[PedidosTable.clienteId],
-                clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
-                valor = row[PedidosTable.valor],
-                valorFrete = row[PedidosTable.valorFrete],
-                tipoEnvio = row[PedidosTable.tipoEnvio],
-                cepDestino = row[PedidosTable.cepDestino],
-                prazoEnvio = row[PedidosTable.prazoEnvio],
-                comprimentoCm = row[PedidosTable.comprimentoCm],
-                larguraCm = row[PedidosTable.larguraCm],
-                alturaCm = row[PedidosTable.alturaCm],
-                pesoKg = row[PedidosTable.pesoKg],
-                valorCustoTotal = row[PedidosTable.valorCustoTotal],
-                lucroBruto = row[PedidosTable.lucroBruto],
-                formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
-                entregue = row[PedidosTable.entregue],
-                itens = listarItens(pedidoId)
-            )
+            mapearLinhaParaPedido(row)
         }
     }
 
@@ -279,43 +263,29 @@ class PedidoRepository {
 
     fun listarPorCliente(clienteId: Int): List<Pedido> = transaction {
         (PedidosTable leftJoin ClientesTable).select { PedidosTable.clienteId eq clienteId }.map { row ->
-            val pedidoId = row[PedidosTable.id]
-            Pedido(
-                id = pedidoId,
-                clienteId = row[PedidosTable.clienteId],
-                clienteNome = row.getOrNull(ClientesTable.nome) ?: "Sem cliente",
-                valor = row[PedidosTable.valor],
-                valorFrete = row[PedidosTable.valorFrete],
-                tipoEnvio = row[PedidosTable.tipoEnvio],
-                cepDestino = row[PedidosTable.cepDestino],
-                prazoEnvio = row[PedidosTable.prazoEnvio],
-                comprimentoCm = row[PedidosTable.comprimentoCm],
-                larguraCm = row[PedidosTable.larguraCm],
-                alturaCm = row[PedidosTable.alturaCm],
-                pesoKg = row[PedidosTable.pesoKg],
-                valorCustoTotal = row[PedidosTable.valorCustoTotal],
-                lucroBruto = row[PedidosTable.lucroBruto],
-                formaPagamento = row[PedidosTable.formaPagamento],
-                dataPagamento = row[PedidosTable.dataPagamento],
-                entregue = row[PedidosTable.entregue],
-                itens = listarItens(pedidoId)
-            )
+            mapearLinhaParaPedido(row)
         }
     }
 
     private fun listarItens(pedidoId: Int): List<PedidoItem> = transaction {
-        PedidoItensTable.select { PedidoItensTable.pedidoId eq pedidoId }.map { row ->
-            PedidoItem(
-                id = row[PedidoItensTable.id],
-                pedidoId = row[PedidoItensTable.pedidoId],
-                nome = row[PedidoItensTable.nomeProduto],
-                qtd = row[PedidoItensTable.quantidade],
-                preco = row[PedidoItensTable.precoUnitario],
-                variacaoId = row[PedidoItensTable.variacaoId],
-                kitId = row[PedidoItensTable.kitId],
-                tipo = row[PedidoItensTable.tipo],
-                custoUnitario = row[PedidoItensTable.custoUnitario]
-            )
+        try {
+            PedidoItensTable.select { PedidoItensTable.pedidoId eq pedidoId }.map { row ->
+                PedidoItem(
+                    id = row[PedidoItensTable.id],
+                    pedidoId = row[PedidoItensTable.pedidoId],
+                    nome = row.getOrNull(PedidoItensTable.nomeProduto)
+                        ?: row.getOrNull(PedidoItensTable.produtoNome)
+                        ?: "Item",
+                    qtd = row.getOrNull(PedidoItensTable.quantidade) ?: 1,
+                    preco = row.getOrNull(PedidoItensTable.precoUnitario) ?: 0.0,
+                    variacaoId = row.getOrNull(PedidoItensTable.variacaoId),
+                    kitId = row.getOrNull(PedidoItensTable.kitId),
+                    tipo = row.getOrNull(PedidoItensTable.tipo) ?: "PRODUTO",
+                    custoUnitario = row.getOrNull(PedidoItensTable.custoUnitario) ?: 0.0
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
