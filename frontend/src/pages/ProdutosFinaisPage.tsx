@@ -12,6 +12,8 @@ import {
   Boxes,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
+  Lock,
   ArrowRight,
   Sparkles,
   DollarSign,
@@ -19,6 +21,7 @@ import {
   Copy,
   Barcode
 } from 'lucide-react';
+import { toast } from '../js/app';
 
 interface ProdutoFinal {
   id: number;
@@ -26,6 +29,13 @@ interface ProdutoFinal {
   descricao: string;
   rendimentoReceitaBase: number;
   rotulo: string | null;
+}
+
+interface CotaProdutos {
+  total: number;
+  limite: number | null;
+  atingido: boolean;
+  disponivel: number | null;
 }
 
 const fmtBrl = (val: number | undefined | null) => {
@@ -54,15 +64,26 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ nome: '', descricao: '', rendimentoReceitaBase: '1000' });
 
-  const { data: produtosData, isLoading } = useQuery({
+  const { data: produtosResponse, isLoading } = useQuery({
     queryKey: ['produtosFinais'],
     queryFn: async () => {
       const res = await fetch('/produtos-finais/json');
       if (!res.ok) throw new Error('Erro ao buscar produtos');
       const json = await res.json();
-      return json.produtos || [];
+      return {
+        produtos: (json.produtos || []) as ProdutoFinal[],
+        cota: (json.cota || { total: (json.produtos || []).length, limite: null, atingido: false, disponivel: null }) as CotaProdutos
+      };
     }
   });
+
+  const produtos: ProdutoFinal[] = produtosResponse?.produtos || [];
+  const cota: CotaProdutos = produtosResponse?.cota || {
+    total: produtos.length,
+    limite: null,
+    atingido: false,
+    disponivel: null
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -70,33 +91,45 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
       if (!res.ok) throw new Error('Falha ao excluir');
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['produtosFinais'] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['produtosFinais'] });
+      toast('Produto excluído com sucesso!', 'success');
+    }
   });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (cota.atingido) {
+        throw new Error(`Limite de cadastro atingido (${cota.total}/${cota.limite} produtos). Apenas o superusuário pode alterar o limite desta empresa.`);
+      }
       const res = await fetch('/produtos-finais', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: 0,
-          nome: formData.nome,
-          descricao: formData.descricao,
+          nome: formData.nome.trim(),
+          descricao: formData.descricao.trim(),
           rendimentoReceitaBase: Number(formData.rendimentoReceitaBase) || 1000,
           rotulo: null
         })
       });
-      if (!res.ok) throw new Error('Falha ao criar produto');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Falha ao criar produto');
+      }
       return res.json();
     },
     onSuccess: () => {
       setIsModalOpen(false);
       setFormData({ nome: '', descricao: '', rendimentoReceitaBase: '1000' });
+      toast('Produto cadastrado com sucesso!', 'success');
       queryClient.invalidateQueries({ queryKey: ['produtosFinais'] });
+    },
+    onError: (err: any) => {
+      toast(err.message || 'Erro ao cadastrar produto', 'error');
     }
   });
 
-  const produtos: ProdutoFinal[] = produtosData || [];
   const filtered = produtos.filter((p: ProdutoFinal) =>
     p.nome.toLowerCase().includes(search.toLowerCase()) ||
     (p.descricao && p.descricao.toLowerCase().includes(search.toLowerCase()))
@@ -116,6 +149,38 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
         </div>
 
         <div className="toolbar-actions" aria-label="Ações e filtros de produtos">
+          {/* Badge Indicador de Cota / Limitador de Produtos */}
+          <div
+            className={`quota-indicator-badge ${
+              cota.atingido
+                ? 'quota-danger'
+                : (cota.limite && cota.total / cota.limite >= 0.8)
+                ? 'quota-warning'
+                : 'quota-normal'
+            }`}
+            title={
+              cota.atingido
+                ? `Limite máximo atingido (${cota.total} de ${cota.limite} produtos permitidos). Apenas o superusuário pode alterar.`
+                : cota.limite
+                ? `${cota.total} produtos cadastrados de um limite de ${cota.limite}`
+                : 'Empresa com cadastro de produtos ilimitado'
+            }
+          >
+            {cota.atingido ? <Lock size={15} className="quota-icon" /> : <PackageOpen size={15} className="quota-icon" />}
+            <span className="quota-label">
+              {cota.limite ? (
+                <>
+                  <strong>{cota.total}</strong> / {cota.limite} produtos
+                  {cota.atingido && <span className="quota-pill-alert">Esgotado</span>}
+                </>
+              ) : (
+                <>
+                  <strong>{cota.total}</strong> produtos <span className="quota-pill-unlimited">Ilimitado</span>
+                </>
+              )}
+            </span>
+          </div>
+
           <div className="search-input-wrapper">
             <label htmlFor="produtoSearch" className="sr-only">Buscar produtos</label>
             <Search className="search-icon" size={20} aria-hidden="true" />
@@ -130,10 +195,18 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
             />
           </div>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn btn-primary btn-lg"
+            onClick={() => {
+              if (cota.atingido) {
+                toast(`Limite de cadastro atingido (${cota.total}/${cota.limite} produtos). Apenas o superusuário pode alterar o limite desta empresa.`, 'error');
+                return;
+              }
+              setIsModalOpen(true);
+            }}
+            className={`btn btn-primary btn-lg ${cota.atingido ? 'btn-disabled opacity-60 cursor-not-allowed' : ''}`}
+            disabled={cota.atingido}
+            title={cota.atingido ? `Limite de ${cota.limite} produtos atingido. Apenas o superusuário pode alterar.` : 'Novo Produto'}
           >
-            <Plus size={20} />
+            {cota.atingido ? <Lock size={18} /> : <Plus size={20} />}
             Novo Produto
           </button>
         </div>
@@ -221,7 +294,7 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
       {/* Modal Criar Produto */}
       {isModalOpen && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setIsModalOpen(false)}>
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <h2 className="modal-title">Novo Produto Final</h2>
               <button onClick={() => setIsModalOpen(false)} className="modal-close">
@@ -230,17 +303,43 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
             </div>
             <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(); }}>
               <div className="modal-body">
+                {cota.atingido && (
+                  <div className="p-3 mb-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5">
+                    <Lock size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block font-bold">Limite de cadastro atingido ({cota.total}/{cota.limite})</strong>
+                      <span className="text-rose-700">Esta empresa atingiu a cota máxima de produtos cadastrados. Apenas o superusuário pode alterar essa configuração.</span>
+                    </div>
+                  </div>
+                )}
+                {cota.limite && !cota.atingido && (cota.total / cota.limite >= 0.8) && (
+                  <div className="p-2.5 mb-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                    <span>Atenção: restam <strong>{cota.disponivel}</strong> vaga(s) para cadastro de novos produtos nesta empresa.</span>
+                  </div>
+                )}
+
                 <div className="form-group">
-                  <label htmlFor="prod-nome" className="required">Nome do Produto</label>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <label htmlFor="prod-nome" className="required mb-0">Nome do Produto</label>
+                    <span className={`text-[11px] font-mono ${formData.nome.length >= 140 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                      {formData.nome.length}/150
+                    </span>
+                  </div>
                   <input
                     id="prod-nome"
                     required
+                    maxLength={150}
                     placeholder="Ex: Água de Lençóis, Sabonete Líquido..."
                     value={formData.nome}
                     onChange={e => setFormData({ ...formData, nome: e.target.value })}
                     autoFocus
                   />
+                  <small style={{ color: 'var(--muted)', marginTop: '2px', display: 'block', fontSize: '11px' }}>
+                    Limitador: máximo de 150 caracteres.
+                  </small>
                 </div>
+
                 <div className="form-group">
                   <label htmlFor="prod-rendimento" className="required">
                     Rendimento da Receita Base (medida)
@@ -255,26 +354,40 @@ const ProdutoList: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
                     value={formData.rendimentoReceitaBase}
                     onChange={e => setFormData({ ...formData, rendimentoReceitaBase: e.target.value })}
                   />
-                  <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                  <small style={{ color: 'var(--muted)', marginTop: '4px', display: 'block', fontSize: '11px' }}>
                     Defina o volume/peso base da formulação (ex: 1000 ml para 1L de Água de Lençóis).
                   </small>
                 </div>
+
                 <div className="form-group">
-                  <label htmlFor="prod-desc">Descrição / Observações</label>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <label htmlFor="prod-desc" className="mb-0">Descrição / Observações</label>
+                    <span className={`text-[11px] font-mono ${formData.descricao.length >= 950 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                      {formData.descricao.length}/1000
+                    </span>
+                  </div>
                   <textarea
                     id="prod-desc"
                     rows={2}
+                    maxLength={1000}
                     placeholder="Descrição do produto..."
                     value={formData.descricao}
                     onChange={e => setFormData({ ...formData, descricao: e.target.value })}
                   />
+                  <small style={{ color: 'var(--muted)', marginTop: '2px', display: 'block', fontSize: '11px' }}>
+                    Limitador: máximo de 1000 caracteres.
+                  </small>
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saveMutation.isPending || cota.atingido || !formData.nome.trim() || formData.nome.length > 150 || formData.descricao.length > 1000}
+                >
                   {saveMutation.isPending ? 'Salvando...' : 'Criar Produto'}
                 </button>
               </div>
@@ -901,9 +1014,15 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
           <div className="section-title">Informações do Produto Base</div>
           <div className="form-row" style={{ marginBottom: '0' }}>
             <div className="form-group" style={{ flex: 2 }}>
-              <label htmlFor="edit-nome" className="required">Nome do Produto</label>
+              <div className="flex justify-between items-baseline mb-1">
+                <label htmlFor="edit-nome" className="required mb-0">Nome do Produto</label>
+                <span className={`text-[11px] font-mono ${(prodForm.nome || '').length >= 140 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                  {(prodForm.nome || '').length}/150
+                </span>
+              </div>
               <input
                 id="edit-nome"
+                maxLength={150}
                 value={prodForm.nome}
                 onChange={e => setProdForm({ ...prodForm, nome: e.target.value })}
               />
@@ -926,9 +1045,15 @@ const ProdutoDetail: React.FC<{ id: number; onBack: () => void }> = ({ id, onBac
             </div>
           </div>
           <div className="form-group" style={{ marginTop: '16px', marginBottom: '0' }}>
-            <label htmlFor="edit-descricao">Descrição da Formulação</label>
+            <div className="flex justify-between items-baseline mb-1">
+              <label htmlFor="edit-descricao" className="mb-0">Descrição da Formulação</label>
+              <span className={`text-[11px] font-mono ${(prodForm.descricao || '').length >= 950 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
+                {(prodForm.descricao || '').length}/1000
+              </span>
+            </div>
             <textarea
               id="edit-descricao"
+              maxLength={1000}
               value={prodForm.descricao}
               onChange={e => setProdForm({ ...prodForm, descricao: e.target.value })}
               rows={2}

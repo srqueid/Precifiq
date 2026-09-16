@@ -20,6 +20,7 @@ object EmpresasTable : Table("empresa") {
     val schemaName = varchar("schema_name", 63).uniqueIndex()
     val bancoDados = varchar("banco_dados", 100).default("bd_controle")
     val ativo = bool("ativo").default(true)
+    val limiteProdutos = integer("limite_produtos").nullable()
     val criadoEm = datetime("criado_em").defaultExpression(CurrentDateTime)
     val atualizadoEm = datetime("atualizado_em").defaultExpression(CurrentDateTime)
 
@@ -93,6 +94,7 @@ data class EmpresaDTO(
     val schemaName: String,
     val bancoDados: String = "bd_controle",
     val ativo: Boolean,
+    val limiteProdutos: Int? = null,
     val criadoEm: String? = null
 )
 
@@ -107,7 +109,8 @@ data class EmpresaHierarquiaDTO(
     val ativo: Boolean,
     val filiais: List<EmpresaDTO> = emptyList(),
     val totalProdutos: Long = 0,
-    val totalInsumos: Long = 0
+    val totalInsumos: Long = 0,
+    val limiteProdutos: Int? = null
 )
 
 data class CriarEmpresaRequest(
@@ -120,14 +123,16 @@ data class CriarEmpresaRequest(
     val bancoDados: String? = null, // Se omitido, será gerado (ex: bd_controle)
     val adminNome: String? = null,
     val adminEmail: String? = null,
-    val adminSenha: String? = null
+    val adminSenha: String? = null,
+    val limiteProdutos: Int? = null
 )
 
 data class AtualizarEmpresaRequest(
     val nomeFantasia: String? = null,
     val razaoSocial: String? = null,
     val cnpj: String? = null,
-    val ativo: Boolean? = null
+    val ativo: Boolean? = null,
+    val limiteProdutos: Int? = null
 )
 
 data class PerfilDTO(
@@ -191,6 +196,16 @@ data class CriarUsuarioRequest(
     val email: String,
     val senha: String,
     val isSuperuser: Boolean = false,
+    val empresaId: Int? = null,
+    val perfilId: Int? = null
+)
+
+data class AtualizarUsuarioRequest(
+    val nome: String? = null,
+    val email: String? = null,
+    val senha: String? = null,
+    val isSuperuser: Boolean? = null,
+    val ativo: Boolean? = null,
     val empresaId: Int? = null,
     val perfilId: Int? = null
 )

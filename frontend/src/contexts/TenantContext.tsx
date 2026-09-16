@@ -11,6 +11,7 @@ export interface EmpresaItem {
   schemaName: string;
   bancoDados?: string;
   ativo: boolean;
+  limiteProdutos?: number | null;
   criadoEm?: string;
 }
 
@@ -26,6 +27,7 @@ export interface EmpresaHierarquia {
   filiais: EmpresaItem[];
   totalProdutos?: number;
   totalInsumos?: number;
+  limiteProdutos?: number | null;
 }
 
 interface TenantContextType {
@@ -43,7 +45,7 @@ const DEFAULT_COMPANY: EmpresaItem = {
   id: 1,
   tipo: 'MATRIZ',
   matrizId: null,
-  nomeFantasia: 'Controle Silvia (Produção)',
+  nomeFantasia: 'Controle Silvia',
   razaoSocial: 'Silvia Artes & Cosméticos Ltda',
   cnpj: '12.345.678/0001-90',
   schemaName: 'controle',

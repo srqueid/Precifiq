@@ -157,6 +157,7 @@ fun obterEmpresasPermitidas(callerEmail: String?): List<EmpresaHierarquiaDTO> {
                 schemaName = row[EmpresasTable.schemaName],
                 bancoDados = row[EmpresasTable.bancoDados],
                 ativo = row[EmpresasTable.ativo],
+                limiteProdutos = row[EmpresasTable.limiteProdutos],
                 criadoEm = row[EmpresasTable.criadoEm].toString()
             )
         }
@@ -174,7 +175,8 @@ fun obterEmpresasPermitidas(callerEmail: String?): List<EmpresaHierarquiaDTO> {
                     schemaName = m.schemaName,
                     bancoDados = m.bancoDados,
                     ativo = m.ativo,
-                    filiais = filiais.filter { it.matrizId == m.id }
+                    filiais = filiais.filter { it.matrizId == m.id },
+                    limiteProdutos = m.limiteProdutos
                 )
             }
         }
@@ -231,7 +233,8 @@ fun obterEmpresasPermitidas(callerEmail: String?): List<EmpresaHierarquiaDTO> {
                 schemaName = m.schemaName,
                 bancoDados = m.bancoDados,
                 ativo = m.ativo,
-                filiais = filiaisDestaMatriz
+                filiais = filiaisDestaMatriz,
+                limiteProdutos = m.limiteProdutos
             )
         }
     }
@@ -853,6 +856,7 @@ fun Route.globalRoutes() {
                         it[schemaName] = finalSchema
                         it[bancoDados] = finalBancoDados
                         it[ativo] = true
+                        it[limiteProdutos] = req.limiteProdutos?.takeIf { l -> l > 0 }
                     } get EmpresasTable.id
 
                     // 1. Vincula automaticamente o Superusuário DcSys à nova empresa com perfil ADMIN (id 1)
@@ -910,7 +914,8 @@ fun Route.globalRoutes() {
                         razaoSocial = req.razaoSocial?.trim(),
                         cnpj = req.cnpj?.replace(Regex("\\D"), "")?.takeIf { it.isNotBlank() },
                         schemaName = finalSchema,
-                        ativo = true
+                        ativo = true,
+                        limiteProdutos = req.limiteProdutos?.takeIf { l -> l > 0 }
                     )
                 }
 
@@ -1050,6 +1055,9 @@ fun Route.globalRoutes() {
                         if (req.cnpj != null) {
                             it[cnpj] = req.cnpj.replace(Regex("\\D"), "").takeIf { c -> c.isNotBlank() }
                         }
+                        if (req.limiteProdutos != null) {
+                            it[limiteProdutos] = if (req.limiteProdutos > 0) req.limiteProdutos else null
+                        }
                         if (req.ativo != null) {
                             it[ativo] = req.ativo
                             // Se for MATRIZ e estiver sendo inativada (exclusão lógica), inativa em cascata todas as filiais
@@ -1074,6 +1082,7 @@ fun Route.globalRoutes() {
                             schemaName = r[EmpresasTable.schemaName],
                             bancoDados = r[EmpresasTable.bancoDados],
                             ativo = r[EmpresasTable.ativo],
+                            limiteProdutos = r[EmpresasTable.limiteProdutos],
                             criadoEm = r[EmpresasTable.criadoEm].toString()
                         )
                     }
@@ -1417,6 +1426,98 @@ fun Route.globalRoutes() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao criar usuário")))
+            }
+        }
+
+        // 5.1. Atualizar Usuário Global e Perfil (Superusuário DcSys ou Administrador)
+        put("/usuarios/{id}") {
+            try {
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID de usuário inválido"))
+                    return@put
+                }
+
+                val (isSuper, callerEmail) = call.checkSuperuser()
+                val req = call.receive<AtualizarUsuarioRequest>()
+
+                val usuarioAtualizado = transaction {
+                    val usuarioExistente = UsuariosTable.select { UsuariosTable.id eq id }.singleOrNull()
+                        ?: throw IllegalArgumentException("Usuário não encontrado")
+
+                    // Se alterou email, verifica unicidade
+                    if (!req.email.isNullOrBlank() && req.email.trim().lowercase() != usuarioExistente[UsuariosTable.email].lowercase()) {
+                        val existe = UsuariosTable.select { 
+                            (UsuariosTable.email eq req.email.trim().lowercase()) and (UsuariosTable.id neq id) 
+                        }.count() > 0
+                        if (existe) {
+                            throw IllegalArgumentException("Já existe outro usuário cadastrado com o e-mail '${req.email}'")
+                        }
+                    }
+
+                    UsuariosTable.update({ UsuariosTable.id eq id }) {
+                        if (!req.nome.isNullOrBlank()) it[nome] = req.nome.trim()
+                        if (!req.email.isNullOrBlank()) it[email] = req.email.trim().lowercase()
+                        if (!req.senha.isNullOrBlank()) it[senhaHash] = PasswordUtils.hash(req.senha)
+                        if (isSuper && req.isSuperuser != null) it[isSuperuser] = req.isSuperuser
+                        if (req.ativo != null) it[ativo] = req.ativo
+                    }
+
+                    // Se informou empresaId e perfilId, atualiza vínculo
+                    if (req.empresaId != null && req.perfilId != null) {
+                        UsuarioEmpresasTable.deleteWhere {
+                            (UsuarioEmpresasTable.usuarioId eq id) and (UsuarioEmpresasTable.empresaId eq req.empresaId)
+                        }
+                        UsuarioEmpresasTable.insert {
+                            it[usuarioId] = id
+                            it[empresaId] = req.empresaId
+                            it[perfilId] = req.perfilId
+                        }
+                    }
+
+                    val row = UsuariosTable.select { UsuariosTable.id eq id }.single()
+                    val vinculos = (UsuarioEmpresasTable innerJoin EmpresasTable innerJoin PerfisTable)
+                        .select { UsuarioEmpresasTable.usuarioId eq id }
+                        .map { vRow ->
+                            UsuarioEmpresaVinculoDTO(
+                                id = vRow[UsuarioEmpresasTable.id],
+                                empresaId = vRow[EmpresasTable.id],
+                                empresaNome = vRow[EmpresasTable.nomeFantasia],
+                                empresaTipo = vRow[EmpresasTable.tipo],
+                                schemaName = vRow[EmpresasTable.schemaName],
+                                perfilId = vRow[PerfisTable.id],
+                                perfilCodigo = vRow[PerfisTable.codigo],
+                                perfilNome = vRow[PerfisTable.nome]
+                            )
+                        }
+
+                    UsuarioGlobalDTO(
+                        id = row[UsuariosTable.id],
+                        nome = row[UsuariosTable.nome],
+                        email = row[UsuariosTable.email],
+                        isSuperuser = row[UsuariosTable.isSuperuser],
+                        ativo = row[UsuariosTable.ativo],
+                        criadoEm = row[UsuariosTable.criadoEm].toString(),
+                        fotoUrl = row[UsuariosTable.fotoUrl],
+                        empresas = vinculos
+                    )
+                }
+
+                registrarAuditoriaGlobal(
+                    usuario = callerEmail,
+                    funcao = if (isSuper) "SUPERUSER" else "ADMINISTRACAO",
+                    atividadeRealizada = "Atualizado usuário '${usuarioAtualizado.email}' (ID $id)",
+                    tabela = "usuario",
+                    registroId = id,
+                    ipOrigem = call.getCallerIp()
+                )
+
+                call.respond(HttpStatusCode.OK, usuarioAtualizado)
+            } catch (e: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Dados inválidos")))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Erro ao atualizar usuário")))
             }
         }
 
