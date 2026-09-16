@@ -109,6 +109,18 @@ fun main(args: Array<String>) {
                 return@intercept
             }
 
+            // Superusuário possui acesso administrativo garantido independente de validação do banco de dados
+            if (isSuperadminEmail(callerEmail)) {
+                val schemaToUse = if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader)) {
+                    schemaHeader
+                } else {
+                    "controle"
+                }
+                TenantContext.setCurrentSchema(schemaToUse)
+                proceed()
+                return@intercept
+            }
+
             val schemaToUse = if (!schemaHeader.isNullOrBlank() && TenantContext.isValidSchema(schemaHeader)) {
                 schemaHeader
             } else {

@@ -109,7 +109,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [isAlterarSenhaOpen, setIsAlterarSenhaOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const appVersion = packageJson?.version || '0.1.0';
+  const appVersion = packageJson?.version || '0.1.1';
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {

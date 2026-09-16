@@ -12,7 +12,7 @@ fun Application.unidadeMedidaRouting(db: AppDatabase) {
     val database = db
 
     routing {
-        route("/unidades-medida") {
+        val setupRoutes: Route.() -> Unit = {
             get("/json") {
                 call.respond(database.unidadesMedida.lerTodos())
             }
@@ -49,5 +49,8 @@ fun Application.unidadeMedidaRouting(db: AppDatabase) {
                 call.respond(mapOf("status" to "success"))
             }
         }
+
+        route("/unidades-medida", setupRoutes)
+        route("/api/unidades-medida", setupRoutes)
     }
 }

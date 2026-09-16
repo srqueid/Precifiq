@@ -14,7 +14,10 @@ import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InsumosScreen(viewModel: InsumosViewModel = hiltViewModel()) {
+fun InsumosScreen(
+    viewModel: InsumosViewModel = hiltViewModel(),
+    onVoltar: () -> Unit = {}
+) {
     val insumos by viewModel.insumos.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var filtroTipo by remember { mutableStateOf("Todos") }
@@ -28,6 +31,11 @@ fun InsumosScreen(viewModel: InsumosViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Gestão de Insumos") },
+                navigationIcon = {
+                    IconButton(onClick = onVoltar) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.carregarInsumos() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Atualizar Insumos")

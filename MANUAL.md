@@ -1,7 +1,7 @@
 # Manual de Utilização — Precifiq
 
 **Sistema de Gestão e Precificação**
-Versão do sistema: v0.1.0
+Versão do sistema: v0.1.1
 
 ---
 

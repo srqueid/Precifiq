@@ -75,7 +75,7 @@ class PedidosViewModel(
     fun baixarPagamento(id: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-            val dataHoje = LocalDate.now().toString()
+            val dataHoje = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(java.util.Date())
             val result = repository.atualizarPagamentoPedido(id, dataHoje)
             result.onSuccess {
                 _userMessage.value = "Pagamento do pedido #$id confirmado com sucesso!"

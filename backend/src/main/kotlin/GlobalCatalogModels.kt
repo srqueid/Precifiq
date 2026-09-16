@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 // TABELAS DO CATÁLOGO GLOBAL (Schema: global)
 // ==============================================================================
 
-object EmpresasTable : Table("empresa") {
+object EmpresasTable : Table("global.empresa") {
     val id = integer("id").autoIncrement()
     val tipo = varchar("tipo", 20).default("MATRIZ") // 'MATRIZ' ou 'FILIAL'
     val matrizId = integer("matriz_id").references(EmpresasTable.id).nullable()
@@ -27,7 +27,7 @@ object EmpresasTable : Table("empresa") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object PerfisTable : Table("perfil") {
+object PerfisTable : Table("global.perfil") {
     val id = integer("id").autoIncrement()
     val codigo = varchar("codigo", 50).uniqueIndex() // 'SUPERUSER', 'ADMIN_MATRIZ', 'GERENTE_FILIAL', 'OPERADOR'
     val nome = varchar("nome", 100)
@@ -37,7 +37,7 @@ object PerfisTable : Table("perfil") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object UsuariosTable : Table("usuario") {
+object UsuariosTable : Table("global.usuario") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 150)
     val email = varchar("email", 150).uniqueIndex()
@@ -53,7 +53,7 @@ object UsuariosTable : Table("usuario") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object UsuarioEmpresasTable : Table("usuario_empresa") {
+object UsuarioEmpresasTable : Table("global.usuario_empresa") {
     val id = integer("id").autoIncrement()
     val usuarioId = integer("usuario_id").references(UsuariosTable.id)
     val empresaId = integer("empresa_id").references(EmpresasTable.id)
@@ -67,7 +67,7 @@ object UsuarioEmpresasTable : Table("usuario_empresa") {
     }
 }
 
-object GlobalAuditoriaTable : Table("log_auditoria") {
+object GlobalAuditoriaTable : Table("global.log_auditoria") {
     val id = integer("id").autoIncrement()
     val usuario = varchar("usuario", 150)
     val funcao = varchar("funcao", 100).default("GERAL")

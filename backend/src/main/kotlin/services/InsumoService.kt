@@ -12,7 +12,7 @@ fun Application.insumoRouting(db: AppDatabase) {
     val database = db
 
     routing {
-        route("/insumos") {
+        val setupRoutes: Route.() -> Unit = {
             get("/json") {
                 val insumos = database.insumos.lerTodos()
                 val unidades = database.unidadesMedida.lerTodos()
@@ -124,6 +124,9 @@ fun Application.insumoRouting(db: AppDatabase) {
                 call.respond(mapOf("status" to "success"))
             }
         }
+
+        route("/insumos", setupRoutes)
+        route("/api/insumos", setupRoutes)
     }
 }
 
