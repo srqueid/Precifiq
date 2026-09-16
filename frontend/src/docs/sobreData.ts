@@ -1,7 +1,7 @@
 export const sobreMarkdown = `# Sobre o Precifiq
 
 **Precifiq — Sistema de Gestão e Precificação**  
-*Versão 0.1.0*
+*Versão 0.1.1*
 
 O Precifiq é um sistema de gestão desenvolvido para empresas que compram insumos, transformam esses insumos em produtos e precisam saber, com precisão, quanto cada item realmente custa antes de definir o preço de venda.
 

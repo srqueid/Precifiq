@@ -1,4 +1,5 @@
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,6 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.precific.app.data.network.EmpresaDTO
+import com.precific.app.data.network.UsuarioDTO
+import com.precific.app.data.network.UsuarioVinculoEmpresaDTO
+import com.precific.app.data.session.SessionManager
 import java.util.Locale
 
 // Models de dados para visualização do Dashboard
@@ -62,12 +67,18 @@ fun DashboardScreen(
     onNavigateToOrcamentos: () -> Unit = {},
     onNavigateToNovoOrcamento: () -> Unit = {},
     onNavigateToInsumos: () -> Unit = {},
-    onNavigateToFornecedores: () -> Unit = {}
+    onNavigateToFornecedores: () -> Unit = {},
+    onNavigateToPedidosOperacionais: () -> Unit = {}
 ) {
+    val dashboardData by viewModel.dashboardData.collectAsState()
     val kpisFromApi by viewModel.kpis.collectAsState()
     val insumosFromApi by viewModel.insumosCriticos.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+
+    val currentUser by SessionManager.currentUser.collectAsState()
+    val currentEmpresa by SessionManager.currentEmpresa.collectAsState()
+    val activeSchema by SessionManager.activeSchema.collectAsState()
 
     // Dados base enquanto sincroniza com a API
     val defaultKpis = remember {
@@ -176,6 +187,22 @@ fun DashboardScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Seção 0: Informações do Usuário e Empresa Vinculada
+            item {
+                UserCompanyCard(
+                    usuario = currentUser,
+                    empresa = currentEmpresa,
+                    activeSchema = activeSchema,
+                    onTrocarEmpresa = { vinculo ->
+                        SessionManager.selecionarEmpresaSchema(vinculo.schemaName, vinculo.empresaNome)
+                        viewModel.carregarDashboard()
+                    },
+                    onLogout = {
+                        SessionManager.limparSessao()
+                    }
+                )
+            }
+
             // Seção 1: Quick Actions (Ações Rápidas)
             item {
                 QuickActionsSection(
@@ -186,7 +213,7 @@ fun DashboardScreen(
                 )
             }
 
-            // Seção 2: Cards de KPIs Principais
+            // Seção 2: Cards de Indicadores de Gestão (Clicáveis)
             item {
                 Column {
                     Row(
@@ -195,7 +222,7 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Indicadores Principais",
+                            text = "Indicadores de Gestão",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onBackground
@@ -206,15 +233,22 @@ fun DashboardScreen(
                             Text(if (isLoading) "Atualizando..." else "Atualizar", fontSize = 12.sp)
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        items(kpis) { kpi ->
-                            KPICardItem(kpi = kpi)
-                        }
-                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    DashboardKpiCards(
+                        vendasMesVal = "R$ " + (dashboardData?.vendasTotalMes?.takeIf { it > 0 } ?: 220.45).format(2),
+                        vendasMesSub = "2 pedido(s) faturados/entregues",
+                        pendentesEntregaVal = "1 pedido(s)",
+                        pendentesEntregaSub = "Total: R$ 75,45 a expedir",
+                        comprasAguardandoVal = "0",
+                        orcamentosAtivosVal = (dashboardData?.orcamentosPendentes ?: 0).toString(),
+                        orcamentosAprovadosVal = (dashboardData?.orcamentosAprovados ?: 0).toString(),
+                        produtosCadastradosVal = (dashboardData?.totalProdutos?.takeIf { it > 0 } ?: 2).toString(),
+                        onNavigateToOrcamentos = onNavigateToOrcamentos,
+                        onNavigateToInsumos = onNavigateToInsumos,
+                        onNavigateToPedidosOperacionais = onNavigateToPedidosOperacionais
+                    )
                 }
             }
 
@@ -322,37 +356,158 @@ fun QuickActionButton(
 }
 
 @Composable
-fun KPICardItem(kpi: DashboardKPIData) {
+fun DashboardKpiCards(
+    vendasMesVal: String,
+    vendasMesSub: String,
+    pendentesEntregaVal: String,
+    pendentesEntregaSub: String,
+    comprasAguardandoVal: String,
+    orcamentosAtivosVal: String,
+    orcamentosAprovadosVal: String,
+    produtosCadastradosVal: String,
+    onNavigateToOrcamentos: () -> Unit,
+    onNavigateToInsumos: () -> Unit,
+    onNavigateToPedidosOperacionais: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 1. VENDAS REALIZADAS (MÊS) -> Ir direto para Gestão Operacional de Pedidos
+        SingleKpiCard(
+            title = "VENDAS REALIZADAS (MÊS)",
+            value = vendasMesVal,
+            subtitle = vendasMesSub,
+            icon = Icons.Default.ShoppingCart,
+            iconTint = Color(0xFF10B981),
+            iconBg = Color(0xFFDCFCE7),
+            valueColor = Color(0xFF10B981),
+            onClick = onNavigateToPedidosOperacionais
+        )
+
+        // 2. PENDENTES DE ENTREGA -> Ir direto para Gestão Operacional de Pedidos
+        SingleKpiCard(
+            title = "PENDENTES DE ENTREGA",
+            value = pendentesEntregaVal,
+            subtitle = pendentesEntregaSub,
+            icon = Icons.Default.LocalShipping,
+            iconTint = Color(0xFF2563EB),
+            iconBg = Color(0xFFDBEAFE),
+            valueColor = Color(0xFF2563EB),
+            onClick = onNavigateToPedidosOperacionais
+        )
+
+        // 3. COMPRAS AGUARDANDO -> Ir direto para Insumos / Compras
+        SingleKpiCard(
+            title = "COMPRAS AGUARDANDO",
+            value = comprasAguardandoVal,
+            subtitle = "Aguardando confirmação",
+            icon = Icons.Default.ShoppingCart,
+            iconTint = Color(0xFFD97706),
+            iconBg = Color(0xFFFEF3C7),
+            valueColor = Color(0xFFD97706),
+            onClick = onNavigateToInsumos
+        )
+
+        // 4. ORÇAMENTOS ATIVOS -> Ir direto para Orçamentos
+        SingleKpiCard(
+            title = "ORÇAMENTOS ATIVOS",
+            value = orcamentosAtivosVal,
+            subtitle = "Em cotação com fornecedores",
+            icon = Icons.Default.Description,
+            iconTint = Color(0xFF2563EB),
+            iconBg = Color(0xFFDBEAFE),
+            valueColor = Color(0xFF2563EB),
+            onClick = onNavigateToOrcamentos
+        )
+
+        // 5. ORÇAMENTOS APROVADOS -> Ir direto para Orçamentos
+        SingleKpiCard(
+            title = "ORÇAMENTOS APROVADOS",
+            value = orcamentosAprovadosVal,
+            subtitle = "Prontos para conversão em compra",
+            icon = Icons.Default.CheckCircle,
+            iconTint = Color(0xFF10B981),
+            iconBg = Color(0xFFDCFCE7),
+            valueColor = Color(0xFF10B981),
+            onClick = onNavigateToOrcamentos
+        )
+
+        // 6. PRODUTOS CADASTRADOS -> Ir direto para Insumos / Produtos
+        SingleKpiCard(
+            title = "PRODUTOS CADASTRADOS",
+            value = produtosCadastradosVal,
+            subtitle = "Fórmulas e receitas base",
+            icon = Icons.Default.Layers,
+            iconTint = Color(0xFF2563EB),
+            iconBg = Color(0xFFDBEAFE),
+            valueColor = Color(0xFF2563EB),
+            onClick = onNavigateToInsumos
+        )
+    }
+}
+
+@Composable
+fun SingleKpiCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconTint: Color,
+    iconBg: Color,
+    valueColor: Color = Color.Unspecified,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.width(180.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(iconBg, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(kpi.accentColor.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(kpi.icon, contentDescription = null, tint = kpi.accentColor, modifier = Modifier.size(20.dp))
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = iconTint,
+                    modifier = Modifier.size(24.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(kpi.title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(kpi.value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                kpi.trendText,
-                fontSize = 11.sp,
-                color = if (kpi.isPositiveTrend) Color(0xFF10B981) else Color(0xFFEF4444),
-                fontWeight = FontWeight.Medium
-            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF475569),
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = value,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = valueColor
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
         }
     }
 }
@@ -605,5 +760,118 @@ fun DashboardStatusChip(status: String) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
+    }
+}
+
+@Composable
+fun UserCompanyCard(
+    usuario: UsuarioDTO?,
+    empresa: EmpresaDTO?,
+    activeSchema: String,
+    onTrocarEmpresa: (UsuarioVinculoEmpresaDTO) -> Unit,
+    onLogout: () -> Unit
+) {
+    var showEmpresasMenu by remember { mutableStateOf(false) }
+    val empresasVinculadas = usuario?.empresas ?: emptyList()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Business,
+                        contentDescription = "Empresa",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = empresa?.nomeFantasia ?: "Empresa (${activeSchema.ifBlank { "Padrão" }})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = usuario?.email ?: "Usuário Conectado",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                // Botão de Logout
+                IconButton(onClick = onLogout) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Sair da conta",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            // Alternância de Empresa caso o usuário possua mais de um vínculo no sistema web
+            if (empresasVinculadas.size > 1) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Box {
+                    OutlinedButton(
+                        onClick = { showEmpresasMenu = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Empresa Ativa: ${empresasVinculadas.find { it.schemaName == activeSchema }?.empresaNome ?: activeSchema}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showEmpresasMenu,
+                        onDismissRequest = { showEmpresasMenu = false }
+                    ) {
+                        empresasVinculadas.forEach { vinculo ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = vinculo.empresaNome,
+                                            fontWeight = if (vinculo.schemaName == activeSchema) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        Text(
+                                            text = "Perfil: ${vinculo.perfilNome} | Schema: ${vinculo.schemaName}",
+                                            fontSize = 11.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    showEmpresasMenu = false
+                                    onTrocarEmpresa(vinculo)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

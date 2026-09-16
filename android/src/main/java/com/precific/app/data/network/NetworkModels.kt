@@ -178,3 +178,33 @@ data class CodigoBarrasResultadoDTO(
     @SerializedName("unidade") val unidade: String? = null,
     @SerializedName("detalhes") val detalhes: String? = null
 )
+
+// ============================================================================
+// 7. Modelos de Pedidos Operacionais
+// ============================================================================
+
+data class PedidoItemDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("pedidoId") val pedidoId: Int = 0,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("qtd") val qtd: Int = 1,
+    @SerializedName("preco") val preco: Double = 0.0,
+    @SerializedName("tipo") val tipo: String? = "PRODUTO",
+    @SerializedName("custoUnitario") val custoUnitario: Double? = 0.0
+)
+
+data class PedidoDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("clienteId") val clienteId: Int? = null,
+    @SerializedName("clienteNome") val clienteNome: String? = null,
+    @SerializedName("valor") val valor: Double? = 0.0,
+    @SerializedName("valorFrete") val valorFrete: Double? = 0.0,
+    @SerializedName("tipoEnvio") val tipoEnvio: String? = "RETIRADA",
+    @SerializedName("prazoEnvio") val prazoEnvio: String? = null,
+    @SerializedName("valorCustoTotal") val valorCustoTotal: Double? = 0.0,
+    @SerializedName("lucroBruto") val lucroBruto: Double? = 0.0,
+    @SerializedName("formaPagamento") val formaPagamento: String = "PIX",
+    @SerializedName("dataPagamento") val dataPagamento: String? = null,
+    @SerializedName("entregue") val entregue: Boolean = false,
+    @SerializedName("itens") val itens: List<PedidoItemDTO> = emptyList()
+)

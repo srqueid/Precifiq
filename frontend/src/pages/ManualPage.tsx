@@ -17,7 +17,7 @@ export const ManualPage: React.FC<ManualPageProps> = ({ isPublic = false }) => {
       title="Manual de Utilização"
       subtitle="Guia completo de funções, boas práticas e fluxo operacional do sistema Precifiq"
       icon={<BookOpen size={22} />}
-      version="v0.1.0"
+      version="v0.1.1"
       isPublic={isPublic}
       onBackToApp={() => navigate('/login')}
     />

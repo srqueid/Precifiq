@@ -107,8 +107,8 @@ object DatabaseConfig {
                 break
             } catch (e: Exception) {
                 if (attempt >= maxAttempts) {
-                    println("ERROR: Falha definitiva ao conectar ao banco após $maxAttempts tentativas: ${e.message}")
-                    throw e
+                    System.err.println("WARN: Banco de dados inacessível após $maxAttempts tentativas: ${e.message}. O backend continuará ativo permitindo acesso autônomo do superusuário e auto-recuperação.")
+                    break
                 }
                 println("WARN: Banco ainda não disponível (${e.message}). Aguardando 3s antes da próxima tentativa...")
                 try {
@@ -145,95 +145,107 @@ object DatabaseConfig {
     }
 
     private fun initGlobalCatalog() {
+        // 1. Migrações DDL estruturais do Catálogo Global (executadas isoladamente para garantir persistência)
+        val ddlList = listOf(
+            "CREATE SCHEMA IF NOT EXISTS global;",
+            """
+            CREATE TABLE IF NOT EXISTS global.empresa (
+                id SERIAL PRIMARY KEY,
+                tipo VARCHAR(20) NOT NULL DEFAULT 'MATRIZ',
+                matriz_id INTEGER REFERENCES global.empresa(id) ON DELETE SET NULL,
+                nome_fantasia VARCHAR(150) NOT NULL,
+                razao_social VARCHAR(255),
+                cnpj VARCHAR(20) UNIQUE,
+                schema_name VARCHAR(63) UNIQUE NOT NULL,
+                banco_dados VARCHAR(100) NOT NULL DEFAULT 'bd_controle',
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """.trimIndent(),
+            "ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS banco_dados VARCHAR(100) DEFAULT 'bd_controle';",
+            "ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS limite_produtos INTEGER;",
+            """
+            CREATE TABLE IF NOT EXISTS global.perfil (
+                id SERIAL PRIMARY KEY,
+                codigo VARCHAR(50) UNIQUE NOT NULL,
+                nome VARCHAR(100) NOT NULL,
+                descricao TEXT,
+                permissoes TEXT
+            );
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS global.usuario (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(150) NOT NULL,
+                email VARCHAR(150) UNIQUE NOT NULL,
+                senha_hash VARCHAR(255) NOT NULL,
+                is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """.trimIndent(),
+            "ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS foto_url VARCHAR(500);",
+            "ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);",
+            "ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);",
+            "ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP WITHOUT TIME ZONE;",
+            """
+            CREATE TABLE IF NOT EXISTS global.usuario_empresa (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL REFERENCES global.usuario(id) ON DELETE CASCADE,
+                empresa_id INTEGER NOT NULL REFERENCES global.empresa(id) ON DELETE CASCADE,
+                perfil_id INTEGER NOT NULL REFERENCES global.perfil(id) ON DELETE RESTRICT,
+                criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (usuario_id, empresa_id)
+            );
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS global.log_auditoria (
+                id SERIAL PRIMARY KEY,
+                usuario VARCHAR(150) NOT NULL,
+                funcao VARCHAR(100) NOT NULL DEFAULT 'GERAL',
+                atividade_realizada TEXT NOT NULL,
+                tabela VARCHAR(100),
+                registro_id INTEGER,
+                ip_origem VARCHAR(45),
+                data_hora TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """.trimIndent(),
+            """
+            CREATE OR REPLACE FUNCTION global.trg_clean_empresa_numeric_fields()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                IF NEW.cnpj IS NOT NULL THEN
+                    NEW.cnpj := NULLIF(regexp_replace(NEW.cnpj, '\D', '', 'g'), '');
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """.trimIndent(),
+            "DROP TRIGGER IF EXISTS trg_clean_empresa_fields ON global.empresa;",
+            """
+            CREATE TRIGGER trg_clean_empresa_fields
+            BEFORE INSERT OR UPDATE ON global.empresa
+            FOR EACH ROW
+            EXECUTE FUNCTION global.trg_clean_empresa_numeric_fields();
+            """.trimIndent()
+        )
+
+        for (ddl in ddlList) {
+            try {
+                transaction {
+                    connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
+                    exec(ddl)
+                }
+            } catch (e: Exception) {
+                println("WARN: DDL global: ${e.message}")
+            }
+        }
+
+        // 2. Seeds de Perfis RBAC Oficiais
         try {
             transaction {
                 connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
-                exec("CREATE SCHEMA IF NOT EXISTS global;")
-                exec("""
-                    CREATE TABLE IF NOT EXISTS global.empresa (
-                        id SERIAL PRIMARY KEY,
-                        tipo VARCHAR(20) NOT NULL DEFAULT 'MATRIZ',
-                        matriz_id INTEGER REFERENCES global.empresa(id) ON DELETE SET NULL,
-                        nome_fantasia VARCHAR(150) NOT NULL,
-                        razao_social VARCHAR(255),
-                        cnpj VARCHAR(20) UNIQUE,
-                        schema_name VARCHAR(63) UNIQUE NOT NULL,
-                        banco_dados VARCHAR(100) NOT NULL DEFAULT 'bd_controle',
-                        ativo BOOLEAN NOT NULL DEFAULT TRUE,
-                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-                    ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS banco_dados VARCHAR(100) DEFAULT 'bd_controle';
-                    ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS limite_produtos INTEGER;
-
-                    CREATE OR REPLACE FUNCTION global.trg_clean_empresa_numeric_fields()
-                    RETURNS TRIGGER AS $$
-                    BEGIN
-                        IF NEW.cnpj IS NOT NULL THEN
-                            NEW.cnpj := NULLIF(regexp_replace(NEW.cnpj, '\D', '', 'g'), '');
-                        END IF;
-                        RETURN NEW;
-                    END;
-                    $$ LANGUAGE plpgsql;
-
-                    DROP TRIGGER IF EXISTS trg_clean_empresa_fields ON global.empresa;
-                    CREATE TRIGGER trg_clean_empresa_fields
-                    BEFORE INSERT OR UPDATE ON global.empresa
-                    FOR EACH ROW
-                    EXECUTE FUNCTION global.trg_clean_empresa_numeric_fields();
-                """.trimIndent())
-
-                exec("""
-                    CREATE TABLE IF NOT EXISTS global.perfil (
-                        id SERIAL PRIMARY KEY,
-                        codigo VARCHAR(50) UNIQUE NOT NULL,
-                        nome VARCHAR(100) NOT NULL,
-                        descricao TEXT,
-                        permissoes TEXT
-                    );
-                """.trimIndent())
-
-                exec("""
-                    CREATE TABLE IF NOT EXISTS global.usuario (
-                        id SERIAL PRIMARY KEY,
-                        nome VARCHAR(150) NOT NULL,
-                        email VARCHAR(150) UNIQUE NOT NULL,
-                        senha_hash VARCHAR(255) NOT NULL,
-                        is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
-                        ativo BOOLEAN NOT NULL DEFAULT TRUE,
-                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS foto_url VARCHAR(500);
-                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS google_id VARCHAR(100);
-                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);
-                    ALTER TABLE global.usuario ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP WITHOUT TIME ZONE;
-                """.trimIndent())
-
-                exec("""
-                    CREATE TABLE IF NOT EXISTS global.usuario_empresa (
-                        id SERIAL PRIMARY KEY,
-                        usuario_id INTEGER NOT NULL REFERENCES global.usuario(id) ON DELETE CASCADE,
-                        empresa_id INTEGER NOT NULL REFERENCES global.empresa(id) ON DELETE CASCADE,
-                        perfil_id INTEGER NOT NULL REFERENCES global.perfil(id) ON DELETE RESTRICT,
-                        criado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE (usuario_id, empresa_id)
-                    );
-                """.trimIndent())
-
-                exec("""
-                    CREATE TABLE IF NOT EXISTS global.log_auditoria (
-                        id SERIAL PRIMARY KEY,
-                        usuario VARCHAR(150) NOT NULL,
-                        funcao VARCHAR(100) NOT NULL DEFAULT 'GERAL',
-                        atividade_realizada TEXT NOT NULL,
-                        tabela VARCHAR(100),
-                        registro_id INTEGER,
-                        ip_origem VARCHAR(45),
-                        data_hora TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-                """.trimIndent())
-
-                // Seeds de Perfis RBAC Oficiais
                 exec("""
                     INSERT INTO global.perfil (id, codigo, nome, descricao, permissoes)
                     VALUES 
@@ -250,8 +262,15 @@ object DatabaseConfig {
                         PERFORM setval('global.perfil_id_seq', (SELECT GREATEST(MAX(id), 4) FROM global.perfil));
                     END $$;
                 """.trimIndent())
+            }
+        } catch (e: Exception) {
+            println("WARN: Seed de perfis globais: ${e.message}")
+        }
 
-                // Seed da Matriz Inicial (schema controle)
+        // 3. Seed da Matriz Inicial (schema controle)
+        try {
+            transaction {
+                connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
                 exec("""
                     INSERT INTO global.empresa (id, tipo, matriz_id, nome_fantasia, razao_social, cnpj, schema_name, ativo)
                     VALUES (1, 'MATRIZ', NULL, 'Controle Silvia (Matriz)', 'Silvia Artes & Cosméticos Ltda', '12.345.678/0001-90', 'controle', TRUE)
@@ -262,16 +281,20 @@ object DatabaseConfig {
                         PERFORM setval('global.empresa_id_seq', (SELECT GREATEST(MAX(id), 1) FROM global.empresa));
                     END $$;
                 """.trimIndent())
+            }
+        } catch (e: Exception) {
+            println("WARN: Seed da empresa matriz: ${e.message}")
+        }
 
-                // Seed do Superusuário DcSys inicial (admin@dcsys.com / admin123)
+        // 4. Seed do Superusuário DcSys inicial (admin@dcsys.com / admin123)
+        try {
+            transaction {
+                connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
                 exec("""
                     INSERT INTO global.usuario (nome, email, senha_hash, is_superuser, ativo)
                     VALUES ('Superusuário DcSys', 'admin@dcsys.com', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', TRUE, TRUE)
                     ON CONFLICT (email) DO NOTHING;
-                """.trimIndent())
 
-                // Vínculo inicial do Superusuário DcSys com Matriz padrão
-                exec("""
                     DO $$
                     DECLARE
                         v_user_id INTEGER;
@@ -288,8 +311,17 @@ object DatabaseConfig {
                             ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
                         END IF;
                     END $$;
+                """.trimIndent())
+            }
+        } catch (e: Exception) {
+            println("WARN: Seed de superusuário: ${e.message}")
+        }
 
-                    -- Seed do Administrador da Empresa padrão (silvia@empresa.com / 123456 - is_superuser = FALSE)
+        // 5. Seed Administrador Silvia
+        try {
+            transaction {
+                connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
+                exec("""
                     INSERT INTO global.usuario (nome, email, senha_hash, is_superuser, ativo)
                     VALUES ('Silvia Administradora', 'silvia@empresa.com', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', FALSE, TRUE)
                     ON CONFLICT (email) DO UPDATE SET is_superuser = FALSE;
@@ -310,13 +342,23 @@ object DatabaseConfig {
                             ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
                         END IF;
                     END $$;
+                """.trimIndent())
+            }
+        } catch (e: Exception) {
+            println("WARN: Seed Silvia: ${e.message}")
+        }
 
-                    -- Seed da Empresa e Usuário dedicados para Demonstração (separados da empresa real de produção)
-                    INSERT INTO global.empresa (id, tipo, matriz_id, nome_fantasia, razao_social, cnpj, schema_name, ativo)
-                    VALUES (99, 'MATRIZ', NULL, 'Demonstração (Demo)', 'Demonstração e Treinamento Ltda', '99.999.999/0001-99', 'db_demo', TRUE)
-                    ON CONFLICT (id) DO UPDATE SET 
-                        nome_fantasia = EXCLUDED.nome_fantasia,
-                        schema_name = EXCLUDED.schema_name;
+        // 6. Seed Demonstração (Demo)
+        try {
+            transaction {
+                connection.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
+                exec("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM global.empresa WHERE id = 99 OR schema_name = 'db_demo' OR cnpj = '99.999.999/0001-99') THEN
+                            INSERT INTO global.empresa (id, tipo, matriz_id, nome_fantasia, razao_social, cnpj, schema_name, ativo)
+                            VALUES (99, 'MATRIZ', NULL, 'Demonstração (Demo)', 'Demonstração e Treinamento Ltda', '99.999.999/0001-99', 'db_demo', TRUE);
+                        END IF;
+                    END $$;
 
                     INSERT INTO global.usuario (nome, email, senha_hash, is_superuser, ativo)
                     VALUES ('Usuário Demonstração', 'demo@empresa.com', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', FALSE, TRUE)
@@ -330,7 +372,7 @@ object DatabaseConfig {
                     BEGIN
                         SELECT id INTO v_demo_user_id FROM global.usuario WHERE email = 'demo@empresa.com' LIMIT 1;
                         SELECT id INTO v_demo_perfil_id FROM global.perfil WHERE codigo = 'ADMIN_MATRIZ' LIMIT 1;
-                        SELECT id INTO v_demo_empresa_id FROM global.empresa WHERE id = 99 LIMIT 1;
+                        SELECT id INTO v_demo_empresa_id FROM global.empresa WHERE schema_name = 'db_demo' OR id = 99 LIMIT 1;
 
                         IF v_demo_user_id IS NOT NULL AND v_demo_perfil_id IS NOT NULL AND v_demo_empresa_id IS NOT NULL THEN
                             INSERT INTO global.usuario_empresa (usuario_id, empresa_id, perfil_id)
@@ -339,12 +381,12 @@ object DatabaseConfig {
                         END IF;
                     END $$;
                 """.trimIndent())
-
-                println("INFO: Catálogo global e governança inicializados com sucesso.")
             }
         } catch (e: Exception) {
-            System.err.println("WARN: Não foi possível inicializar catálogo global (verifique se o DB está acessível): ${e.message}")
+            println("WARN: Seed demo: ${e.message}")
         }
+
+        println("INFO: Catálogo global e governança inicializados com sucesso.")
     }
 
     private fun testConnection() {

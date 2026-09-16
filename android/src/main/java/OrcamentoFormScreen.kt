@@ -18,16 +18,25 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun OrcamentoFormScreen(
     orcamentoId: Int? = null,
-    viewModel: OrcamentoFormViewModel = hiltViewModel()
+    viewModel: OrcamentoFormViewModel = hiltViewModel(),
+    onVoltar: () -> Unit = {},
+    onSalvoSucesso: () -> Unit = {}
 ) {
     val formState by viewModel.formState.collectAsState()
     val itens by viewModel.itens.collectAsState()
     val total by viewModel.total.collectAsState()
+    val isSaving by viewModel.isSaving.collectAsState()
+    val saveMessage by viewModel.saveMessage.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (orcamentoId == null) "Novo Orçamento" else "Editar Orçamento") }
+                title = { Text(if (orcamentoId == null) "Novo Orçamento" else "Editar Orçamento") },
+                navigationIcon = {
+                    IconButton(onClick = onVoltar) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                    }
+                }
             )
         },
         floatingActionButton = {
@@ -41,12 +50,29 @@ fun OrcamentoFormScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            saveMessage?.let { msg ->
+                Surface(
+                    color = if (msg.contains("sucesso", ignoreCase = true)) Color(0xFFD1FAE5) else Color(0xFFFEE2E2),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = msg,
+                        color = if (msg.contains("sucesso", ignoreCase = true)) Color(0xFF065F46) else Color(0xFF991B1B),
+                        modifier = Modifier.padding(12.dp),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
             OutlinedTextField(
                 value = formState.titulo,
                 onValueChange = { viewModel.updateTitulo(it) },
                 label = { Text("Título do Orçamento") },
+                placeholder = { Text("Ex: Orçamento de Produção") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -54,55 +80,72 @@ fun OrcamentoFormScreen(
                 value = formState.cliente,
                 onValueChange = { viewModel.updateCliente(it) },
                 label = { Text("Cliente / Projeto") },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                placeholder = { Text("Ex: Cliente João Silva") },
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Itens", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp))
+            Text("Itens do Orçamento", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp))
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-            ) {
-                items(itens) { item ->
-                    ItemOrcamentoEditable(
-                        item = item,
-                        onUpdate = viewModel::updateItem,
-                        onDelete = viewModel::removerItem
+            if (itens.isEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        "Nenhum item adicionado. Clique no botão + abaixo para adicionar um insumo.",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.Gray,
+                        fontSize = 13.sp
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                ) {
+                    items(itens) { item ->
+                        ItemOrcamentoEditable(
+                            item = item,
+                            onUpdate = viewModel::updateItem,
+                            onDelete = viewModel::removerItem
+                        )
+                    }
                 }
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
                 Row(
                     modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Total do Orçamento", fontSize = 18.sp)
+                    Text("Total Estimado", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                     Text(
                         "R$ ${total.format(2)}",
-                        fontSize = 28.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { /* Salvar Rascunho */ },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                ) {
-                    Text("Salvar Rascunho")
-                }
-                Button(
-                    onClick = { viewModel.salvarEEnviarAprovacao() },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Salvar e Enviar")
+            Button(
+                onClick = {
+                    viewModel.salvarEEnviarAprovacao(onSuccess = onSalvoSucesso)
+                },
+                enabled = !isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("SALVAR E REGISTRAR ORÇAMENTO", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -120,9 +163,11 @@ fun ItemOrcamentoEditable(
             OutlinedTextField(
                 value = item.insumoNome,
                 onValueChange = { onUpdate(item.copy(insumoNome = it)) },
-                label = { Text("Insumo") },
+                label = { Text("Nome do Insumo / Produto") },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -134,19 +179,20 @@ fun ItemOrcamentoEditable(
                 OutlinedTextField(
                     value = item.precoUnitario.toString(),
                     onValueChange = { onUpdate(item.copy(precoUnitario = it.toDoubleOrNull() ?: 0.0)) },
-                    label = { Text("Preço Unit.") },
+                    label = { Text("Preço Unit. (R$)") },
                     modifier = Modifier.weight(1f)
                 )
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Subtotal: R$ ${(item.quantidade * item.precoUnitario).format(2)}",
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 IconButton(onClick = { onDelete(item.id) }) {
                     Icon(Icons.Default.Delete, contentDescription = "Remover", tint = Color.Red)

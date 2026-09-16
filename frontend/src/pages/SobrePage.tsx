@@ -17,7 +17,7 @@ export const SobrePage: React.FC<SobrePageProps> = ({ isPublic = false }) => {
       title="Sobre o Precifiq"
       subtitle="Conceito, arquitetura tecnológica, diferenciais e canais de suporte da DcSys"
       icon={<Info size={22} />}
-      version="v0.1.0"
+      version="v0.1.1"
       isPublic={isPublic}
       onBackToApp={() => navigate('/login')}
     />

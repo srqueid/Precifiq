@@ -21,11 +21,15 @@ data class RotuloRequest(
 
 fun obterStatusLimiteProdutos(db: AppDatabase): Map<String, Any?> {
     val schema = TenantContext.getCurrentSchema()
-    val limite = transaction {
-        EmpresasTable.select { EmpresasTable.schemaName eq schema }
-            .firstOrNull()?.get(EmpresasTable.limiteProdutos)
+    val limite = try {
+        transaction {
+            EmpresasTable.select { EmpresasTable.schemaName eq schema }
+                .firstOrNull()?.get(EmpresasTable.limiteProdutos)
+        }
+    } catch (_: Exception) {
+        null
     }
-    val total = db.produtosFinais.lerTodos().size
+    val total = try { db.produtosFinais.lerTodos().size } catch (_: Exception) { 0 }
     val atingido = limite != null && limite > 0 && total >= limite
     val disponivel = if (limite != null && limite > 0) maxOf(0, limite - total) else null
     return mapOf(
@@ -44,8 +48,8 @@ fun recalcularCustos(produtoId: Int, db: AppDatabase) {
 
     // 1. Custo total da receita base
     var custoReceitaBase = 0.0
-    for (item in receita) {
-        val insumo = db.insumos.lerPorId(item.insumoId)
+    for ((_, _, insumoId, quantidadeUsada) in receita) {
+        val insumo = db.insumos.lerPorId(insumoId)
         if (insumo != null) {
             val qtdBase = if (insumo.quantidadePorEmbalagem != null && insumo.quantidadePorEmbalagem!! > 0) {
                 insumo.quantidadePorEmbalagem!!
@@ -55,7 +59,7 @@ fun recalcularCustos(produtoId: Int, db: AppDatabase) {
             // Custo por mililitro ou grama: preco / quantidadePorEmbalagem (ex: R$ 61,27 / 5000ml = R$ 0,012254/ml)
             val custoPorUnidadeBase = insumo.preco / qtdBase
             // Custo do insumo na receita = quantidadeUsada * custoPorUnidadeBase (ex: 700ml * 0,012254 = R$ 8,58)
-            custoReceitaBase += custoPorUnidadeBase * item.quantidadeUsada
+            custoReceitaBase += custoPorUnidadeBase * quantidadeUsada
         }
     }
 
@@ -164,7 +168,7 @@ fun gerarRotuloCompleto(produto: ProdutoFinal, db: AppDatabase, gemini: org.exam
     }
 
     // Geração determinística padronizada e profissional
-    val caracteristicasTexto = if (!produto.descricao.isNullOrBlank()) {
+    val caracteristicasTexto = if (produto.descricao.isNotBlank()) {
         produto.descricao.trim()
     } else {
         "Fragrância exclusiva elaborada com matérias-primas nobres para proporcionar uma experiência olfativa marcante, elegante e duradoura ao seu espaço."
@@ -178,7 +182,7 @@ fun gerarRotuloCompleto(produto: ProdutoFinal, db: AppDatabase, gemini: org.exam
 
     val embalagensTexto = embalagensFormatadas.joinToString("\n") { "• $it" }
 
-    val combined = "${produto.nome} ${produto.descricao ?: ""}".lowercase()
+    val combined = "${produto.nome} ${produto.descricao}".lowercase()
     val modoDeUso = when {
         combined.contains("difusor") || combined.contains("vareta") -> {
             "1. Retire a tampa externa e remova o batoque de vedação do frasco.\n" +
@@ -300,8 +304,8 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
                 if (nomeLimpo.length > 150) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto não pode exceder 150 caracteres."))
                 }
-                val descLimpa = produto.descricao?.trim()
-                if (descLimpa != null && descLimpa.length > 1000) {
+                val descLimpa = produto.descricao.trim()
+                if (descLimpa.length > 1000) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A descrição do produto não pode exceder 1000 caracteres."))
                 }
                 if (produto.rendimentoReceitaBase <= 0.0) {
@@ -321,7 +325,7 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
                     )
                 }
 
-                db.produtosFinais.criar(produto.copy(nome = nomeLimpo, descricao = descLimpa ?: ""))
+                db.produtosFinais.criar(produto.copy(nome = nomeLimpo, descricao = descLimpa))
                 call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
             }
             get("/editar/{id}") {
@@ -340,15 +344,15 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
                 if (nomeLimpo.length > 150) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto não pode exceder 150 caracteres."))
                 }
-                val descLimpa = produto.descricao?.trim()
-                if (descLimpa != null && descLimpa.length > 1000) {
+                val descLimpa = produto.descricao.trim()
+                if (descLimpa.length > 1000) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A descrição do produto não pode exceder 1000 caracteres."))
                 }
                 if (produto.rendimentoReceitaBase <= 0.0) {
                     return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O rendimento da receita base deve ser maior que zero."))
                 }
 
-                db.produtosFinais.atualizarProdutoBase(id, nomeLimpo, descLimpa ?: "", produto.rendimentoReceitaBase)
+                db.produtosFinais.atualizarProdutoBase(id, nomeLimpo, descLimpa, produto.rendimentoReceitaBase)
 
                 // Recalcular custos sempre que o rendimento mudar
                 recalcularCustos(id, db)

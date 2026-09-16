@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.precific.app.data.network.CriarOrcamentoRequest
+import com.precific.app.data.network.DashboardResponse
 import com.precific.app.data.network.ItemOrcamentoDTO
 import com.precific.app.data.repository.PrecificRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,6 +119,9 @@ class DashboardViewModel(
     private val repository: PrecificRepository = PrecificRepository()
 ) : ViewModel() {
 
+    private val _dashboardData = MutableStateFlow<DashboardResponse?>(null)
+    val dashboardData: StateFlow<DashboardResponse?> = _dashboardData.asStateFlow()
+
     private val _kpis = MutableStateFlow<List<DashboardKPIData>>(emptyList())
     val kpis: StateFlow<List<DashboardKPIData>> = _kpis.asStateFlow()
 
@@ -140,6 +144,7 @@ class DashboardViewModel(
             _errorMessage.value = null
             val result = repository.getDashboard()
             result.onSuccess { data ->
+                _dashboardData.value = data
                 _kpis.value = listOf(
                     DashboardKPIData(
                         title = "Valor em Estoque",
@@ -294,6 +299,9 @@ class OrcamentosViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _userMessage = MutableStateFlow<String?>(null)
+    val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
+
     init {
         carregarOrcamentos()
     }
@@ -324,6 +332,25 @@ class OrcamentosViewModel(
             }
             _isLoading.value = false
         }
+    }
+
+    fun converterParaCompra(orcamentoId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _userMessage.value = null
+            val result = repository.converterOrcamentoEmCompra(orcamentoId)
+            result.onSuccess {
+                _userMessage.value = "Orçamento #$orcamentoId convertido em Pedido de Compra com sucesso!"
+                carregarOrcamentos()
+            }.onFailure { err ->
+                _userMessage.value = "Erro ao converter orçamento: ${err.message}"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun limparMensagem() {
+        _userMessage.value = null
     }
 }
 

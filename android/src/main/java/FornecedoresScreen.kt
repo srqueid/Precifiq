@@ -15,7 +15,8 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FornecedoresScreen(
-    viewModel: FornecedoresViewModel = hiltViewModel()
+    viewModel: FornecedoresViewModel = hiltViewModel(),
+    onVoltar: () -> Unit = {}
 ) {
     val fornecedores by viewModel.fornecedores.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -29,6 +30,11 @@ fun FornecedoresScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Fornecedores") },
+                navigationIcon = {
+                    IconButton(onClick = onVoltar) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.carregarFornecedores() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Atualizar", tint = Color.White)
