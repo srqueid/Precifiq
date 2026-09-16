@@ -19,11 +19,20 @@ import javax.sql.DataSource
  */
 class MultiTenantDataSource(private val delegate: DataSource) : DataSource {
 
+    // Cacheia o último schema configurado na conexão física para evitar round-trips desnecessários
+    private val connectionSchemaCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Connection, String>())
+
     private fun configureConnection(conn: Connection): Connection {
         try {
             val schema = TenantContext.getCurrentSchema()
-            conn.createStatement().use { stmt ->
-                stmt.execute("SET search_path TO \"$schema\", global;")
+            val physicalConn = try { conn.unwrap(Connection::class.java) } catch (_: Exception) { conn }
+            val lastSchema = connectionSchemaCache[physicalConn]
+
+            if (lastSchema != schema) {
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET search_path TO \"$schema\", global;")
+                }
+                connectionSchemaCache[physicalConn] = schema
             }
         } catch (e: SQLException) {
             System.err.println("WARN: Falha ao definir search_path para conexão: ${e.message}")

@@ -66,13 +66,24 @@ object DatabaseConfig {
 
         println("INFO: Connecting to database with URL: $url")
 
-        val pgDataSource = org.postgresql.ds.PGSimpleDataSource().apply {
-            setURL(url)
-            this.user = user
+        val hikariConfig = com.zaxxer.hikari.HikariConfig().apply {
+            this.jdbcUrl = url
+            this.username = user
             this.password = password
+            this.driverClassName = "org.postgresql.Driver"
+            this.maximumPoolSize = 15
+            this.minimumIdle = 3
+            this.idleTimeout = 60000 // 1 min
+            this.maxLifetime = 600000 // 10 min
+            this.connectionTimeout = 10000 // 10s
+            this.keepaliveTime = 30000 // 30s keepalive ping para manter conexões quentes e ativas
+            this.poolName = "PrecifiqHikariPool"
+            this.addDataSourceProperty("reWriteBatchedInserts", "true")
+            this.addDataSourceProperty("ApplicationName", "PrecifiqBackend")
         }
 
-        val multiTenantDataSource = MultiTenantDataSource(pgDataSource)
+        val hikariDataSource = com.zaxxer.hikari.HikariDataSource(hikariConfig)
+        val multiTenantDataSource = MultiTenantDataSource(hikariDataSource)
 
         Database.connect(multiTenantDataSource)
 
@@ -153,6 +164,7 @@ object DatabaseConfig {
                         atualizado_em TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
                     ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS banco_dados VARCHAR(100) DEFAULT 'bd_controle';
+                    ALTER TABLE global.empresa ADD COLUMN IF NOT EXISTS limite_produtos INTEGER;
 
                     CREATE OR REPLACE FUNCTION global.trg_clean_empresa_numeric_fields()
                     RETURNS TRIGGER AS $$
@@ -295,6 +307,34 @@ object DatabaseConfig {
                         IF v_user_id IS NOT NULL AND v_perfil_id IS NOT NULL AND v_empresa_id IS NOT NULL THEN
                             INSERT INTO global.usuario_empresa (usuario_id, empresa_id, perfil_id)
                             VALUES (v_user_id, v_empresa_id, v_perfil_id)
+                            ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
+                        END IF;
+                    END $$;
+
+                    -- Seed da Empresa e Usuário dedicados para Demonstração (separados da empresa real de produção)
+                    INSERT INTO global.empresa (id, tipo, matriz_id, nome_fantasia, razao_social, cnpj, schema_name, ativo)
+                    VALUES (99, 'MATRIZ', NULL, 'Demonstração (Demo)', 'Demonstração e Treinamento Ltda', '99.999.999/0001-99', 'db_demo', TRUE)
+                    ON CONFLICT (id) DO UPDATE SET 
+                        nome_fantasia = EXCLUDED.nome_fantasia,
+                        schema_name = EXCLUDED.schema_name;
+
+                    INSERT INTO global.usuario (nome, email, senha_hash, is_superuser, ativo)
+                    VALUES ('Usuário Demonstração', 'demo@empresa.com', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', FALSE, TRUE)
+                    ON CONFLICT (email) DO NOTHING;
+
+                    DO $$
+                    DECLARE
+                        v_demo_user_id INTEGER;
+                        v_demo_perfil_id INTEGER;
+                        v_demo_empresa_id INTEGER;
+                    BEGIN
+                        SELECT id INTO v_demo_user_id FROM global.usuario WHERE email = 'demo@empresa.com' LIMIT 1;
+                        SELECT id INTO v_demo_perfil_id FROM global.perfil WHERE codigo = 'ADMIN_MATRIZ' LIMIT 1;
+                        SELECT id INTO v_demo_empresa_id FROM global.empresa WHERE id = 99 LIMIT 1;
+
+                        IF v_demo_user_id IS NOT NULL AND v_demo_perfil_id IS NOT NULL AND v_demo_empresa_id IS NOT NULL THEN
+                            INSERT INTO global.usuario_empresa (usuario_id, empresa_id, perfil_id)
+                            VALUES (v_demo_user_id, v_demo_empresa_id, v_demo_perfil_id)
                             ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
                         END IF;
                     END $$;

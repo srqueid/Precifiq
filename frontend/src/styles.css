@@ -622,5 +622,79 @@ th, td { border-collapse: collapse; }
   }
 }
 
+/* =========================================================
+   Limitador de Cadastro de Produtos (Quota Badges)
+   ========================================================= */
+.quota-indicator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.quota-indicator-badge .quota-icon {
+  flex-shrink: 0;
+}
+
+.quota-indicator-badge .quota-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quota-indicator-badge.quota-normal {
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  color: var(--text, #334155);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.quota-indicator-badge.quota-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.12);
+}
+
+.quota-indicator-badge.quota-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.15);
+}
+
+.quota-pill-alert {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  margin-left: 4px;
+}
+
+.quota-pill-unlimited {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+  margin-left: 4px;
+}
+
+
 
 

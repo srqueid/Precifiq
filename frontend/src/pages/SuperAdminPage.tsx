@@ -214,6 +214,7 @@ export const SuperAdminPage: React.FC = () => {
     cnpj: '',
     bancoDados: '',
     schemaName: '',
+    limiteProdutos: '',
     adminNome: '',
     adminEmail: '',
     adminSenha: ''
@@ -224,6 +225,7 @@ export const SuperAdminPage: React.FC = () => {
     nomeFilial: '',
     cnpj: '',
     schemaName: '',
+    limiteProdutos: '',
     provisionarAuto: true,
     adminVinculadoId: 0,
     adminNome: '',
@@ -241,8 +243,22 @@ export const SuperAdminPage: React.FC = () => {
     schemaName: string;
     bancoDados: string;
     ativo: boolean;
+    limiteProdutos: string;
   } | null>(null);
   const [isSalvandoEdicaoEmpresa, setIsSalvandoEdicaoEmpresa] = useState(false);
+
+  // Estado para Edição de Usuário / Perfil (CRUD Superusuário)
+  const [usuarioParaEditar, setUsuarioParaEditar] = useState<{
+    id: number;
+    nome: string;
+    email: string;
+    senha: string;
+    isSuperuser: boolean;
+    ativo: boolean;
+    empresaId: number;
+    perfilId: number;
+  } | null>(null);
+  const [isSalvandoUsuario, setIsSalvandoUsuario] = useState(false);
 
   // Formulário Novo Administrador (Imagem 1)
   const [formNovoAdmin, setFormNovoAdmin] = useState({
@@ -384,6 +400,7 @@ export const SuperAdminPage: React.FC = () => {
           cnpj: onlyNumbers(formMatriz.cnpj) || null,
           bancoDados: dbAuto,
           schemaName: schemaAuto,
+          limiteProdutos: formMatriz.limiteProdutos ? parseInt(formMatriz.limiteProdutos, 10) : null,
           adminNome: formMatriz.adminNome.trim() || null,
           adminEmail: formMatriz.adminEmail.trim() || null,
           adminSenha: formMatriz.adminSenha.trim() || null
@@ -397,7 +414,7 @@ export const SuperAdminPage: React.FC = () => {
 
       showFeedback('success', `Nova Matriz provisionada no banco '${dbAuto}' com schema '${schemaAuto}' e governança 'global'!`);
       setIsModalNovaMatrizOpen(false);
-      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: '', schemaName: '', adminNome: '', adminEmail: '', adminSenha: '' });
+      setFormMatriz({ nomeFantasia: '', razaoSocial: '', cnpj: '', bancoDados: '', schemaName: '', limiteProdutos: '', adminNome: '', adminEmail: '', adminSenha: '' });
       await refreshEmpresas();
       await carregarUsuarios();
     } catch (err: any) {
@@ -431,6 +448,7 @@ export const SuperAdminPage: React.FC = () => {
           cnpj: onlyNumbers(formFilial.cnpj) || null,
           bancoDados: matrizPai?.bancoDados || 'bd_controle',
           schemaName: schemaAuto,
+          limiteProdutos: formFilial.limiteProdutos ? parseInt(formFilial.limiteProdutos, 10) : null,
           adminNome: formFilial.adminNome.trim() || null,
           adminEmail: formFilial.adminEmail.trim() || null,
           adminSenha: formFilial.adminSenha.trim() || null
@@ -449,6 +467,7 @@ export const SuperAdminPage: React.FC = () => {
         nomeFilial: '',
         cnpj: '',
         schemaName: '',
+        limiteProdutos: '',
         provisionarAuto: true,
         adminVinculadoId: 0,
         adminNome: '',
@@ -477,7 +496,8 @@ export const SuperAdminPage: React.FC = () => {
           nomeFantasia: empresaParaEditar.nomeFantasia.trim(),
           razaoSocial: empresaParaEditar.razaoSocial.trim() || empresaParaEditar.nomeFantasia.trim(),
           cnpj: onlyNumbers(empresaParaEditar.cnpj) || null,
-          ativo: empresaParaEditar.ativo
+          ativo: empresaParaEditar.ativo,
+          limiteProdutos: empresaParaEditar.limiteProdutos ? parseInt(empresaParaEditar.limiteProdutos, 10) : 0
         })
       });
       if (!res.ok) {
@@ -772,8 +792,58 @@ export const SuperAdminPage: React.FC = () => {
     }
   };
 
-  // Filtragem dos Administradores (Tabela Imagem 1)
-  const administradores = usuarios.filter(u => !u.isSuperuser);
+  // Handlers para Edição Completa de Usuário & Perfil
+  const handleOpenEditarUsuario = (u: UsuarioGlobal) => {
+    const vinculo = u.empresas?.[0];
+    setUsuarioParaEditar({
+      id: u.id,
+      nome: u.nome,
+      email: u.email,
+      senha: '',
+      isSuperuser: u.isSuperuser || false,
+      ativo: u.ativo !== false,
+      empresaId: vinculo?.empresaId || empresasHierarquia[0]?.id || 1,
+      perfilId: vinculo?.perfilId || 4
+    });
+  };
+
+  const handleSalvarEdicaoUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usuarioParaEditar) return;
+    setIsSalvandoUsuario(true);
+
+    try {
+      const res = await fetch(`/api/global/usuarios/${usuarioParaEditar.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: usuarioParaEditar.nome.trim(),
+          email: usuarioParaEditar.email.trim(),
+          senha: usuarioParaEditar.senha.trim() ? usuarioParaEditar.senha.trim() : undefined,
+          isSuperuser: usuarioParaEditar.isSuperuser,
+          ativo: usuarioParaEditar.ativo,
+          empresaId: usuarioParaEditar.empresaId,
+          perfilId: usuarioParaEditar.perfilId
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao atualizar dados do usuário');
+      }
+
+      showFeedback('success', 'Usuário e perfil de acesso atualizados com sucesso!');
+      setUsuarioParaEditar(null);
+      await carregarUsuarios();
+    } catch (err: any) {
+      showFeedback('error', err.message || 'Falha ao salvar edição do usuário');
+    } finally {
+      setIsSalvandoUsuario(false);
+    }
+  };
+
+  // Listagem de Usuários / Gestores Cadastrados
+  const administradores = usuarios;
 
   const administradoresFiltrados = administradores.filter(u => {
     if (filtroBusca.trim()) {
@@ -950,6 +1020,7 @@ export const SuperAdminPage: React.FC = () => {
                     <th className="py-3 px-4">Schema</th>
                     <th className="py-3 px-4">Governança</th>
                     <th className="py-3 px-4">CNPJ</th>
+                    <th className="py-3 px-4 text-center">Limite Produtos</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
@@ -989,6 +1060,15 @@ export const SuperAdminPage: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">{matriz.cnpj || '—'}</td>
                           <td className="py-3 px-4 text-center">
+                            {matriz.limiteProdutos && matriz.limiteProdutos > 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                {matriz.limiteProdutos} produtos
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[11px] font-medium">Ilimitado</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center">
                             {matriz.ativo ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                 <CheckCircle2 size={12} /> Ativa
@@ -1010,7 +1090,8 @@ export const SuperAdminPage: React.FC = () => {
                                   tipo: 'MATRIZ',
                                   schemaName: matriz.schemaName,
                                   bancoDados: matriz.bancoDados || 'bd_controle',
-                                  ativo: matriz.ativo
+                                  ativo: matriz.ativo,
+                                  limiteProdutos: matriz.limiteProdutos != null ? String(matriz.limiteProdutos) : ''
                                 })}
                                 className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                 title="Editar Matriz"
@@ -1070,6 +1151,15 @@ export const SuperAdminPage: React.FC = () => {
                               </td>
                               <td className="py-2.5 px-4 text-slate-600 font-mono text-[11px]">{filial.cnpj || matriz.cnpj || '—'}</td>
                               <td className="py-2.5 px-4 text-center">
+                                {filial.limiteProdutos && filial.limiteProdutos > 0 ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                    {filial.limiteProdutos} produtos
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[10px]">Ilimitado</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4 text-center">
                                 {filial.ativo ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                     <CheckCircle2 size={11} /> Ativa
@@ -1091,7 +1181,8 @@ export const SuperAdminPage: React.FC = () => {
                                       tipo: 'FILIAL',
                                       schemaName: filial.schemaName,
                                       bancoDados: filial.bancoDados || matriz.bancoDados || 'bd_controle',
-                                      ativo: filial.ativo
+                                      ativo: filial.ativo,
+                                      limiteProdutos: filial.limiteProdutos != null ? String(filial.limiteProdutos) : ''
                                     })}
                                     className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                     title="Editar Filial"
@@ -1310,40 +1401,32 @@ export const SuperAdminPage: React.FC = () => {
                           {nivelAcesso}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {isFundamental ? (
-                            <span className="px-2.5 py-1 rounded bg-[#0f172a] text-white text-[10px] font-bold inline-block shadow-sm">
-                              {p.codigo === 'ADMIN' 
-                                ? 'Perfil Fundamental - Proteção contra Exclusão e Alteração'
-                                : 'Perfil Fundamental - Proteção contra Exclusão'}
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditarPerfil(p)}
-                                className="px-2 py-1 text-slate-700 hover:bg-slate-200 rounded text-xs font-semibold flex items-center gap-1"
-                              >
-                                <Edit2 size={12} />
-                                <span>Ver/Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => showFeedback('success', `Perfil "${p.nome}" inativado temporariamente.`)}
-                                className="px-2 py-1 text-amber-700 hover:bg-amber-100 rounded text-xs font-semibold flex items-center gap-1"
-                              >
-                                <X size={12} />
-                                <span>Inativar</span>
-                              </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditarPerfil(p)}
+                              className="px-2.5 py-1 text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                              title="Editar permissões e dados deste perfil"
+                            >
+                              <Edit2 size={12} />
+                              <span>Editar</span>
+                            </button>
+                            {isFundamental ? (
+                              <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px] font-semibold" title="Perfil fundamental do sistema: protegido contra exclusão">
+                                Protegido
+                              </span>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => handleExcluirPerfil(p.id, p.nome)}
-                                className="px-2 py-1 text-red-600 hover:bg-red-100 rounded text-xs font-semibold flex items-center gap-1"
+                                className="px-2 py-1 text-red-600 hover:bg-red-100 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                                title="Excluir perfil customizado"
                               >
                                 <Trash2 size={12} />
                                 <span>Excluir</span>
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1481,7 +1564,14 @@ export const SuperAdminPage: React.FC = () => {
                             {vinculoPrincipal?.empresaTipo === 'FILIAL' ? vinculoPrincipal.empresaNome : 'Filial SP'}
                           </td>
                           <td className="py-2.5 px-4 font-semibold text-slate-800">
-                            {vinculoPrincipal?.perfilCodigo || 'ADMIN_MATRIZ'}
+                            <div className="flex items-center gap-1.5">
+                              <span>{vinculoPrincipal?.perfilNome || vinculoPrincipal?.perfilCodigo || 'ADMIN_MATRIZ'}</span>
+                              {admin.isSuperuser && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800" title="Superusuário DcSys">
+                                  Super
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             <button
@@ -1494,8 +1584,8 @@ export const SuperAdminPage: React.FC = () => {
                             </button>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                              Ativo
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${admin.ativo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                              {admin.ativo !== false ? 'Ativo' : 'Inativo'}
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-center">
@@ -1504,15 +1594,15 @@ export const SuperAdminPage: React.FC = () => {
                                 type="button"
                                 onClick={() => handleOpenConcederFiliais(admin)}
                                 className="p-1 rounded text-slate-600 hover:bg-slate-200"
-                                title="Ver Detalhes"
+                                title="Ver Detalhes de Filiais"
                               >
                                 <Eye size={14} />
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleOpenConcederFiliais(admin)}
-                                className="p-1 rounded text-slate-600 hover:bg-slate-200"
-                                title="Editar"
+                                onClick={() => handleOpenEditarUsuario(admin)}
+                                className="p-1 rounded text-blue-600 hover:bg-blue-100"
+                                title="Editar Usuário e Perfil"
                               >
                                 <Edit2 size={14} />
                               </button>
@@ -1597,150 +1687,142 @@ export const SuperAdminPage: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR NOVA FILIAL (IMAGEM 2) */}
+      {/* MODAL: EDITAR USUÁRIO & PERFIL DE ACESSO (CRUD SUPERUSUÁRIO) */}
       {/* ========================================================================= */}
-      {isModalNovaFilialOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden">
-            {/* Topo Dark Slate do Modal */}
-            <div className="p-4 bg-[#2b394e] text-white flex justify-between items-center">
-              <h3 className="text-sm font-bold m-0">Criar Nova Filial para Matriz</h3>
-              <button onClick={() => setIsModalNovaFilialOpen(false)} className="text-slate-300 hover:text-white">
+      {usuarioParaEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 bg-[#2b394e] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit2 size={18} className="text-blue-400" />
+                <h3 className="text-sm font-bold">
+                  Editar Usuário & Perfil: {usuarioParaEditar.nome}
+                </h3>
+              </div>
+              <button
+                onClick={() => setUsuarioParaEditar(null)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCriarFilial} className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleSalvarEdicaoUsuario} className="p-5 space-y-4 text-xs">
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Nome da Filial</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nome Completo *</label>
                 <input
                   type="text"
                   required
-                  placeholder="Nome da Filial"
-                  value={formFilial.nomeFilial}
-                  onChange={(e) => {
-                    const nome = e.target.value;
-                    const clean = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-                    const autoSchema = clean ? `db_${clean}` : '';
-                    setFormFilial(prev => ({ ...prev, nomeFilial: nome, schemaName: autoSchema }));
-                  }}
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-slate-500 focus:outline-none"
+                  value={usuarioParaEditar.nome}
+                  onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, nome: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">CNPJ</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Email de Acesso *</label>
                 <input
-                  type="text"
-                  placeholder="00.000.000/0000-00"
-                  value={formFilial.cnpj}
-                  onChange={(e) => setFormFilial(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
-                  maxLength={18}
-                  inputMode="numeric"
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-slate-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Schema Name</label>
-                <input
-                  type="text"
+                  type="email"
                   required
-                  value={formFilial.schemaName}
-                  onChange={(e) => setFormFilial(prev => ({ ...prev, schemaName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono text-purple-900 bg-purple-50/50"
+                  value={usuarioParaEditar.email}
+                  onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="chkProvisionar"
-                  checked={formFilial.provisionarAuto}
-                  onChange={(e) => setFormFilial(prev => ({ ...prev, provisionarAuto: e.target.checked }))}
-                  className="w-4 h-4 rounded text-blue-600"
-                />
-                <label htmlFor="chkProvisionar" className="text-xs text-slate-700 font-medium">
-                  Provisionamento automático de tabelas operacionais, views, etc. (?)
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Redefinir Senha <span className="font-normal text-slate-400 text-[11px]">(deixe em branco para manter a atual)</span>
                 </label>
+                <input
+                  type="password"
+                  placeholder="Nova senha (mínimo 4 caracteres)"
+                  value={usuarioParaEditar.senha}
+                  onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, senha: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                />
               </div>
 
-              <div className="pt-2 border-t border-slate-200">
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Vincular Primeiro Administrador</label>
-                <select
-                  value={formFilial.adminVinculadoId}
-                  onChange={(e) => setFormFilial(prev => ({ ...prev, adminVinculadoId: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs bg-white"
-                >
-                  <option value="0">Selecionar Primeiro Administrador (Criar Novo)</option>
-                  {administradores.map(adm => (
-                    <option key={adm.id} value={adm.id}>{adm.nome} ({adm.email})</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Perfil de Acesso *</label>
+                  <select
+                    value={usuarioParaEditar.perfilId}
+                    onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, perfilId: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                  >
+                    {perfis.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome} ({p.codigo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Unidade / Empresa *</label>
+                  <select
+                    value={usuarioParaEditar.empresaId}
+                    onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, empresaId: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                  >
+                    {empresasHierarquia.flatMap(m => [
+                      <option key={`m_${m.id}`} value={m.id}>
+                        {m.nomeFantasia} (Matriz)
+                      </option>,
+                      ...(m.filiais || []).map(f => (
+                        <option key={`f_${f.id}`} value={f.id}>
+                          &nbsp;&nbsp;↳ {f.nomeFantasia} (Filial)
+                        </option>
+                      ))
+                    ])}
+                  </select>
+                </div>
               </div>
 
-              <div className="flex justify-end pt-3">
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <div className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="chkEditAtivo"
+                    checked={usuarioParaEditar.ativo}
+                    onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, ativo: e.target.checked })}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  />
+                  <label htmlFor="chkEditAtivo" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Usuário Ativo (acesso liberado ao sistema)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2 p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="chkEditSuper"
+                    checked={usuarioParaEditar.isSuperuser}
+                    onChange={(e) => setUsuarioParaEditar({ ...usuarioParaEditar, isSuperuser: e.target.checked })}
+                    className="rounded text-purple-600 focus:ring-purple-500 w-4 h-4"
+                  />
+                  <label htmlFor="chkEditSuper" className="text-xs font-bold text-purple-900 cursor-pointer">
+                    Superusuário DcSys (Acesso irrestrito à governança global)
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
                 <button
-                  type="submit"
-                  disabled={isSavingEmpresa}
-                  className="w-full py-2.5 bg-[#2b394e] hover:bg-[#1e293b] text-white rounded text-xs font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => setUsuarioParaEditar(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors"
                 >
-                  {isSavingEmpresa ? <Loader2 size={14} className="animate-spin" /> : null}
-                  <span>Cadastrar e Provisionar</span>
+                  Cancelar
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: CRIAR NOVA MATRIZ */}
-      {/* ========================================================================= */}
-      {isModalNovaMatrizOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="p-4 bg-[#2b394e] text-white flex justify-between items-center">
-              <h3 className="text-sm font-bold m-0">Criar Nova Matriz</h3>
-              <button onClick={() => setIsModalNovaMatrizOpen(false)} className="text-slate-300 hover:text-white">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCriarMatriz} className="p-5 space-y-4 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Nome Fantasia da Matriz</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Grupo Silvia Cosméticos"
-                  value={formMatriz.nomeFantasia}
-                  onChange={(e) => setFormMatriz(prev => ({ ...prev, nomeFantasia: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">CNPJ</label>
-                <input
-                  type="text"
-                  placeholder="00.000.000/0001-00"
-                  value={formMatriz.cnpj}
-                  onChange={(e) => setFormMatriz(prev => ({ ...prev, cnpj: (e.target.value = maskCnpj(e.target.value)) }))}
-                  maxLength={18}
-                  inputMode="numeric"
-                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs"
-                />
-              </div>
-
-              <div className="flex justify-end pt-3">
                 <button
                   type="submit"
-                  disabled={isSavingEmpresa}
-                  className="w-full py-2.5 bg-[#2b394e] hover:bg-[#1e293b] text-white rounded text-xs font-bold uppercase transition-colors flex items-center justify-center gap-2"
+                  disabled={isSalvandoUsuario}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm disabled:opacity-50 flex items-center gap-1.5 transition-colors"
                 >
-                  {isSavingEmpresa ? <Loader2 size={14} className="animate-spin" /> : null}
-                  <span>Cadastrar e Provisionar Matriz</span>
+                  {isSalvandoUsuario ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  <span>Salvar Usuário & Perfil</span>
                 </button>
               </div>
             </form>
@@ -2143,7 +2225,7 @@ export const SuperAdminPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-600 font-bold block mb-1">Razão Social</label>
                     <input
@@ -2164,6 +2246,20 @@ export const SuperAdminPage: React.FC = () => {
                       maxLength={18}
                       inputMode="numeric"
                       className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-bold block mb-1">
+                      Limite Produtos <span className="font-normal text-slate-400">(vazio=ilimitado)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Ex: 50"
+                      value={formMatriz.limiteProdutos}
+                      onChange={(e) => setFormMatriz(prev => ({ ...prev, limiteProdutos: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-xs"
                     />
                   </div>
                 </div>
@@ -2375,6 +2471,21 @@ export const SuperAdminPage: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-600 font-bold block mb-1">
+                    Limite de Produtos <span className="font-normal text-slate-400">(vazio=ilimitado)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Ex: 50 (ou deixe vazio para ilimitado)"
+                    value={formFilial.limiteProdutos}
+                    onChange={(e) => setFormFilial(prev => ({ ...prev, limiteProdutos: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded text-xs"
+                  />
+                </div>
               </div>
 
               {/* Bloco 2: Administrador da Filial (Opcional) */}
@@ -2492,6 +2603,24 @@ export const SuperAdminPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Limite de Cadastro de Produtos <span className="font-normal text-slate-400 text-[11px]">(deixe vazio ou 0 para ilimitado)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Ex: 50 (vazio = ilimitado)"
+                  value={empresaParaEditar.limiteProdutos}
+                  onChange={(e) => setEmpresaParaEditar({ ...empresaParaEditar, limiteProdutos: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Define a cota máxima de produtos que esta empresa pode cadastrar. Apenas o Superusuário pode alterar.
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">

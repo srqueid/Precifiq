@@ -10,10 +10,31 @@ import org.example.repository.AppDatabase
 import org.example.ReceitaInsumo
 import org.example.ProdutoVariacao
 import org.example.VariacaoMaterial
+import org.example.EmpresasTable
+import org.example.TenantContext
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.transactions.transaction
 
 data class RotuloRequest(
     val rotulo: String?
 )
+
+fun obterStatusLimiteProdutos(db: AppDatabase): Map<String, Any?> {
+    val schema = TenantContext.getCurrentSchema()
+    val limite = transaction {
+        EmpresasTable.select { EmpresasTable.schemaName eq schema }
+            .firstOrNull()?.get(EmpresasTable.limiteProdutos)
+    }
+    val total = db.produtosFinais.lerTodos().size
+    val atingido = limite != null && limite > 0 && total >= limite
+    val disponivel = if (limite != null && limite > 0) maxOf(0, limite - total) else null
+    return mapOf(
+        "total" to total,
+        "limite" to limite,
+        "atingido" to atingido,
+        "disponivel" to disponivel
+    )
+}
 
 // Funcao auxiliar para recalcular o custo das variações de um produto (CPV Fracionado)
 fun recalcularCustos(produtoId: Int, db: AppDatabase) {
@@ -222,7 +243,15 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
         route("/produtos-finais") {
             get("/json") {
                 val produtos = db.produtosFinais.lerTodos()
-                call.respond(mapOf("produtos" to produtos))
+                val cota = obterStatusLimiteProdutos(db)
+                call.respond(mapOf(
+                    "produtos" to produtos,
+                    "cota" to cota
+                ))
+            }
+            get("/limite") {
+                val cota = obterStatusLimiteProdutos(db)
+                call.respond(cota)
             }
             get("/estoque/json") {
                 val unidades = db.unidadesMedida.lerTodos()
@@ -262,7 +291,37 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
             }
             post {
                 val produto = call.receive<ProdutoFinal>()
-                db.produtosFinais.criar(produto)
+
+                // Limitador e validação dos campos do cadastro
+                val nomeLimpo = produto.nome.trim()
+                if (nomeLimpo.isBlank()) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto é obrigatório."))
+                }
+                if (nomeLimpo.length > 150) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto não pode exceder 150 caracteres."))
+                }
+                val descLimpa = produto.descricao?.trim()
+                if (descLimpa != null && descLimpa.length > 1000) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A descrição do produto não pode exceder 1000 caracteres."))
+                }
+                if (produto.rendimentoReceitaBase <= 0.0) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O rendimento da receita base deve ser maior que zero."))
+                }
+
+                // Limitador de cota máxima de produtos cadastrados (definido pelo Superusuário)
+                val cota = obterStatusLimiteProdutos(db)
+                val atingido = cota["atingido"] as? Boolean ?: false
+                val limite = cota["limite"] as? Int
+                val total = cota["total"] as? Int ?: 0
+
+                if (atingido && limite != null) {
+                    return@post call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Limite de cadastro de produtos atingido ($total de $limite permitidos). Apenas o superusuário pode alterar o limite desta empresa.")
+                    )
+                }
+
+                db.produtosFinais.criar(produto.copy(nome = nomeLimpo, descricao = descLimpa ?: ""))
                 call.respond(HttpStatusCode.Created, mapOf("status" to "success"))
             }
             get("/editar/{id}") {
@@ -273,7 +332,23 @@ fun Application.produtosFinaisRouting(db: AppDatabase) {
             post("/atualizar/{id}") {
                 val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "ID inválido"))
                 val produto = call.receive<ProdutoFinal>()
-                db.produtosFinais.atualizarProdutoBase(id, produto.nome, produto.descricao, produto.rendimentoReceitaBase)
+
+                val nomeLimpo = produto.nome.trim()
+                if (nomeLimpo.isBlank()) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto é obrigatório."))
+                }
+                if (nomeLimpo.length > 150) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O nome do produto não pode exceder 150 caracteres."))
+                }
+                val descLimpa = produto.descricao?.trim()
+                if (descLimpa != null && descLimpa.length > 1000) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "A descrição do produto não pode exceder 1000 caracteres."))
+                }
+                if (produto.rendimentoReceitaBase <= 0.0) {
+                    return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "O rendimento da receita base deve ser maior que zero."))
+                }
+
+                db.produtosFinais.atualizarProdutoBase(id, nomeLimpo, descLimpa ?: "", produto.rendimentoReceitaBase)
 
                 // Recalcular custos sempre que o rendimento mudar
                 recalcularCustos(id, db)
