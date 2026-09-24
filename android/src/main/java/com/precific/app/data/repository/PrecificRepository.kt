@@ -223,4 +223,104 @@ class PrecificRepository(
             Result.failure(e)
         }
     }
+
+    /**
+     * Atualiza os dados completos de um pedido operacional.
+     */
+    suspend fun atualizarPedidoOperacional(id: Int, pedido: PedidoDTO): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.atualizarPedidoOperacional(id, pedido)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Erro ao atualizar pedido: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Registra o recebimento de materiais comprados ajustando o saldo em estoque.
+     */
+    suspend fun darRecebimentoMaterial(insumoId: Int, novoEstoqueTotal: Double, motivo: String): Result<Map<String, Any>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.ajustarEstoqueInsumo(insumoId, novoEstoqueTotal, motivo)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Erro ao dar recebimento do material: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Carrega produtos finais e kits disponíveis para venda no pedido do cliente.
+     */
+    suspend fun getProdutosEKitsForSale(): Result<List<ProdutoFinalDTO>> = withContext(Dispatchers.IO) {
+        try {
+            val lista = mutableListOf<ProdutoFinalDTO>()
+
+            // 1. Tenta buscar Variações/Produtos com Preço de Venda do Estoque
+            try {
+                val respEstoque = api.getProdutosEstoque()
+                if (respEstoque.isSuccessful && respEstoque.body()?.produtos != null) {
+                    val prodsEstoque = respEstoque.body()!!.produtos!!
+                    prodsEstoque.forEach { p ->
+                        val nomeFinal = p.nomeExibicao
+                        if (nomeFinal.isNotBlank()) {
+                            lista.add(p.copy(nome = nomeFinal))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 2. Se a rota de variações de estoque não retornou nada, busca os Produtos Base (/produtos-finais/json)
+            if (lista.isEmpty()) {
+                try {
+                    val respProdutos = api.getProdutosFinais()
+                    if (respProdutos.isSuccessful && respProdutos.body()?.produtos != null) {
+                        val prodsBase = respProdutos.body()!!.produtos!!
+                        prodsBase.forEach { p ->
+                            if (p.nomeExibicao.isNotBlank()) {
+                                lista.add(p.copy(nome = p.nomeExibicao))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            // 3. Busca Kits de Venda (/api/kits)
+            try {
+                val respKits = api.getKits()
+                if (respKits.isSuccessful && respKits.body() != null) {
+                    val kitsDto = respKits.body()!!.map { kit ->
+                        ProdutoFinalDTO(
+                            id = kit.id + 10000,
+                            nome = kit.nome,
+                            descricao = kit.descricao,
+                            precoVenda = kit.precoVenda,
+                            custoCalculado = kit.custoTotalCalculado,
+                            estoque = 10.0,
+                            codigoBarras = kit.codigoBarras,
+                            tipo = "KIT"
+                        )
+                    }
+                    lista.addAll(kitsDto)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            Result.success(lista)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

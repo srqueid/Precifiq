@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./.vscode/compose-spec.json
 services:
   postgres:
     image: postgres:15-alpine
@@ -43,13 +44,22 @@ services:
       - "8081"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.precifiq-backend.rule=Host(`precifiq.dcsys.info`) && PathPrefix(`/api`)"
+      # Router Web Backend: rotas /api da aplicação web
+      - "traefik.http.routers.precifiq-backend.rule=Host(`${DOMAIN:-precifiq.dcsys.info}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.precifiq-backend.entrypoints=websecure"
       - "traefik.http.routers.precifiq-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.precifiq-backend.service=precifiq-backend"
+      - "traefik.http.routers.precifiq-backend.middlewares=precifiq-https"
+      # Router Mobile API: todas as rotas para o app mobile
+      - "traefik.http.routers.precifiq-mobile.rule=Host(`${API_DOMAIN:-apiprecifiq.dcsys.info}`)"
+      - "traefik.http.routers.precifiq-mobile.entrypoints=websecure"
+      - "traefik.http.routers.precifiq-mobile.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.precifiq-mobile.service=precifiq-backend"
+      - "traefik.http.routers.precifiq-mobile.middlewares=precifiq-https"
+      # Serviço compartilhado do Backend Ktor
       - "traefik.http.services.precifiq-backend.loadbalancer.server.port=8081"
       - "traefik.docker.network=precifiq-app-network"
       - "traefik.http.middlewares.precifiq-https.headers.customrequestheaders.X-Forwarded-Proto=https"
-      - "traefik.http.routers.precifiq-backend.middlewares=precifiq-https"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8081/api/health" ]
       interval: 5s
@@ -68,7 +78,7 @@ services:
       - backend
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.precifiq-frontend.rule=Host(`precifiq.dcsys.info`)"
+      - "traefik.http.routers.precifiq-frontend.rule=Host(`${DOMAIN:-precifiq.dcsys.info}`)"
       - "traefik.http.routers.precifiq-frontend.entrypoints=websecure"
       - "traefik.http.routers.precifiq-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.precifiq-frontend.loadbalancer.server.port=80"

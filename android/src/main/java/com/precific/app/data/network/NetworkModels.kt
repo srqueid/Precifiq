@@ -208,3 +208,50 @@ data class PedidoDTO(
     @SerializedName("entregue") val entregue: Boolean = false,
     @SerializedName("itens") val itens: List<PedidoItemDTO> = emptyList()
 )
+
+// ============================================================================
+// 8. Modelos de Produtos Finais & Kits para Venda ao Cliente
+// ============================================================================
+
+data class ProdutosFinaisResponse(
+    @SerializedName("produtos") val produtos: List<ProdutoFinalDTO>? = emptyList()
+)
+
+data class ProdutoFinalDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("produtoId") val produtoId: Int? = null,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("produtoNome") val produtoNome: String? = null,
+    @SerializedName("nomeTamanho") val nomeTamanho: String? = null,
+    @SerializedName("descricao") val descricao: String? = null,
+    @SerializedName("precoVenda") val precoVenda: Double = 0.0,
+    @SerializedName("preco") val preco: Double = 0.0,
+    @SerializedName("custoCalculado") val custoCalculado: Double = 0.0,
+    @SerializedName("custoUnitarioCalculado") val custoUnitarioCalculado: Double = 0.0,
+    @SerializedName("estoque") val estoque: Double = 0.0,
+    @SerializedName("codigoBarras") val codigoBarras: String? = null,
+    @SerializedName("tipo") val tipo: String = "PRODUTO_FINAL"
+) {
+    val nomeExibicao: String
+        get() {
+            val base = if (!produtoNome.isNullOrBlank()) produtoNome else nome
+            return if (!nomeTamanho.isNullOrBlank() && !base.contains(nomeTamanho)) {
+                "$base ($nomeTamanho)"
+            } else {
+                base
+            }
+        }
+
+    val precoFinal: Double
+        get() = if (precoVenda > 0) precoVenda else preco
+}
+
+data class KitDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("descricao") val descricao: String? = null,
+    @SerializedName("precoVenda") val precoVenda: Double = 0.0,
+    @SerializedName("custoTotalCalculado") val custoTotalCalculado: Double = 0.0,
+    @SerializedName("codigoBarras") val codigoBarras: String? = null,
+    @SerializedName("tipo") val tipo: String = "KIT"
+)

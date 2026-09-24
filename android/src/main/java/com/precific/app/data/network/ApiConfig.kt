@@ -7,12 +7,17 @@ import android.os.Build
  */
 object ApiConfig {
     /**
+     * URL de Produção com HTTPS para o App Mobile (Hostinger VPS / Traefik SSL).
+     */
+    const val PROD_BASE_URL = "https://apiprecifiq.dcsys.info/"
+
+    /**
      * IP para Emulador do Android Studio (10.0.2.2 mapeia para o localhost da máquina).
      */
     const val EMULATOR_BASE_URL = "http://10.0.2.2:8081/"
 
     /**
-     * IP local da máquina na rede física (para celulares reais na mesma rede Wi-Fi/Ethernet).
+     * IP local da máquina na rede física (para desenvolvimento local na mesma rede Wi-Fi/Ethernet).
      */
     const val LOCAL_IP_BASE_URL = "http://10.100.111.116:8081/"
 
@@ -22,7 +27,7 @@ object ApiConfig {
     val baseUrl: String
         get() {
             customBaseUrl?.let { return it }
-            return if (isEmulator()) EMULATOR_BASE_URL else LOCAL_IP_BASE_URL
+            return PROD_BASE_URL
         }
 
     private fun isEmulator(): Boolean {
