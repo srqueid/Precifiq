@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.application") version "8.13.2"
+    id("com.android.application") version "8.5.2"
     id("org.jetbrains.kotlin.android") version "2.0.0"
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
 }
@@ -44,6 +44,7 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDirs("src/main/java", "src/main/kotlin")
+            res.srcDirs("src/main/res")
             manifest.srcFile("src/main/AndroidManifest.xml")
         }
     }
