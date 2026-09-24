@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.application") version "8.13.2"
+    id("com.android.application") version "8.5.2"
     id("org.jetbrains.kotlin.android") version "2.0.0"
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
 }
@@ -44,6 +44,7 @@ android {
     sourceSets {
         getByName("main") {
             java.srcDirs("src/main/java", "src/main/kotlin")
+            res.srcDirs("src/main/res")
             manifest.srcFile("src/main/AndroidManifest.xml")
         }
     }
@@ -75,6 +76,14 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // CameraX & ML Kit Barcode Scanning
+    val cameraVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraVersion")
+    implementation("androidx.camera:camera-camera2:$cameraVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraVersion")
+    implementation("androidx.camera:camera-view:$cameraVersion")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

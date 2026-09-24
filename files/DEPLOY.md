@@ -122,23 +122,25 @@ curl http://localhost
 
 ## SSL/HTTPS e Roteamento com Traefik
 
-A aplicação está configurada para roteamento automático via **Traefik** com TLS automático Let's Encrypt para o domínio `precifiq.dcsys.info`:
+A aplicação está configurada para roteamento automático via **Traefik** com TLS automático Let's Encrypt para o domínio `precifiq.dcsys.info` e a API do app mobile `apiprecifiq.dcsys.info`:
 
-- **Rede Compartilhada:** O Traefik e a aplicação se comunicam através da rede Docker `app-network`.
+- **Rede Compartilhada:** O Traefik e a aplicação se comunicam através da rede Docker `precifiq-app-network`.
   ```bash
   # Criar a rede caso ainda não exista na VPS
-  docker network create app-network 2>/dev/null || true
+  docker network create precifiq-app-network 2>/dev/null || true
   ```
 
 - **Roteamento Configurado:**
-  - `https://precifiq.dcsys.info/api/*` -> Encaminhado para o container `backend` (porta interna `8081`).
   - `https://precifiq.dcsys.info/*` -> Encaminhado para o container `frontend` (porta interna `80`).
-  - Certificado SSL obtido automaticamente pelo `certresolver=letsencrypt`.
+  - `https://precifiq.dcsys.info/api/*` -> Encaminhado para o container `backend` (porta interna `8081`).
+  - `https://apiprecifiq.dcsys.info/*` -> Encaminhado diretamente para o container `backend` (porta interna `8081`) para atender o aplicativo Android/mobile.
+  - Certificados SSL emitidos automaticamente pelo Let's Encrypt para ambos os subdomínios.
 
-- **DNS Necessário:**
-  - Crie uma entrada DNS **Tipo A** no seu gerenciador de domínio:
-    - Host: `precifiq.dcsys.info` (ou subdomínio desejado)
-    - Valor: IP público da sua VPS Hostinger
+- **DNS no Provedor (Hostinger):**
+  - Entradas **Tipo A** apontando para o IP público da sua VPS (`187.127.38.62`):
+    - `precifiq` -> `187.127.38.62`
+    - `apiprecifiq` -> `187.127.38.62`
+
 
 ## Comandos Úteis
 

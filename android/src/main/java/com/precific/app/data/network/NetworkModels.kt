@@ -117,6 +117,10 @@ data class InsumoDTO(
     @SerializedName("codigoBarras") val codigoBarras: String? = null
 )
 
+data class InsumosResponse(
+    @SerializedName("insumos") val insumos: List<InsumoDTO>? = emptyList()
+)
+
 // ============================================================================
 // 4. Modelos de Fornecedor
 // ============================================================================
@@ -124,6 +128,7 @@ data class InsumoDTO(
 data class FornecedorDTO(
     @SerializedName("id") val id: Int,
     @SerializedName("nome") val nome: String,
+    @SerializedName("nomeEmpresa") val nomeEmpresa: String? = null,
     @SerializedName("nomeFantasia") val nomeFantasia: String? = null,
     @SerializedName("cnpjCpf") val cnpjCpf: String? = null,
     @SerializedName("email") val email: String? = null,
@@ -148,17 +153,23 @@ data class ItemOrcamentoDTO(
 )
 
 data class OrcamentoDTO(
-    @SerializedName("id") val id: Int,
-    @SerializedName("titulo") val titulo: String,
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("titulo") val titulo: String = "",
     @SerializedName("clienteNome") val clienteNome: String? = null,
-    @SerializedName("status") val status: String, // "APROVADO", "PENDENTE", "REJEITADO", "RASCUNHO"
+    @SerializedName("status") val status: String = "EM_DIGITACAO",
     @SerializedName("total") val total: Double = 0.0,
     @SerializedName("dataCriacao") val dataCriacao: String? = null,
     @SerializedName("itens") val itens: List<ItemOrcamentoDTO>? = null
 )
 
+data class OrcamentosResponse(
+    @SerializedName("orcamentos") val orcamentos: List<OrcamentoDTO>? = emptyList()
+)
+
 data class CriarOrcamentoRequest(
     @SerializedName("titulo") val titulo: String,
+    @SerializedName("solicitante") val solicitante: String? = "Aplicativo Mobile",
+    @SerializedName("observacao") val observacao: String? = null,
     @SerializedName("clienteNome") val clienteNome: String? = null,
     @SerializedName("margemLucro") val margemLucro: Double = 0.0,
     @SerializedName("itens") val itens: List<ItemOrcamentoDTO> = emptyList()
@@ -207,4 +218,51 @@ data class PedidoDTO(
     @SerializedName("dataPagamento") val dataPagamento: String? = null,
     @SerializedName("entregue") val entregue: Boolean = false,
     @SerializedName("itens") val itens: List<PedidoItemDTO> = emptyList()
+)
+
+// ============================================================================
+// 8. Modelos de Produtos Finais & Kits para Venda ao Cliente
+// ============================================================================
+
+data class ProdutosFinaisResponse(
+    @SerializedName("produtos") val produtos: List<ProdutoFinalDTO>? = emptyList()
+)
+
+data class ProdutoFinalDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("produtoId") val produtoId: Int? = null,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("produtoNome") val produtoNome: String? = null,
+    @SerializedName("nomeTamanho") val nomeTamanho: String? = null,
+    @SerializedName("descricao") val descricao: String? = null,
+    @SerializedName("precoVenda") val precoVenda: Double = 0.0,
+    @SerializedName("preco") val preco: Double = 0.0,
+    @SerializedName("custoCalculado") val custoCalculado: Double = 0.0,
+    @SerializedName("custoUnitarioCalculado") val custoUnitarioCalculado: Double = 0.0,
+    @SerializedName("estoque") val estoque: Double = 0.0,
+    @SerializedName("codigoBarras") val codigoBarras: String? = null,
+    @SerializedName("tipo") val tipo: String = "PRODUTO_FINAL"
+) {
+    val nomeExibicao: String
+        get() {
+            val base = if (!produtoNome.isNullOrBlank()) produtoNome else nome
+            return if (!nomeTamanho.isNullOrBlank() && !base.contains(nomeTamanho)) {
+                "$base ($nomeTamanho)"
+            } else {
+                base
+            }
+        }
+
+    val precoFinal: Double
+        get() = if (precoVenda > 0) precoVenda else preco
+}
+
+data class KitDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("descricao") val descricao: String? = null,
+    @SerializedName("precoVenda") val precoVenda: Double = 0.0,
+    @SerializedName("custoTotalCalculado") val custoTotalCalculado: Double = 0.0,
+    @SerializedName("codigoBarras") val codigoBarras: String? = null,
+    @SerializedName("tipo") val tipo: String = "KIT"
 )

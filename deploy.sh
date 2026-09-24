@@ -130,8 +130,10 @@ echo ""
 echo "🎉 Deployment complete! (Database was preserved)"
 echo ""
 echo "Services running:"
-echo "  - Frontend: http://localhost (or your domain)"
-echo "  - Backend API: http://localhost:8081"
+echo "  - Frontend Web: https://${DOMAIN:-precifiq.dcsys.info} (ou http://localhost)"
+echo "  - Backend Web API: https://${DOMAIN:-precifiq.dcsys.info}/api"
+echo "  - Mobile App API: https://${API_DOMAIN:-apiprecifiq.dcsys.info}"
+echo "  - Backend Local: http://localhost:8081"
 if [ "$DB_HOST_VAL" = "postgres" ] || [ "$DB_HOST_VAL" = "localhost" ] || [ "$DB_HOST_VAL" = "127.0.0.1" ]; then
     echo "  - PostgreSQL: localhost:$DB_PORT_VAL (local Docker)"
 else

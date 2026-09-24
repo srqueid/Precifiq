@@ -3,9 +3,12 @@ package com.precific.app.data.network
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 
 /**
@@ -26,21 +29,35 @@ interface PrecificApiService {
     @GET("dashboard/json")
     suspend fun getDashboard(): Response<DashboardResponse>
 
-    // 3. Estoque de Insumos & Validade
-    @GET("insumos")
-    suspend fun getInsumos(): Response<List<InsumoDTO>>
+    // 3. Estoque de Insumos, Validade & Recebimento
+    @GET("insumos/json")
+    suspend fun getInsumos(): Response<InsumosResponse>
+
+    @FormUrlEncoded
+    @POST("api/insumos/ajustar-estoque/{id}")
+    suspend fun ajustarEstoqueInsumo(
+        @Path("id") id: Int,
+        @Field("estoque") estoque: Double,
+        @Field("motivo") motivo: String
+    ): Response<Map<String, Any>>
 
     // 4. Fornecedores
-    @GET("fornecedores")
+    @GET("fornecedores/json")
     suspend fun getFornecedores(): Response<List<FornecedorDTO>>
 
-    // 5. Orçamentos & Conversão para Compra
-    @GET("orcamentos")
-    suspend fun getOrcamentos(): Response<List<OrcamentoDTO>>
+    // 5. Orçamentos & Cotação de Compra
+    @GET("orcamentos/json")
+    suspend fun getOrcamentos(): Response<OrcamentosResponse>
 
-    @POST("orcamentos")
+    @POST("orcamentos/novo")
     suspend fun criarOrcamento(
         @Body request: CriarOrcamentoRequest
+    ): Response<OrcamentoDTO>
+
+    @POST("orcamentos/{id}/itens")
+    suspend fun adicionarItemOrcamento(
+        @Path("id") id: Int,
+        @Body item: ItemOrcamentoDTO
     ): Response<Map<String, Any>>
 
     @POST("orcamentos/{id}/converter-compra")
@@ -79,4 +96,27 @@ interface PrecificApiService {
     suspend fun deletarPedidoOperacional(
         @Path("id") id: Int
     ): Response<Map<String, Any>>
+
+    @PUT("api/pedidos/{id}")
+    suspend fun atualizarPedidoOperacional(
+        @Path("id") id: Int,
+        @Body pedido: PedidoDTO
+    ): Response<Map<String, Any>>
+
+    // 8. Produtos Finais & Kits para Venda ao Cliente
+    @GET("produtos-finais/estoque/json")
+    suspend fun getProdutosEstoque(): Response<ProdutosFinaisResponse>
+
+    @GET("produtos-finais/json")
+    suspend fun getProdutosFinais(): Response<ProdutosFinaisResponse>
+
+    @FormUrlEncoded
+    @POST("produtos-finais/ajustar-estoque/{id}")
+    suspend fun ajustarEstoqueProdutoFinal(
+        @Path("id") id: Int,
+        @Field("estoque") estoque: Double
+    ): Response<Map<String, Any>>
+
+    @GET("api/kits")
+    suspend fun getKits(): Response<List<KitDTO>>
 }
