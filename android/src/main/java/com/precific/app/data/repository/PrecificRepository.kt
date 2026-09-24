@@ -54,8 +54,8 @@ class PrecificRepository(
     suspend fun getInsumos(): Result<List<InsumoDTO>> = withContext(Dispatchers.IO) {
         try {
             val response = api.getInsumos()
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful && response.body()?.insumos != null) {
+                Result.success(response.body()!!.insumos!!)
             } else {
                 Result.failure(Exception("Erro ao buscar insumos: ${response.code()}"))
             }
@@ -86,8 +86,8 @@ class PrecificRepository(
     suspend fun getOrcamentos(): Result<List<OrcamentoDTO>> = withContext(Dispatchers.IO) {
         try {
             val response = api.getOrcamentos()
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful && response.body()?.orcamentos != null) {
+                Result.success(response.body()!!.orcamentos!!)
             } else {
                 Result.failure(Exception("Erro ao buscar orçamentos: ${response.code()}"))
             }
@@ -97,13 +97,21 @@ class PrecificRepository(
     }
 
     /**
-     * Cadastra um novo orçamento.
+     * Cadastra um novo orçamento seguindo o fluxo Web (`POST /orcamentos/novo` + `POST /orcamentos/{id}/itens`).
      */
-    suspend fun criarOrcamento(request: CriarOrcamentoRequest): Result<Map<String, Any>> = withContext(Dispatchers.IO) {
+    suspend fun criarOrcamento(request: CriarOrcamentoRequest): Result<OrcamentoDTO> = withContext(Dispatchers.IO) {
         try {
             val response = api.criarOrcamento(request)
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val orcCriado = response.body()!!
+                request.itens.forEach { item ->
+                    if (item.insumoId != null && item.insumoId > 0) {
+                        try {
+                            api.adicionarItemOrcamento(orcCriado.id, item)
+                        } catch (_: Exception) {}
+                    }
+                }
+                Result.success(orcCriado)
             } else {
                 Result.failure(Exception("Erro ao criar orçamento: ${response.code()}"))
             }
@@ -177,6 +185,22 @@ class PrecificRepository(
     }
 
     /**
+     * Atualiza os dados completos de um pedido operacional.
+     */
+    suspend fun atualizarPedidoOperacional(id: Int, pedido: PedidoDTO): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.atualizarPedidoOperacional(id, pedido)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Erro ao atualizar pedido: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Atualiza o status de entrega (Expedido / Entregue).
      */
     suspend fun atualizarEntregaPedido(id: Int, entregue: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
@@ -221,6 +245,139 @@ class PrecificRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Registra o recebimento de materiais comprados ajustando o saldo em estoque.
+     */
+    suspend fun darRecebimentoMaterial(insumoId: Int, novoEstoqueTotal: Double, motivo: String): Result<Map<String, Any>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.ajustarEstoqueInsumo(insumoId, novoEstoqueTotal, motivo)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Erro ao dar recebimento do material: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Ajusta a quantidade de produtos em estoque.
+     */
+    suspend fun ajustarEstoqueProdutoFinal(id: Int, novoEstoque: Double): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.ajustarEstoqueProdutoFinal(id, novoEstoque)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Erro ao ajustar estoque do produto: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Carrega produtos finais e kits disponíveis para venda no pedido do cliente.
+     */
+    suspend fun getProdutosEKitsForSale(): Result<List<ProdutoFinalDTO>> = withContext(Dispatchers.IO) {
+        try {
+            val lista = mutableListOf<ProdutoFinalDTO>()
+
+            // 1. Tenta buscar Variações/Produtos com Preço de Venda do Estoque
+            try {
+                val respEstoque = api.getProdutosEstoque()
+                if (respEstoque.isSuccessful && respEstoque.body()?.produtos != null) {
+                    val prodsEstoque = respEstoque.body()!!.produtos!!
+                    prodsEstoque.forEach { p ->
+                        val nomeFinal = p.nomeExibicao
+                        if (nomeFinal.isNotBlank()) {
+                            lista.add(p.copy(nome = nomeFinal))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 2. Se a rota de variações de estoque não retornou nada, busca os Produtos Base (/produtos-finais/json)
+            if (lista.isEmpty()) {
+                try {
+                    val respProdutos = api.getProdutosFinais()
+                    if (respProdutos.isSuccessful && respProdutos.body()?.produtos != null) {
+                        val prodsBase = respProdutos.body()!!.produtos!!
+                        prodsBase.forEach { p ->
+                            if (p.nomeExibicao.isNotBlank()) {
+                                lista.add(p.copy(nome = p.nomeExibicao))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            // 3. Busca Kits de Venda (/api/kits)
+            try {
+                val respKits = api.getKits()
+                if (respKits.isSuccessful && respKits.body() != null) {
+                    val kitsDto = respKits.body()!!.map { kit ->
+                        ProdutoFinalDTO(
+                            id = kit.id + 10000,
+                            nome = kit.nome,
+                            descricao = kit.descricao,
+                            precoVenda = kit.precoVenda,
+                            custoCalculado = kit.custoTotalCalculado,
+                            estoque = 10.0,
+                            codigoBarras = kit.codigoBarras,
+                            tipo = "KIT"
+                        )
+                    }
+                    lista.addAll(kitsDto)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            Result.success(lista)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Carrega a lista de clientes cadastrados no schema da empresa ativa.
+     */
+    suspend fun getClientes(): Result<List<ClienteDTO>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getClientes()
+            if (response.isSuccessful && response.body()?.clientes != null) {
+                Result.success(response.body()!!.clientes!!)
+            } else {
+                Result.failure(Exception("Erro ao buscar clientes: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Cadastra um novo cliente no banco de dados do tenant.
+     */
+    suspend fun criarCliente(nome: String): Result<ClienteDTO> = withContext(Dispatchers.IO) {
+        try {
+            val req = ClienteDTO(id = 0, nome = nome.trim())
+            val response = api.criarCliente(req)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.success(ClienteDTO(id = 0, nome = nome.trim()))
+            }
+        } catch (e: Exception) {
+            Result.success(ClienteDTO(id = 0, nome = nome.trim()))
         }
     }
 }

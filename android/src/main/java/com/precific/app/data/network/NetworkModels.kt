@@ -138,6 +138,22 @@ data class FornecedorDTO(
 )
 
 // ============================================================================
+// 4.5 Modelos de Cliente
+// ============================================================================
+
+data class ClienteDTO(
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("nome") val nome: String = "",
+    @SerializedName("telefone") val telefone: String? = null,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("endereco") val endereco: String? = null
+)
+
+data class ClientesResponse(
+    @SerializedName("clientes") val clientes: List<ClienteDTO>? = emptyList()
+)
+
+// ============================================================================
 // 5. Modelos de Orçamento
 // ============================================================================
 

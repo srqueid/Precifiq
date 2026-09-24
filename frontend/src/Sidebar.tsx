@@ -29,11 +29,13 @@ import {
   KeyRound,
   BookOpen,
   Info,
-  Shield
+  Shield,
+  RotateCw
 } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useTenant, EmpresaItem } from './contexts/TenantContext';
 import { useAuth } from './contexts/AuthContext';
+import { useAutoReload } from './contexts/AutoReloadContext';
 import AlterarSenhaModal from './components/AlterarSenhaModal';
 import packageJson from '../package.json';
 import precifiqLogo from './assets/precifiq.png';
@@ -110,6 +112,7 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
   const [isAlterarSenhaOpen, setIsAlterarSenhaOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const appVersion = packageJson?.version || '0.1.1';
+  const { enabled: autoReloadEnabled, openModal: openAutoReloadModal } = useAutoReload();
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -571,6 +574,39 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
             <span className="sidebar-section-title">Cadastros & Sistema</span>
           </div>
           {systemItems.map((item) => renderStandardLink(item))}
+          <button
+            type="button"
+            onClick={openAutoReloadModal}
+            className="sidebar-link"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              background: autoReloadEnabled ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+              color: autoReloadEnabled ? '#2563eb' : 'inherit',
+              border: 'none',
+              textAlign: 'left'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <RotateCw size={18} style={{ color: autoReloadEnabled ? '#2563eb' : 'inherit' }} />
+              <span>Auto-Reload (30s)</span>
+            </div>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: autoReloadEnabled ? '#dcfce7' : 'var(--surface-2, #f1f5f9)',
+                color: autoReloadEnabled ? '#15803d' : 'var(--muted, #64748b)'
+              }}
+            >
+              {autoReloadEnabled ? 'Ativo' : 'Off'}
+            </span>
+          </button>
 
           {/* 5. Ajuda & Informações */}
           <div className="sidebar-section-header">
@@ -740,6 +776,42 @@ const SidebarInner: React.FC<SidebarProps> = ({ isOpen, onToggle, onClose, onOpe
             <span className="sidebar-section-title">Cadastros & Sistema</span>
           </div>
           {systemItems.map((item) => renderStandardLink(item, true))}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              openAutoReloadModal();
+            }}
+            className="sidebar-link"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              background: autoReloadEnabled ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+              color: autoReloadEnabled ? '#2563eb' : 'inherit',
+              border: 'none',
+              textAlign: 'left'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <RotateCw size={20} style={{ color: autoReloadEnabled ? '#2563eb' : 'inherit' }} />
+              <span>Auto-Reload (30s)</span>
+            </div>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: autoReloadEnabled ? '#dcfce7' : 'var(--surface-2, #f1f5f9)',
+                color: autoReloadEnabled ? '#15803d' : 'var(--muted, #64748b)'
+              }}
+            >
+              {autoReloadEnabled ? 'Ativo' : 'Off'}
+            </span>
+          </button>
 
           {/* 5. Ajuda & Informações */}
           <div className="sidebar-section-header">

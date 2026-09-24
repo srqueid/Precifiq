@@ -19,10 +19,12 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle, 
-  Loader2 
+  Loader2,
+  RotateCw
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAutoReload, AVAILABLE_RELOAD_PAGES } from '../contexts/AutoReloadContext';
 import AlterarSenhaModal from '../components/AlterarSenhaModal';
 
 interface Funcionario {
@@ -48,6 +50,7 @@ interface Config {
 const ConfiguracoesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
+  const autoReload = useAutoReload();
   const [horas, setHoras] = useState('');
 
   // Modals state
@@ -262,6 +265,74 @@ const ConfiguracoesPage: React.FC = () => {
               aria-pressed={theme === 'system'}
             >
               <Monitor size={20} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Recarregamento Automático de Páginas (30s) */}
+      <section className="card mb-6" style={{ borderLeft: '4px solid #2563eb' }}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl" style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' }}>
+              <RotateCw size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+                Recarregamento Automático de Páginas (30s)
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    backgroundColor: autoReload.enabled ? '#dcfce7' : 'var(--surface-2, #f1f5f9)',
+                    color: autoReload.enabled ? '#15803d' : 'var(--muted, #64748b)'
+                  }}
+                >
+                  {autoReload.enabled ? 'Ativo (30s)' : 'Desativado'}
+                </span>
+              </h2>
+              <p className="text-sm text-gray-500" style={{ color: 'var(--muted, #64748b)', margin: '4px 0 0' }}>
+                Recarrega a página completa do navegador a cada 30 segundos nas telas selecionadas por você ({autoReload.selectedPages.length} de {AVAILABLE_RELOAD_PAGES.length} telas selecionadas).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => autoReload.setEnabled(!autoReload.enabled)}
+              className={`btn ${autoReload.enabled ? 'btn-secondary' : 'btn-primary'}`}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '13px'
+              }}
+            >
+              {autoReload.enabled ? 'Desativar' : 'Ativar Auto-Reload'}
+            </button>
+            <button
+              type="button"
+              onClick={autoReload.openModal}
+              className="btn btn-primary"
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#2563eb',
+                color: '#ffffff',
+                border: 'none'
+              }}
+            >
+              <Settings size={16} />
+              <span>Selecionar Páginas</span>
             </button>
           </div>
         </div>
