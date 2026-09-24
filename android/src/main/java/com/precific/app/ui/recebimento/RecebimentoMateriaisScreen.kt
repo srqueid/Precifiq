@@ -31,7 +31,6 @@ import com.precific.app.data.network.InsumoDTO
 import com.precific.app.data.repository.PrecificRepository
 import com.precific.app.domain.format
 import com.precific.app.domain.hiltViewModel
-import com.precific.app.ui.scanner.CameraBarcodeScannerDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -195,7 +194,6 @@ fun RecebimentoMateriaisScreen(
 
     val focusManager = LocalFocusManager.current
     var searchQuery by remember { mutableStateOf("") }
-    var showCameraScanner by remember { mutableStateOf(false) }
 
     val filteredInsumos = insumosDisponiveis.filter {
         it.nome.contains(searchQuery, ignoreCase = true) ||
@@ -257,7 +255,6 @@ fun RecebimentoMateriaisScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            // Card 1: Leitura de Código de Barras / Leitor óptico Câmera
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -268,11 +265,6 @@ fun RecebimentoMateriaisScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -285,17 +277,6 @@ fun RecebimentoMateriaisScreen(
                             )
                         }
 
-                        // Botão para abrir Câmera do Dispositivo
-                        FilledTonalButton(
-                            onClick = { showCameraScanner = true },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = "Câmera", modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Abrir Câmera", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
                     OutlinedTextField(
                         value = codigoBarras,
                         onValueChange = { viewModel.updateCodigoBarras(it) },
@@ -304,16 +285,11 @@ fun RecebimentoMateriaisScreen(
                         singleLine = true,
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { showCameraScanner = true }) {
-                                    Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear com Câmera", tint = MaterialTheme.colorScheme.primary)
-                                }
                                 if (codigoBarras.isNotBlank()) {
                                     IconButton(onClick = { viewModel.limparSelecao() }) {
                                         Icon(Icons.Default.Clear, contentDescription = "Limpar")
                                     }
                                 }
-                            }
                         },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
@@ -520,17 +496,5 @@ fun RecebimentoMateriaisScreen(
                 }
             }
         }
-    }
-
-    // Modal de Câmera para Leitura Óptica do Código de Barras
-    if (showCameraScanner) {
-        CameraBarcodeScannerDialog(
-            onDismiss = { showCameraScanner = false },
-            onBarcodeScanned = { scannedCode ->
-                showCameraScanner = false
-                viewModel.updateCodigoBarras(scannedCode)
-                viewModel.buscarPorCodigo(scannedCode)
-            }
-        )
     }
 }
