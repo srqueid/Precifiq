@@ -93,7 +93,7 @@ export const AutoReloadProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [currentPath]);
 
   // Timer de 30 segundos com contagem regressiva
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (timerRef.current) {
