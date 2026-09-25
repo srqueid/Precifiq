@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.precific.app.data.network.ClienteDTO
 import com.precific.app.data.network.PedidoDTO
 import com.precific.app.data.network.PedidoItemDTO
 import com.precific.app.data.network.ProdutoFinalDTO
@@ -46,8 +47,8 @@ class PedidosViewModel(
     private val _produtosEKitsCadastrados = MutableStateFlow<List<ProdutoFinalDTO>>(emptyList())
     val produtosEKitsCadastrados: StateFlow<List<ProdutoFinalDTO>> = _produtosEKitsCadastrados.asStateFlow()
 
-    private val _clientesCadastrados = MutableStateFlow<List<String>>(emptyList())
-    val clientesCadastrados: StateFlow<List<String>> = _clientesCadastrados.asStateFlow()
+    private val _clientesCadastrados = MutableStateFlow<List<ClienteDTO>>(emptyList())
+    val clientesCadastrados: StateFlow<List<ClienteDTO>> = _clientesCadastrados.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -67,7 +68,6 @@ class PedidosViewModel(
             val result = repository.getPedidosOperacionais()
             result.onSuccess { list ->
                 _pedidos.value = list
-                atualizarClientes(list)
             }.onFailure { err ->
                 _userMessage.value = "Erro ao carregar pedidos: ${err.message}"
             }
@@ -77,25 +77,18 @@ class PedidosViewModel(
 
     fun carregarProdutosEClientes() {
         viewModelScope.launch {
-            val result = repository.getProdutosEKitsForSale()
-            result.onSuccess { list ->
+            // 1. Produtos e Kits para Venda
+            val resultProds = repository.getProdutosEKitsForSale()
+            resultProds.onSuccess { list ->
                 _produtosEKitsCadastrados.value = list
             }
-        }
-    }
 
-    private fun atualizarClientes(pedidosList: List<PedidoDTO>) {
-        val padraoClientes = listOf(
-            "Cliente Balcão",
-            "Restaurante Sabor & Arte",
-            "Padaria Central",
-            "Supermercado Exemplo",
-            "Empresa ABC",
-            "Buffet Gourmet",
-            "Doceria Sonho Doce"
-        )
-        val clientesDosPedidos = pedidosList.mapNotNull { it.clienteNome }.filter { it.isNotBlank() }
-        _clientesCadastrados.value = (padraoClientes + clientesDosPedidos).distinct()
+            // 2. Clientes Reais do Banco de Dados %SCHEMA%.cliente
+            val resultClientes = repository.getClientes()
+            resultClientes.onSuccess { list ->
+                _clientesCadastrados.value = list
+            }
+        }
     }
 
     fun marcarComoEntregue(id: Int, entregue: Boolean) {
@@ -128,6 +121,7 @@ class PedidosViewModel(
     }
 
     fun criarNovoPedido(
+        clienteId: Int?,
         clienteNome: String,
         valorTotal: Double,
         valorFrete: Double,
@@ -135,13 +129,32 @@ class PedidosViewModel(
         tipoEnvio: String,
         prazoEnvio: String,
         pagamentoConfirmado: Boolean,
+        isNovoCliente: Boolean,
         itens: List<PedidoItemDTO>
     ) {
         viewModelScope.launch {
             _isLoading.value = true
+
+            var finalClienteId: Int? = clienteId
+            var finalClienteNome: String = clienteNome.trim()
+
+            // Se for um novo cliente, cadastra no banco de dados primeiro
+            if (isNovoCliente || finalClienteId == null || finalClienteId == 0) {
+                if (finalClienteNome.isNotBlank()) {
+                    val clienteCriadoResult = repository.criarCliente(finalClienteNome)
+                    clienteCriadoResult.onSuccess { clienteCriado ->
+                        if (clienteCriado.id > 0) {
+                            finalClienteId = clienteCriado.id
+                            finalClienteNome = clienteCriado.nome
+                        }
+                    }
+                }
+            }
+
             val dataHoje = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val novoPedido = PedidoDTO(
-                clienteNome = clienteNome.ifBlank { "Cliente Balcão" },
+                clienteId = finalClienteId,
+                clienteNome = finalClienteNome.ifBlank { "Cliente Balcão" },
                 valor = valorTotal,
                 valorFrete = valorFrete,
                 formaPagamento = formaPagamento,
@@ -156,8 +169,9 @@ class PedidosViewModel(
             val result = repository.criarPedidoOperacional(novoPedido)
             result.onSuccess {
                 val statusPgto = if (pagamentoConfirmado) "pago e baixado" else "aguardando pagamento"
-                _userMessage.value = "Pedido cadastrado com sucesso ($statusPgto) para ${novoPedido.clienteNome}!"
+                _userMessage.value = "Pedido registrado com sucesso ($statusPgto) para ${novoPedido.clienteNome}!"
                 carregarPedidos()
+                carregarProdutosEClientes()
             }.onFailure { err ->
                 _userMessage.value = "Erro ao cadastrar pedido: ${err.message}"
             }
@@ -167,6 +181,7 @@ class PedidosViewModel(
 
     fun editarPedidoExistente(
         id: Int,
+        clienteId: Int?,
         clienteNome: String,
         valorTotal: Double,
         valorFrete: Double,
@@ -174,14 +189,32 @@ class PedidosViewModel(
         tipoEnvio: String,
         prazoEnvio: String,
         pagamentoConfirmado: Boolean,
+        isNovoCliente: Boolean,
         itens: List<PedidoItemDTO>
     ) {
         viewModelScope.launch {
             _isLoading.value = true
+
+            var finalClienteId: Int? = clienteId
+            var finalClienteNome: String = clienteNome.trim()
+
+            if (isNovoCliente || finalClienteId == null || finalClienteId == 0) {
+                if (finalClienteNome.isNotBlank()) {
+                    val clienteCriadoResult = repository.criarCliente(finalClienteNome)
+                    clienteCriadoResult.onSuccess { clienteCriado ->
+                        if (clienteCriado.id > 0) {
+                            finalClienteId = clienteCriado.id
+                            finalClienteNome = clienteCriado.nome
+                        }
+                    }
+                }
+            }
+
             val dataHoje = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val pedidoEditado = PedidoDTO(
                 id = id,
-                clienteNome = clienteNome.ifBlank { "Cliente Balcão" },
+                clienteId = finalClienteId,
+                clienteNome = finalClienteNome.ifBlank { "Cliente Balcão" },
                 valor = valorTotal,
                 valorFrete = valorFrete,
                 formaPagamento = formaPagamento,
@@ -197,6 +230,7 @@ class PedidosViewModel(
             result.onSuccess {
                 _userMessage.value = "Pedido #$id atualizado com sucesso!"
                 carregarPedidos()
+                carregarProdutosEClientes()
             }.onFailure { err ->
                 _userMessage.value = "Erro ao atualizar pedido #$id: ${err.message}"
             }
@@ -473,29 +507,33 @@ fun PedidosOperacionaisScreen(
                 showNovoPedidoModal = false
                 pedidoEmEdicao = null
             },
-            onConfirm = { cliente, valorTotal, valorFrete, forma, envio, prazo, pago, itens ->
+            onConfirm = { clienteId, clienteNome, valorTotal, valorFrete, forma, envio, prazo, pago, isNovoCliente, itens ->
                 showNovoPedidoModal = false
                 if (pedidoEmEdicao != null) {
                     viewModel.editarPedidoExistente(
                         pedidoEmEdicao!!.id,
-                        cliente,
+                        clienteId,
+                        clienteNome,
                         valorTotal,
                         valorFrete,
                         forma,
                         envio,
                         prazo,
                         pago,
+                        isNovoCliente,
                         itens
                     )
                 } else {
                     viewModel.criarNovoPedido(
-                        cliente,
+                        clienteId,
+                        clienteNome,
                         valorTotal,
                         valorFrete,
                         forma,
                         envio,
                         prazo,
                         pago,
+                        isNovoCliente,
                         itens
                     )
                 }
@@ -648,27 +686,38 @@ fun PedidoOperacionalCard(
 @Composable
 fun NovoPedidoModal(
     pedidoParaEditar: PedidoDTO? = null,
-    clientesCadastrados: List<String>,
+    clientesCadastrados: List<ClienteDTO>,
     produtosCadastrados: List<ProdutoFinalDTO>,
     onDismiss: () -> Unit,
     onConfirm: (
-        cliente: String,
+        clienteId: Int?,
+        clienteNome: String,
         valorTotal: Double,
         valorFrete: Double,
         formaPagamento: String,
         tipoEnvio: String,
         prazoEnvio: String,
         pagamentoConfirmado: Boolean,
+        isNovoCliente: Boolean,
         itens: List<PedidoItemDTO>
     ) -> Unit
 ) {
     // -------------------------------------------------------------------------
-    // ESTADOS INICIAIS DO FORMULÁRIO (REMEMBERS VINCULADOS AO ID DO PEDIDO)
+    // ESTADOS INICIAIS DO FORMULÁRIO (VINCULADOS AOS CLIENTES DO BANCO)
     // -------------------------------------------------------------------------
-    val clienteInicial = pedidoParaEditar?.clienteNome ?: "Cliente Balcão"
-    var isClienteExistente by remember(pedidoParaEditar?.id) { mutableStateOf(clientesCadastrados.contains(clienteInicial) || pedidoParaEditar == null) }
-    var clienteSelecionado by remember(pedidoParaEditar?.id) { mutableStateOf(if (isClienteExistente) clienteInicial else (clientesCadastrados.firstOrNull() ?: "Cliente Balcão")) }
-    var novoClienteNome by remember(pedidoParaEditar?.id) { mutableStateOf(if (!isClienteExistente) clienteInicial else "") }
+    val clienteEncontrado = clientesCadastrados.find {
+        it.id == pedidoParaEditar?.clienteId || it.nome.equals(pedidoParaEditar?.clienteNome, ignoreCase = true)
+    }
+
+    var isClienteExistente by remember(pedidoParaEditar?.id) {
+        mutableStateOf(clienteEncontrado != null || (pedidoParaEditar == null && clientesCadastrados.isNotEmpty()))
+    }
+    var clienteSelecionado by remember(pedidoParaEditar?.id) {
+        mutableStateOf<ClienteDTO?>(clienteEncontrado ?: clientesCadastrados.firstOrNull())
+    }
+    var novoClienteNome by remember(pedidoParaEditar?.id) {
+        mutableStateOf(if (clienteEncontrado == null) (pedidoParaEditar?.clienteNome ?: "") else "")
+    }
     var expandedClienteDropdown by remember { mutableStateOf(false) }
 
     // Itens
@@ -703,7 +752,8 @@ fun NovoPedidoModal(
     var pagamentoJaConfirmado by remember(pedidoParaEditar?.id) { mutableStateOf(!pedidoParaEditar?.dataPagamento.isNullOrBlank()) }
 
     // Cálculos
-    val clienteFinal = if (isClienteExistente) clienteSelecionado else novoClienteNome.trim()
+    val finalClienteId = if (isClienteExistente) clienteSelecionado?.id else null
+    val finalClienteNome = if (isClienteExistente) (clienteSelecionado?.nome ?: "") else novoClienteNome.trim()
     val valorSubtotalItens = itensDoPedido.sumOf { it.qtd * it.preco }
     val valorFreteDouble = valorFreteStr.toDoubleOrNull() ?: 0.0
     val valorTotalFinal = valorSubtotalItens + valorFreteDouble
@@ -766,10 +816,10 @@ fun NovoPedidoModal(
                         if (isClienteExistente) {
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
-                                    value = clienteSelecionado,
+                                    value = clienteSelecionado?.nome ?: "Nenhum cliente selecionado",
                                     onValueChange = {},
                                     readOnly = true,
-                                    label = { Text("Selecione o Cliente") },
+                                    label = { Text("Selecione o Cliente Cadastrado") },
                                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -782,14 +832,21 @@ fun NovoPedidoModal(
                                     expanded = expandedClienteDropdown,
                                     onDismissRequest = { expandedClienteDropdown = false }
                                 ) {
-                                    clientesCadastrados.forEach { cliente ->
+                                    if (clientesCadastrados.isEmpty()) {
                                         DropdownMenuItem(
-                                            text = { Text(cliente) },
-                                            onClick = {
-                                                clienteSelecionado = cliente
-                                                expandedClienteDropdown = false
-                                            }
+                                            text = { Text("Nenhum cliente no banco de dados", color = Color.Gray) },
+                                            onClick = { expandedClienteDropdown = false }
                                         )
+                                    } else {
+                                        clientesCadastrados.forEach { cliente ->
+                                            DropdownMenuItem(
+                                                text = { Text(cliente.nome) },
+                                                onClick = {
+                                                    clienteSelecionado = cliente
+                                                    expandedClienteDropdown = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1207,17 +1264,19 @@ fun NovoPedidoModal(
                 onClick = {
                     val finalVal = if (valorTotalFinal > 0) valorTotalFinal else 0.0
                     onConfirm(
-                        clienteFinal,
+                        finalClienteId,
+                        finalClienteNome,
                         finalVal,
                         valorFreteDouble,
                         formaPagamentoSelecionada,
                         tipoEnvioSelecionado,
                         prazoEnvioStr,
                         pagamentoJaConfirmado,
+                        !isClienteExistente,
                         itensDoPedido
                     )
                 },
-                enabled = clienteFinal.isNotBlank() && (itensDoPedido.isNotEmpty() || valorTotalFinal > 0)
+                enabled = finalClienteNome.isNotBlank() && (itensDoPedido.isNotEmpty() || valorTotalFinal > 0)
             ) {
                 Text(if (pedidoParaEditar != null) "Salvar Alterações" else "Registrar Pedido")
             }

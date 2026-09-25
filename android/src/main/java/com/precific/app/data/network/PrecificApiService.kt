@@ -29,9 +29,9 @@ interface PrecificApiService {
     @GET("dashboard/json")
     suspend fun getDashboard(): Response<DashboardResponse>
 
-    // 3. Estoque de Insumos, Validade & Recebimento
-    @GET("insumos")
-    suspend fun getInsumos(): Response<List<InsumoDTO>>
+    // 3. Estoque de Insumos & Validade
+    @GET("insumos/json")
+    suspend fun getInsumos(): Response<InsumosResponse>
 
     @FormUrlEncoded
     @POST("api/insumos/ajustar-estoque/{id}")
@@ -46,12 +46,18 @@ interface PrecificApiService {
     suspend fun getFornecedores(): Response<List<FornecedorDTO>>
 
     // 5. Orçamentos & Conversão para Compra
-    @GET("orcamentos")
-    suspend fun getOrcamentos(): Response<List<OrcamentoDTO>>
+    @GET("orcamentos/json")
+    suspend fun getOrcamentos(): Response<OrcamentosResponse>
 
-    @POST("orcamentos")
+    @POST("orcamentos/novo")
     suspend fun criarOrcamento(
         @Body request: CriarOrcamentoRequest
+    ): Response<OrcamentoDTO>
+
+    @POST("orcamentos/{id}/itens")
+    suspend fun adicionarItemOrcamento(
+        @Path("id") id: Int,
+        @Body item: ItemOrcamentoDTO
     ): Response<Map<String, Any>>
 
     @POST("orcamentos/{id}/converter-compra")
@@ -74,6 +80,12 @@ interface PrecificApiService {
         @Body pedido: PedidoDTO
     ): Response<PedidoDTO>
 
+    @PUT("api/pedidos/{id}")
+    suspend fun atualizarPedidoOperacional(
+        @Path("id") id: Int,
+        @Body pedido: PedidoDTO
+    ): Response<Map<String, Any>>
+
     @PATCH("api/pedidos/{id}/entregue")
     suspend fun atualizarEntregaPedido(
         @Path("id") id: Int,
@@ -91,12 +103,6 @@ interface PrecificApiService {
         @Path("id") id: Int
     ): Response<Map<String, Any>>
 
-    @PUT("api/pedidos/{id}")
-    suspend fun atualizarPedidoOperacional(
-        @Path("id") id: Int,
-        @Body pedido: PedidoDTO
-    ): Response<Map<String, Any>>
-
     // 8. Produtos Finais & Kits para Venda ao Cliente
     @GET("produtos-finais/estoque/json")
     suspend fun getProdutosEstoque(): Response<ProdutosFinaisResponse>
@@ -104,6 +110,22 @@ interface PrecificApiService {
     @GET("produtos-finais/json")
     suspend fun getProdutosFinais(): Response<ProdutosFinaisResponse>
 
+    @FormUrlEncoded
+    @POST("produtos-finais/ajustar-estoque/{id}")
+    suspend fun ajustarEstoqueProdutoFinal(
+        @Path("id") id: Int,
+        @Field("estoque") estoque: Double
+    ): Response<Map<String, Any>>
+
     @GET("api/kits")
     suspend fun getKits(): Response<List<KitDTO>>
+
+    // 9. Clientes do Tenant
+    @GET("clientes")
+    suspend fun getClientes(): Response<ClientesResponse>
+
+    @POST("clientes")
+    suspend fun criarCliente(
+        @Body cliente: ClienteDTO
+    ): Response<ClienteDTO>
 }

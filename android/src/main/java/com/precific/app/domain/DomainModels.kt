@@ -18,6 +18,7 @@ import com.precific.app.data.network.CriarOrcamentoRequest
 import com.precific.app.data.network.DashboardResponse
 import com.precific.app.data.network.ItemOrcamentoDTO
 import com.precific.app.data.network.PedidoDTO
+import com.precific.app.data.network.ProdutoFinalDTO
 import com.precific.app.data.repository.PrecificRepository
 import com.precific.app.ui.pedidos.PedidosViewModel
 import com.precific.app.ui.recebimento.RecebimentoViewModel
@@ -285,6 +286,9 @@ class InsumosViewModel(
     private val _insumos = MutableStateFlow<List<Insumo>>(emptyList())
     val insumos: StateFlow<List<Insumo>> = _insumos.asStateFlow()
 
+    private val _produtosEKits = MutableStateFlow<List<ProdutoFinalDTO>>(emptyList())
+    val produtosEKits: StateFlow<List<ProdutoFinalDTO>> = _produtosEKits.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -292,15 +296,17 @@ class InsumosViewModel(
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     init {
-        carregarInsumos()
+        carregarInsumosEProdutos()
     }
 
-    fun carregarInsumos() {
+    fun carregarInsumosEProdutos() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = repository.getInsumos()
-            result.onSuccess { dtoList ->
+
+            // 1. Insumos da Web
+            val resultInsumos = repository.getInsumos()
+            resultInsumos.onSuccess { dtoList ->
                 _insumos.value = dtoList.map { dto ->
                     Insumo(
                         id = dto.id,
@@ -322,6 +328,26 @@ class InsumosViewModel(
                 }
             }.onFailure { err ->
                 _errorMessage.value = err.message ?: "Erro ao carregar insumos"
+            }
+
+            // 2. Produtos Finais & Kits da Web
+            val resultProds = repository.getProdutosEKitsForSale()
+            resultProds.onSuccess { dtoList ->
+                _produtosEKits.value = dtoList
+            }
+
+            _isLoading.value = false
+        }
+    }
+
+    fun ajustarEstoqueProduto(id: Int, novoEstoque: Double) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = repository.ajustarEstoqueProdutoFinal(id, novoEstoque)
+            result.onSuccess {
+                carregarInsumosEProdutos()
+            }.onFailure { err ->
+                _errorMessage.value = "Erro ao atualizar estoque: ${err.message}"
             }
             _isLoading.value = false
         }
@@ -353,7 +379,7 @@ class FornecedoresViewModel(
                 _fornecedores.value = dtoList.map { dto ->
                     Fornecedor(
                         id = dto.id,
-                        razaoSocial = dto.nome,
+                        razaoSocial = dto.nomeEmpresa?.ifBlank { null } ?: dto.nome,
                         nomeFantasia = dto.nomeFantasia ?: dto.nome,
                         cidadeUf = listOfNotNull(dto.cidade, dto.uf).joinToString("/").ifBlank { "Não informado" },
                         email = dto.email ?: "",

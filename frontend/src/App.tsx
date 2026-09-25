@@ -8,6 +8,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 // Importando os componentes
 import Sidebar from './Sidebar';
 import { CopilotModal } from './components/CopilotModal';
+import { AutoReloadModal } from './components/AutoReloadModal';
+import { AutoReloadFloatingBadge } from './components/AutoReloadFloatingBadge';
+import { AutoReloadProvider } from './contexts/AutoReloadContext';
 
 // Importando as páginas
 import DashboardPage from './pages/DashboardPage';
@@ -110,6 +113,10 @@ const AppContent: React.FC = () => {
         isOpen={isCopilotOpen} 
         onClose={() => setIsCopilotOpen(false)} 
       />
+
+      {/* Controle de Auto-Reload a cada 30 segundos */}
+      <AutoReloadFloatingBadge />
+      <AutoReloadModal />
     </div>
   );
 };
@@ -119,7 +126,9 @@ const App: React.FC = () => {
     <AuthProvider>
       <TenantProvider>
         <BrowserRouter>
-          <AppContent />
+          <AutoReloadProvider>
+            <AppContent />
+          </AutoReloadProvider>
         </BrowserRouter>
       </TenantProvider>
     </AuthProvider>

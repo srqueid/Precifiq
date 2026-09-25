@@ -41,8 +41,9 @@ object SessionManager {
         _token.value = response.token
         _currentUser.value = response.usuario
 
-        // Seleciona a primeira empresa vinculada ao cadastro do usuário
-        val vinculoEmpresa = response.usuario.empresas?.firstOrNull()
+        // Seleciona a empresa cadastrada (dando preferência para db_demo se presente nas empresas do usuário)
+        val vinculoEmpresa = response.usuario.empresas?.find { it.schemaName == "db_demo" }
+            ?: response.usuario.empresas?.firstOrNull()
 
         if (vinculoEmpresa != null) {
             _activeSchema.value = vinculoEmpresa.schemaName

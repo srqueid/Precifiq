@@ -255,7 +255,6 @@ fun RecebimentoMateriaisScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            // Card 1: Leitura de Código de Barras / Leitor óptico
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -266,17 +265,17 @@ fun RecebimentoMateriaisScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text(
-                            text = "Leitura de Código de Barras",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(
+                                text = "Leitura de Código de Barras",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
 
                     OutlinedTextField(
                         value = codigoBarras,
@@ -286,11 +285,11 @@ fun RecebimentoMateriaisScreen(
                         singleLine = true,
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
-                            if (codigoBarras.isNotBlank()) {
-                                IconButton(onClick = { viewModel.limparSelecao() }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Limpar")
+                                if (codigoBarras.isNotBlank()) {
+                                    IconButton(onClick = { viewModel.limparSelecao() }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Limpar")
+                                    }
                                 }
-                            }
                         },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
